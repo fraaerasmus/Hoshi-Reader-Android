@@ -10,6 +10,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.JsonObject
+import moe.antimony.hoshi.features.backup.PreferencesBackup
 
 private val Context.syncSettingsDataStore by preferencesDataStore(name = SyncSettingsRepository.DataStoreName)
 
@@ -27,6 +29,12 @@ class SyncSettingsRepository(
             val current = preferences.toSyncSettings()
             preferences.writeSyncSettings(transform(current))
         }
+    }
+
+    suspend fun exportEntries(): JsonObject = PreferencesBackup.export(dataStore)
+
+    suspend fun importEntries(entries: JsonObject) {
+        PreferencesBackup.import(dataStore, entries)
     }
 
     private fun Preferences.toSyncSettings(): SyncSettings =

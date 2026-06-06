@@ -9,6 +9,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.JsonObject
+import moe.antimony.hoshi.features.backup.PreferencesBackup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
@@ -88,6 +90,12 @@ class LearningProfilesRepository(
 ) {
     val state: Flow<LearningProfilesState> = dataStore.data
         .map { preferences -> preferences.toLearningProfilesState() }
+
+    suspend fun exportEntries(): JsonObject = PreferencesBackup.export(dataStore)
+
+    suspend fun importEntries(entries: JsonObject) {
+        PreferencesBackup.import(dataStore, entries)
+    }
 
     suspend fun addProfile(name: String, lookupLanguage: DictionaryLanguage): LearningProfile {
         return addProfile(

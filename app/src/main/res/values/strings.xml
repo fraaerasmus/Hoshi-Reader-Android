@@ -355,6 +355,12 @@
     <string name="backup_action_restore">Restore</string>
     <string name="backup_archiving">Archiving...</string>
     <string name="backup_restoring">Restoring...</string>
+    <string name="backup_app_settings" comment="Backup section label for app settings.">Settings</string>
+    <string name="backup_settings_saved">Settings backup saved.</string>
+    <string name="backup_settings_save_failed">Unable to save settings backup.</string>
+    <string name="backup_settings_restored">Settings restored. Reopen the app to apply all changes.</string>
+    <string name="backup_settings_restore_failed">Unable to restore settings backup.</string>
+    <string name="backup_settings_credentials_warning">Includes your Google Drive and Anki credentials in plain text. Keep this file private and delete it after importing.</string>
     <string name="advanced_audio">Audio</string>
     <string name="advanced_statistics" comment="Advanced settings row label, intentionally matching reader statistics label.">Statistics</string>
     <string name="advanced_statistics_subtitle">Track per-book reading time, speed, and characters read</string>

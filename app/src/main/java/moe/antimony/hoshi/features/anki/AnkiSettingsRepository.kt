@@ -10,10 +10,14 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import moe.antimony.hoshi.features.backup.PreferencesBackup
 
 interface AnkiSettingsRepository {
     val settings: Flow<AnkiSettings>
     suspend fun update(transform: (AnkiSettings) -> AnkiSettings)
+    suspend fun exportEntries(): JsonObject
+    suspend fun importEntries(entries: JsonObject)
 }
 
 class DataStoreAnkiSettingsRepository(
@@ -32,6 +36,12 @@ class DataStoreAnkiSettingsRepository(
             } ?: AnkiSettings()
             preferences[KEY_SETTINGS] = json.encodeToString(transform(current))
         }
+    }
+
+    override suspend fun exportEntries(): JsonObject = PreferencesBackup.export(dataStore)
+
+    override suspend fun importEntries(entries: JsonObject) {
+        PreferencesBackup.import(dataStore, entries)
     }
 
     private companion object {

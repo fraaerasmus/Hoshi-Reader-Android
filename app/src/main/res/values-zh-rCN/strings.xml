@@ -353,6 +353,12 @@
     <string name="backup_action_restore">恢复</string>
     <string name="backup_archiving">正在归档...</string>
     <string name="backup_restoring">正在恢复...</string>
+    <string name="backup_app_settings" comment="Backup section label for app settings.">设置</string>
+    <string name="backup_settings_saved">设置备份已保存。</string>
+    <string name="backup_settings_save_failed">无法保存设置备份。</string>
+    <string name="backup_settings_restored">设置已恢复。重新打开应用以应用全部更改。</string>
+    <string name="backup_settings_restore_failed">无法恢复设置备份。</string>
+    <string name="backup_settings_credentials_warning">包含明文的 Google Drive 和 Anki 凭据。请妥善保管此文件，并在导入后将其删除。</string>
     <string name="advanced_audio">音频</string>
     <string name="advanced_statistics" comment="Advanced settings row label, intentionally matching reader statistics label.">统计</string>
     <string name="advanced_statistics_subtitle">跟踪每本书的阅读时间、速度和已读字符数</string>

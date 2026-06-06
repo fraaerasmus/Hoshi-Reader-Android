@@ -14,6 +14,8 @@ import androidx.compose.ui.graphics.toArgb
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+import kotlinx.serialization.json.JsonObject
+import moe.antimony.hoshi.features.backup.PreferencesBackup
 
 enum class SasayakiReaderSkipButtonAction(
     val label: String,
@@ -137,6 +139,12 @@ class SasayakiSettingsRepository(
             preferences.writeSasayakiSettings(transform(current))
             preferences[KEY_MIGRATED_FROM_SHARED_PREFERENCES] = true
         }
+    }
+
+    suspend fun exportEntries(): JsonObject = PreferencesBackup.export(dataStore)
+
+    suspend fun importEntries(entries: JsonObject) {
+        PreferencesBackup.import(dataStore, entries)
     }
 
     private suspend fun migrateLegacySettingsIfNeeded() {

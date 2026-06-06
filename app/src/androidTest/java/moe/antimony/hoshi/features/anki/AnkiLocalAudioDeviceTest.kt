@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.JsonObject
 import moe.antimony.hoshi.features.audio.LocalAudioRepository
 import moe.antimony.hoshi.features.audio.LocalAudioResolver
 import org.junit.Assert.assertEquals
@@ -100,6 +101,10 @@ class AnkiLocalAudioDeviceTest {
         override suspend fun update(transform: (AnkiSettings) -> AnkiSettings) {
             state.value = transform(state.value)
         }
+
+        override suspend fun exportEntries(): JsonObject = JsonObject(emptyMap())
+
+        override suspend fun importEntries(entries: JsonObject) {}
     }
 
     private class FakeAnkiBackend : AnkiBackend {

@@ -14,8 +14,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
 import dagger.hilt.android.qualifiers.ApplicationContext
 import moe.antimony.hoshi.di.IoDispatcher
 
@@ -41,6 +46,27 @@ class DeviceCodeDriveAuthorizer @Inject constructor(
             .putString(ClientIdKey, clientId.trim())
             .putString(ClientSecretKey, clientSecret.trim())
             .apply()
+    }
+
+    /** Exports the OAuth client and tokens for settings backup. Sensitive: includes the refresh token. */
+    fun exportCredentials(): JsonObject = buildJsonObject {
+        preferences.getString(ClientIdKey, null)?.let { put(ClientIdKey, it) }
+        preferences.getString(ClientSecretKey, null)?.let { put(ClientSecretKey, it) }
+        preferences.getString(AccessTokenKey, null)?.let { put(AccessTokenKey, it) }
+        preferences.getString(RefreshTokenKey, null)?.let { put(RefreshTokenKey, it) }
+        val expiresAt = preferences.getLong(AccessTokenExpiresAtMillisKey, 0L)
+        if (expiresAt != 0L) put(AccessTokenExpiresAtMillisKey, expiresAt)
+    }
+
+    fun importCredentials(credentials: JsonObject) {
+        val editor = preferences.edit()
+        credentials[ClientIdKey]?.jsonPrimitive?.contentOrNull?.let { editor.putString(ClientIdKey, it) }
+        credentials[ClientSecretKey]?.jsonPrimitive?.contentOrNull?.let { editor.putString(ClientSecretKey, it) }
+        credentials[AccessTokenKey]?.jsonPrimitive?.contentOrNull?.let { editor.putString(AccessTokenKey, it) }
+        credentials[RefreshTokenKey]?.jsonPrimitive?.contentOrNull?.let { editor.putString(RefreshTokenKey, it) }
+        credentials[AccessTokenExpiresAtMillisKey]?.jsonPrimitive?.longOrNull
+            ?.let { editor.putLong(AccessTokenExpiresAtMillisKey, it) }
+        editor.apply()
     }
 
     suspend fun requestDeviceCode(): DeviceCodePrompt {

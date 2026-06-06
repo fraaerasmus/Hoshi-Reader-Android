@@ -11,6 +11,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+import kotlinx.serialization.json.JsonObject
+import moe.antimony.hoshi.features.backup.PreferencesBackup
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -183,6 +185,12 @@ class AudioSettingsRepository(
             preferences.writeAudioSettings(transform(current).normalizedAudioSettings())
             preferences[KEY_MIGRATED_FROM_SHARED_PREFERENCES] = true
         }
+    }
+
+    suspend fun exportEntries(): JsonObject = PreferencesBackup.export(dataStore)
+
+    suspend fun importEntries(entries: JsonObject) {
+        PreferencesBackup.import(dataStore, entries)
     }
 
     private suspend fun migrateLegacySettingsIfNeeded() {

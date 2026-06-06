@@ -58,6 +58,7 @@ fun BackupSettingsView(
     val context = LocalContext.current
     val appContainer = LocalHoshiUiDependencies.current
     val repository = appContainer.backupRepository
+    val settingsRepository = appContainer.settingsBackupRepository
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     var operation by remember { mutableStateOf<BackupOperation?>(null) }
@@ -69,6 +70,10 @@ fun BackupSettingsView(
     val booksRestoreFailed = stringResource(R.string.backup_books_restore_failed)
     val dictionariesRestored = stringResource(R.string.backup_dictionaries_restored)
     val dictionariesRestoreFailed = stringResource(R.string.backup_dictionaries_restore_failed)
+    val settingsBackupSaved = stringResource(R.string.backup_settings_saved)
+    val settingsBackupSaveFailed = stringResource(R.string.backup_settings_save_failed)
+    val settingsRestored = stringResource(R.string.backup_settings_restored)
+    val settingsRestoreFailed = stringResource(R.string.backup_settings_restore_failed)
     val booksExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri == null || operation != null) return@rememberLauncherForActivityResult
         operation = BackupOperation.Exporting
@@ -144,6 +149,41 @@ fun BackupSettingsView(
             )
         }
     }
+    val settingsExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null || operation != null) return@rememberLauncherForActivityResult
+        operation = BackupOperation.Exporting
+        scope.launch {
+            val result = runCatching {
+                settingsRepository.exportSettings(context.contentResolver, uri)
+            }
+            operation = null
+            snackbarHostState.showSnackbar(
+                if (result.isSuccess) {
+                    settingsBackupSaved
+                } else {
+                    result.exceptionOrNull()?.message ?: settingsBackupSaveFailed
+                },
+            )
+        }
+    }
+    val settingsImporter = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null || operation != null) return@rememberLauncherForActivityResult
+        operation = BackupOperation.Restoring
+        scope.launch {
+            val result = runCatching {
+                settingsRepository.importSettings(context.contentResolver, uri)
+                appContainer.dictionaryRepository.rebuildLookupQuery()
+            }
+            operation = null
+            snackbarHostState.showSnackbar(
+                if (result.isSuccess) {
+                    settingsRestored
+                } else {
+                    result.exceptionOrNull()?.message ?: settingsRestoreFailed
+                },
+            )
+        }
+    }
 
     SettingsDetailScaffold(
         title = stringResource(R.string.settings_backup),
@@ -180,6 +220,15 @@ fun BackupSettingsView(
                         footer = stringResource(R.string.backup_restore_overwrites),
                         onBackup = { dictionariesExporter.launch(dictionariesBackupFileName()) },
                         onRestore = { dictionariesImporter.launch(ImportFileType.HoshiBackup.mimeTypes) },
+                        enabled = operation == null,
+                    )
+                }
+                item {
+                    BackupSection(
+                        title = stringResource(R.string.backup_app_settings),
+                        footer = stringResource(R.string.backup_settings_credentials_warning),
+                        onBackup = { settingsExporter.launch(settingsBackupFileName()) },
+                        onRestore = { settingsImporter.launch(SETTINGS_IMPORT_MIME_TYPES) },
                         enabled = operation == null,
                     )
                 }
@@ -256,6 +305,8 @@ private fun BackupGroupCard(content: @Composable () -> Unit) {
         Column(content = { content() })
     }
 }
+
+private val SETTINGS_IMPORT_MIME_TYPES = arrayOf("application/json", "application/octet-stream")
 
 private enum class BackupOperation(val labelRes: Int) {
     Exporting(R.string.backup_archiving),

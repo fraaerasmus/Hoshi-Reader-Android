@@ -10,6 +10,7 @@ import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.features.audio.AudioSettingsRepository
 import moe.antimony.hoshi.features.audio.LocalAudioRepository
 import moe.antimony.hoshi.features.backup.HoshiBackupRepository
+import moe.antimony.hoshi.features.backup.SettingsBackupRepository
 import moe.antimony.hoshi.features.dictionary.DictionarySettingsRepository
 import moe.antimony.hoshi.features.profiles.LearningProfilesRepository
 import moe.antimony.hoshi.features.reader.ReaderFontManager
@@ -42,6 +43,7 @@ internal class HoshiUiDependencies @Inject constructor(
     private val readerFontManagerProvider: Lazy<ReaderFontManager>,
     private val localAudioRepositoryProvider: Lazy<LocalAudioRepository>,
     private val backupRepositoryProvider: Lazy<HoshiBackupRepository>,
+    private val settingsBackupRepositoryProvider: Lazy<SettingsBackupRepository>,
     private val storageCleanupRepositoryProvider: Lazy<StorageCleanupRepository>,
     private val deviceCodeDriveAuthorizerProvider: Lazy<DeviceCodeDriveAuthorizer>,
     private val googleDriveClientProvider: Lazy<GoogleDriveClient>,
@@ -65,6 +67,7 @@ internal class HoshiUiDependencies @Inject constructor(
     val readerFontManager: ReaderFontManager get() = readerFontManagerProvider.get()
     val localAudioRepository: LocalAudioRepository get() = localAudioRepositoryProvider.get()
     val backupRepository: HoshiBackupRepository get() = backupRepositoryProvider.get()
+    val settingsBackupRepository: SettingsBackupRepository get() = settingsBackupRepositoryProvider.get()
     val storageCleanupRepository: StorageCleanupRepository get() = storageCleanupRepositoryProvider.get()
     val deviceCodeDriveAuthorizer: DeviceCodeDriveAuthorizer get() = deviceCodeDriveAuthorizerProvider.get()
     val googleDriveClient: GoogleDriveClient get() = googleDriveClientProvider.get()
