@@ -1,0 +1,122 @@
+---
+name: Build debug APK (PR #97)
+
+# Manually triggered build that produces an installable, debug-signed APK and
+# publishes it to a GitHub Release on this fork for easy phone download.
+# Modeled on android-ci.yml's toolchain setup.
+
+"on":
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-debug-apk:
+    name: Build and publish debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    env:
+      CMAKE_VERSION: "3.22.1"
+      NDK_VERSION: "27.2.12479018"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Initialize required submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git submodule update --init --recursive third_party/hoshidicts-kotlin-bridge
+          git submodule status --recursive
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager \
+            "platforms;android-36.1" \
+            "build-tools;36.0.0" \
+            "cmake;${CMAKE_VERSION}" \
+            "ndk;${NDK_VERSION}"
+          ndk_home="${ANDROID_HOME}/ndk/${NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ndk_home}" >> "${GITHUB_ENV}"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - name: Restore Cargo cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src/main/rust/hoshiepub
+
+      - name: Install cargo-ndk
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v cargo-ndk >/dev/null 2>&1; then
+            cargo install cargo-ndk --locked
+          fi
+
+      - name: Restore Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Assemble debug APK
+        shell: bash
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Locate APK
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="app/build/outputs/apk/debug/app-debug.apk"
+          if [[ ! -f "${src}" ]]; then
+            echo "Debug APK not found at ${src}" >&2
+            find app/build/outputs/apk -type f -name '*.apk' -print >&2 || true
+            exit 1
+          fi
+          asset="Hoshi-Reader-pr97-debug.apk"
+          cp "${src}" "${asset}"
+          echo "asset=${asset}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hoshi-reader-pr97-debug-apk
+          path: ${{ steps.apk.outputs.asset }}
+          if-no-files-found: error
+
+      - name: Publish debug APK to a Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="pr97-debug"
+          asset="${{ steps.apk.outputs.asset }}"
+          gh release delete "${tag}" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "${tag}" "${asset}" \
+            --title "Hoshi Reader — PR #97 multilingual (debug)" \
+            --notes "Debug-signed build of main + PR #97 (multilingual hoshidicts lookup). Installs as a separate app 'Hoshi Debug'. For personal sideloading only." \
+            --prerelease
+
+      - name: Run unit tests (informational, non-blocking)
+        continue-on-error: true
+        shell: bash
+        run: ./gradlew --no-daemon test
