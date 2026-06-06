@@ -47,6 +47,15 @@
     <string name="main_tab_settings" comment="Main navigation tab label, intentionally matching settings page titles.">设置</string>
     <string name="settings_dictionaries" comment="Settings row label, intentionally matching the backup Dictionaries section.">辞典</string>
     <string name="settings_anki">Anki</string>
+    <string name="settings_profiles">Profiles</string>
+    <string name="profiles_title">Profiles</string>
+    <string name="profiles_add_profile">Add Profile</string>
+    <string name="profiles_edit_profile">Edit Profile</string>
+    <string name="profiles_name">Profile Name</string>
+    <string name="profiles_language">Learning Language</string>
+    <string name="profiles_active">Active</string>
+    <string name="profiles_new_name_format">Profile %1$d</string>
+    <string name="profiles_delete_title_format">Delete \"%1$s\"?</string>
     <string name="settings_appearance">外观</string>
     <string name="settings_behavior">行为</string>
     <string name="settings_advanced">高级</string>
@@ -137,6 +146,25 @@
     <string name="dictionary_delete_action">删除辞典</string>
     <string name="dictionary_reorder_action">重新排序辞典</string>
     <string name="dictionary_settings_lookup">查词</string>
+    <string name="dictionary_lookup_language">&#x67E5;&#x8BCD;&#x8BED;&#x8A00;</string>
+    <string name="dictionary_language_arabic">&#x963F;&#x62C9;&#x4F2F;&#x8BED;</string>
+    <string name="dictionary_language_german">&#x5FB7;&#x8BED;</string>
+    <string name="dictionary_language_modern_greek">&#x73B0;&#x4EE3;&#x5E0C;&#x814A;&#x8BED;</string>
+    <string name="dictionary_language_english">&#x82F1;&#x8BED;</string>
+    <string name="dictionary_language_esperanto">&#x4E16;&#x754C;&#x8BED;</string>
+    <string name="dictionary_language_spanish">&#x897F;&#x73ED;&#x7259;&#x8BED;</string>
+    <string name="dictionary_language_basque">&#x5DF4;&#x65AF;&#x514B;&#x8BED;</string>
+    <string name="dictionary_language_french">&#x6CD5;&#x8BED;</string>
+    <string name="dictionary_language_irish">&#x7231;&#x5C14;&#x5170;&#x8BED;</string>
+    <string name="dictionary_language_ancient_greek">&#x53E4;&#x5E0C;&#x814A;&#x8BED;</string>
+    <string name="dictionary_language_japanese">&#x65E5;&#x8BED;</string>
+    <string name="dictionary_language_georgian">&#x683C;&#x9C81;&#x5409;&#x4E9A;&#x8BED;</string>
+    <string name="dictionary_language_korean">&#x97E9;&#x8BED;</string>
+    <string name="dictionary_language_latin">&#x62C9;&#x4E01;&#x8BED;</string>
+    <string name="dictionary_language_old_irish">&#x53E4;&#x7231;&#x5C14;&#x5170;&#x8BED;</string>
+    <string name="dictionary_language_albanian">&#x963F;&#x5C14;&#x5DF4;&#x5C3C;&#x4E9A;&#x8BED;</string>
+    <string name="dictionary_language_tagalog">&#x4ED6;&#x52A0;&#x7984;&#x8BED;</string>
+    <string name="dictionary_language_yiddish">&#x610F;&#x7B2C;&#x7EEA;&#x8BED;</string>
     <string name="dictionary_settings_import" comment="Dictionary settings section label, intentionally matching the Import action noun.">导入</string>
     <string name="dictionary_scan_non_japanese">扫描非日语文本</string>
     <string name="dictionary_max_results">最大结果数</string>

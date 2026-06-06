@@ -330,12 +330,17 @@ internal class DictionaryViewModel : ViewModel {
         }
     }
 
-    fun setDictionaryEnabled(dictionary: DictionaryInfo, enabled: Boolean) {
+    fun setDictionaryEnabled(
+        dictionary: DictionaryInfo,
+        enabled: Boolean,
+        afterSaved: suspend () -> Unit = {},
+    ) {
         val type = _uiState.value.selectedType
         scope.launch {
             withContext(ioDispatcher) {
                 repository.setDictionaryEnabled(type, dictionary.path.name, enabled)
             }
+            afterSaved()
             reloadDictionaries(clearError = false)
         }
     }

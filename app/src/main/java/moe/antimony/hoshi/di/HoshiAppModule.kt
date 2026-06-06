@@ -23,6 +23,8 @@ import moe.antimony.hoshi.features.bookshelf.BookshelfSettingsRepository
 import moe.antimony.hoshi.features.bookshelf.bookshelfSettingsRepository
 import moe.antimony.hoshi.features.dictionary.DictionarySettingsRepository
 import moe.antimony.hoshi.features.dictionary.dictionarySettingsRepository
+import moe.antimony.hoshi.features.profiles.LearningProfilesRepository
+import moe.antimony.hoshi.features.profiles.learningProfilesRepository
 import moe.antimony.hoshi.features.reader.ReaderSettingsRepository
 import moe.antimony.hoshi.features.reader.readerSettingsRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsRepository
@@ -85,6 +87,11 @@ internal object HoshiAppModule {
     @Singleton
     fun provideDictionarySettingsRepository(@ApplicationContext context: Context): DictionarySettingsRepository =
         context.dictionarySettingsRepository()
+
+    @Provides
+    @Singleton
+    fun provideLearningProfilesRepository(@ApplicationContext context: Context): LearningProfilesRepository =
+        context.learningProfilesRepository()
 
     @Provides
     @Singleton

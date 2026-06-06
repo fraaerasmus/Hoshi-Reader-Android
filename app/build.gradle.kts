@@ -38,10 +38,10 @@ if (isReleaseSigningRequested && !isReleaseSigningConfigured) {
     )
 }
 
-val hostLibExtension = when {
-    System.getProperty("os.name").lowercase().contains("mac") -> "dylib"
-    System.getProperty("os.name").lowercase().contains("win") -> "dll"
-    else -> "so"
+val hostLibName = when {
+    System.getProperty("os.name").lowercase().contains("mac") -> "libhoshiepub.dylib"
+    System.getProperty("os.name").lowercase().contains("win") -> "hoshiepub.dll"
+    else -> "libhoshiepub.so"
 }
 
 android {
@@ -181,7 +181,7 @@ val buildRustHost by tasks.registering(Exec::class) {
         rustProjectDir.resolve("uniffi.toml"),
     )
     inputs.dir(rustProjectDir.resolve("src"))
-    outputs.file(rustProjectDir.resolve("target/debug/libhoshiepub.$hostLibExtension"))
+    outputs.file(rustProjectDir.resolve("target/debug/$hostLibName"))
 
     commandLine(cargo, "build", "--lib")
 }
@@ -190,7 +190,7 @@ val generateUniffiKotlin by tasks.registering(Exec::class) {
     dependsOn(buildRustHost)
     workingDir = rustProjectDir
 
-    val hostLibPath = rustProjectDir.resolve("target/debug/libhoshiepub.$hostLibExtension")
+    val hostLibPath = rustProjectDir.resolve("target/debug/$hostLibName")
 
     inputs.file(hostLibPath)
     inputs.file(rustProjectDir.resolve("uniffi.toml"))

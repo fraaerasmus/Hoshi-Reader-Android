@@ -45,6 +45,14 @@ internal class DictionaryRepository private constructor(
     fun loadDictionaries(type: DictionaryType): List<DictionaryInfo> =
         storage.loadDictionaries(type)
 
+    fun currentConfig(): DictionaryConfig =
+        storage.currentConfig()
+
+    fun saveConfig(config: DictionaryConfig) {
+        storage.saveConfig(config)
+        rebuildLookupQuery()
+    }
+
     fun updatableDictionaries(): List<DictionaryUpdateCandidate> =
         storage.updatableDictionaries()
 
@@ -192,9 +200,9 @@ internal class DictionaryRepository private constructor(
         }
     }
 
-    fun lookup(text: String, maxResults: Int = 16, scanLength: Int = 16): List<LookupResult> {
+    fun lookup(text: String, maxResults: Int = 16, scanLength: Int = 16, language: String = "ja"): List<LookupResult> {
         ensureLookupQueryReady()
-        return LookupEngine.lookup(text, maxResults, scanLength)
+        return LookupEngine.lookup(text, maxResults, scanLength, language)
     }
 
     fun dictionaryStyles(): Map<String, String> {

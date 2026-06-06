@@ -27,7 +27,7 @@ internal interface DictionarySearchRepository {
     val dictionarySettings: Flow<DictionarySettings>
     val audioSettings: Flow<AudioSettings>
     suspend fun rebuildLookupQuery()
-    fun lookup(query: String, maxResults: Int, scanLength: Int): List<LookupResult>
+    fun lookup(query: String, maxResults: Int, scanLength: Int, language: String): List<LookupResult>
     fun dictionaryStyles(): Map<String, String>
 }
 
@@ -44,8 +44,8 @@ internal class AndroidDictionarySearchRepository @Inject constructor(
         dictionaryRepository.rebuildLookupQuery()
     }
 
-    override fun lookup(query: String, maxResults: Int, scanLength: Int): List<LookupResult> =
-        dictionaryRepository.lookup(query, maxResults, scanLength)
+    override fun lookup(query: String, maxResults: Int, scanLength: Int, language: String): List<LookupResult> =
+        dictionaryRepository.lookup(query, maxResults, scanLength, language)
 
     override fun dictionaryStyles(): Map<String, String> =
         dictionaryRepository.dictionaryStyles()
@@ -146,7 +146,14 @@ internal class DictionarySearchViewModel : ViewModel {
                         val styles = repository.dictionaryStyles()
                         DictionarySearchContent.runLookup(
                             query = query,
-                            lookup = { repository.lookup(it, dictionarySettings.maxResults, dictionarySettings.scanLength) },
+                            lookup = {
+                                repository.lookup(
+                                    it,
+                                    dictionarySettings.maxResults,
+                                    dictionarySettings.scanLength,
+                                    dictionarySettings.lookupLanguage.code,
+                                )
+                            },
                             dictionaryStyles = styles,
                         )
                     }
@@ -192,7 +199,7 @@ internal class DictionarySearchViewModel : ViewModel {
 
     fun lookupRedirect(query: String): List<LookupResult> {
         val settings = _uiState.value.dictionarySettings.normalized()
-        return repository.lookup(query, settings.maxResults, settings.scanLength)
+        return repository.lookup(query, settings.maxResults, settings.scanLength, settings.lookupLanguage.code)
     }
 
     fun entryForPopup(popupId: String, index: Int): LookupResult? {
