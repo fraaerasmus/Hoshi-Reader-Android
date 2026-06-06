@@ -216,7 +216,7 @@ internal class DictionarySearchViewModel : ViewModel {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return emptyList()
         val settings = _uiState.value.dictionarySettings.normalized()
-        val results = repository.lookup(trimmed, settings.maxResults, settings.scanLength)
+        val results = repository.lookup(trimmed, settings.maxResults, settings.scanLength, settings.lookupLanguage.code)
         if (results.isNotEmpty()) {
             _uiState.update {
                 it.copy(

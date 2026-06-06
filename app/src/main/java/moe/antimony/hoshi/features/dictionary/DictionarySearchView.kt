@@ -767,6 +767,7 @@ private fun Modifier.observeDictionaryHistorySwipe(
 private fun DictionarySearchTopBar(
     query: String,
     isSearching: Boolean,
+    lookupLanguage: DictionaryLanguage,
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
     focusRequestKey: Any,
@@ -788,6 +789,7 @@ private fun DictionarySearchTopBar(
             DictionarySearchBar(
                 query = query,
                 isSearching = isSearching,
+                lookupLanguage = lookupLanguage,
                 onQueryChange = onQueryChange,
                 onSubmit = onSubmit,
                 focusRequestKey = focusRequestKey,
