@@ -69,6 +69,16 @@ android {
         }
     }
 
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug-signing/hoshi-debug.p12")
+            storePassword = "android"
+            keyAlias = "hoshidebug"
+            keyPassword = "android"
+            storeType = "PKCS12"
+        }
+    }
+
     if (isReleaseSigningConfigured) {
         signingConfigs {
             create("release") {
@@ -83,7 +93,7 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
-            manifestPlaceholders["appLabel"] = "Hoshi Debug"
+            manifestPlaceholders["appLabel"] = "Hoshi Custom"
             buildConfigField(
                 "String",
                 "UPDATE_RELEASE_URL",

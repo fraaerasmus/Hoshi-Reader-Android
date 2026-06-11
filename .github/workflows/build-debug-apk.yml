@@ -1,9 +1,10 @@
 ---
-name: Build debug APK (PR #97)
+name: Build Hoshi Custom APK
 
-# Manually triggered build that produces an installable, debug-signed APK and
-# publishes it to a GitHub Release on this fork for easy phone download.
-# Modeled on android-ci.yml's toolchain setup.
+# Manually triggered build that produces an installable, stably debug-signed APK
+# (version derived from the commit count so each build is detectably newer) and
+# publishes it to a non-prerelease GitHub Release on this fork. The in-app update
+# check for debug builds points at this fork's releases/latest.
 
 "on":
   workflow_dispatch:
@@ -13,7 +14,7 @@ permissions:
 
 jobs:
   build-debug-apk:
-    name: Build and publish debug APK
+    name: Build and publish Hoshi Custom APK
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -25,7 +26,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Initialize required submodules
         shell: bash
@@ -33,6 +34,24 @@ jobs:
           set -euo pipefail
           git submodule update --init --recursive third_party/hoshidicts-kotlin-bridge
           git submodule status --recursive
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version_name="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          maj="${version_name%%.*}"
+          rest="${version_name#*.}"
+          min="${rest%%.*}"
+          n="$(git rev-list --count HEAD)"
+          ver="${maj}.${min}.${n}"
+          code=$((maj * 10000 + min * 100 + n))
+          {
+            echo "ver=${ver}"
+            echo "code=${code}"
+          } >> "${GITHUB_OUTPUT}"
+          echo "Resolved version ${ver} (code ${code})"
 
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -78,7 +97,11 @@ jobs:
 
       - name: Assemble debug APK
         shell: bash
-        run: ./gradlew --no-daemon assembleDebug
+        run: |
+          set -euo pipefail
+          ./gradlew --no-daemon assembleDebug \
+            -PreleaseVersionName="${{ steps.version.outputs.ver }}" \
+            -PreleaseVersionCode="${{ steps.version.outputs.code }}"
 
       - name: Locate APK
         id: apk
@@ -91,30 +114,30 @@ jobs:
             find app/build/outputs/apk -type f -name '*.apk' -print >&2 || true
             exit 1
           fi
-          asset="Hoshi-Reader-pr97-debug.apk"
+          asset="Hoshi-Reader-v${{ steps.version.outputs.ver }}.apk"
           cp "${src}" "${asset}"
           echo "asset=${asset}" >> "${GITHUB_OUTPUT}"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hoshi-reader-pr97-debug-apk
+          name: hoshi-custom-apk
           path: ${{ steps.apk.outputs.asset }}
           if-no-files-found: error
 
-      - name: Publish debug APK to a Release
+      - name: Publish to a Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          tag="pr97-debug"
+          ver="${{ steps.version.outputs.ver }}"
+          tag="v${ver}"
           asset="${{ steps.apk.outputs.asset }}"
           gh release delete "${tag}" --yes --cleanup-tag 2>/dev/null || true
           gh release create "${tag}" "${asset}" \
-            --title "Hoshi Reader — PR #97 multilingual (debug)" \
-            --notes "Debug-signed build of main + PR #97 (multilingual hoshidicts lookup). Installs as a separate app 'Hoshi Debug'. For personal sideloading only." \
-            --prerelease
+            --title "Hoshi Custom v${ver}" \
+            --notes "Custom Hoshi Reader build (upstream + multilingual hoshidicts lookup, learning profiles, and JSON settings backup). Installs as a separate app 'Hoshi Custom'. Debug-signed for personal sideloading; in-app updates track this fork's releases."
 
       - name: Run unit tests (informational, non-blocking)
         continue-on-error: true
