@@ -30,7 +30,7 @@ body {
     --background-color-dark1: #eeeeee;
     color: var(--text-color);
     background-color: transparent;
-    font-family: "Hiragino Sans", "Hiragino Kaku Gothic ProN", sans-serif !important;
+    font-family: var(--hoshi-content-font-family, "Noto Sans CJK JP", "NotoSansCJKJP-Regular", sans-serif) !important;
     overscroll-behavior-y: contain;
     touch-action: pan-y;
 }

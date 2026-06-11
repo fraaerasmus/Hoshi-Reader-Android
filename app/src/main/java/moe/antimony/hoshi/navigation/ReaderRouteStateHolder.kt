@@ -13,7 +13,7 @@ import java.io.File
 
 internal class ReaderRouteStateHolder(
     private val repository: ReaderRouteBookRepository,
-    private val parser: ReaderRouteEpubParser = DefaultReaderRouteEpubParser,
+    private val parser: ReaderRouteEpubParser = DefaultReaderRouteEpubParser(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     suspend fun load(
@@ -27,7 +27,7 @@ internal class ReaderRouteStateHolder(
             val parsedBook = parser.parse(entry.root, cachedBookInfo)
             val metadata = entry.metadata.copy(
                 title = parsedBook.title,
-                cover = repository.metadataCoverPath(entry.root, parsedBook.coverHref),
+                cover = repository.metadataCoverPath(entry.root, parsedBook.coverHref) ?: entry.metadata.cover,
                 folder = entry.root.name,
                 lastAccess = repository.currentAppleReferenceDateSeconds(),
             )
@@ -40,12 +40,14 @@ internal class ReaderRouteStateHolder(
             if (cachedBookInfo != displayBook.bookInfo) {
                 repository.saveBookInfo(entry.root, displayBook.bookInfo)
             }
+            val bookCoverFile = resolveMetadataCoverFile(entry.root, metadata.cover)
             beforeBookmarkLoad(displayEntry)
             val bookmark = repository.loadBookmark(entry.root)
             ReaderRouteLoadState.Ready(
                 entry = displayEntry,
                 bookRoot = entry.root,
                 book = displayBook,
+                bookCoverFile = bookCoverFile,
                 bookmark = bookmark,
             )
         }.getOrElse { error ->
@@ -80,9 +82,11 @@ internal interface ReaderRouteEpubParser {
     fun parse(root: File, cachedBookInfo: BookInfo? = null): EpubBook
 }
 
-private object DefaultReaderRouteEpubParser : ReaderRouteEpubParser {
+internal class DefaultReaderRouteEpubParser(
+    private val parser: EpubBookParser = EpubBookParser(),
+) : ReaderRouteEpubParser {
     override fun parse(root: File, cachedBookInfo: BookInfo?): EpubBook =
-        EpubBookParser().parse(root, cachedBookInfo = cachedBookInfo)
+        parser.parse(root, cachedBookInfo = cachedBookInfo)
 }
 
 internal sealed interface ReaderRouteLoadState {
@@ -92,10 +96,16 @@ internal sealed interface ReaderRouteLoadState {
         val entry: moe.antimony.hoshi.epub.BookEntry,
         val bookRoot: File,
         val book: EpubBook,
+        val bookCoverFile: File?,
         val bookmark: Bookmark?,
     ) : ReaderRouteLoadState
 
     data class Error(
         val message: String,
     ) : ReaderRouteLoadState
+}
+
+internal fun resolveMetadataCoverFile(bookRoot: File, metadataCoverPath: String?): File? {
+    val fileName = metadataCoverPath?.takeIf { it.isNotBlank() }?.let { File(it).name } ?: return null
+    return bookRoot.resolve(fileName).takeIf { it.isFile }
 }

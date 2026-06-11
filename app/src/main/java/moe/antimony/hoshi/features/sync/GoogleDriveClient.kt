@@ -1,7 +1,10 @@
 package moe.antimony.hoshi.features.sync
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLDecoder
@@ -23,15 +26,18 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import dagger.hilt.android.qualifiers.ApplicationContext
 import moe.antimony.hoshi.epub.ReadingStatistics
+import moe.antimony.hoshi.di.CacheDir
 import moe.antimony.hoshi.di.IoDispatcher
 
 @Singleton
 class GoogleDriveClient @Inject constructor(
-    @param:ApplicationContext context: Context,
+    @ApplicationContext context: Context,
     private val tokenProvider: DriveAccessTokenProvider,
+    @param:CacheDir private val cacheDir: File,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : DriveSyncDataSource {
     private val cachePreferences = context.applicationContext.getSharedPreferences(CacheName, Context.MODE_PRIVATE)
+    private val connectivityManager = context.applicationContext.getSystemService(ConnectivityManager::class.java)
     private var rootFolderId: String? = cachePreferences.getString(RootFolderIdKey, null)
     private var titleToFolderId: MutableMap<String, String> = cachePreferences
         .getStringSet(TitleFolderIdsKey, emptySet())
@@ -60,6 +66,14 @@ class GoogleDriveClient @Inject constructor(
         return folderId
     }
 
+    override suspend fun listBooks(rootFolderId: String): List<DriveFile> {
+        val list = listFiles(
+            query = "trashed=false and '${rootFolderId.driveQueryLiteral()}' in parents and mimeType='$FolderMimeType'",
+            fields = "nextPageToken, files(id, name, thumbnailLink)",
+        )
+        return list.files.map { it.toDriveFile() }
+    }
+
     override suspend fun ensureBookFolder(
         bookTitle: String,
         rootFolderId: String,
@@ -85,13 +99,29 @@ class GoogleDriveClient @Inject constructor(
     override suspend fun listSyncFiles(folderId: String): DriveSyncFiles {
         val list = listFiles(
             query = "trashed=false and '${folderId.driveQueryLiteral()}' in parents and mimeType != '$FolderMimeType'",
-            fields = "files(id, name)",
+            fields = "nextPageToken, files(id, name, parents, thumbnailLink)",
         )
-        return DriveSyncFiles(
-            progress = list.files.firstOrNull { it.name.startsWith("progress_") }?.toDriveFile(),
-            statistics = list.files.firstOrNull { it.name.startsWith("statistics_") }?.toDriveFile(),
-            audioBook = list.files.firstOrNull { it.name.startsWith("audioBook_") }?.toDriveFile(),
-        )
+        return list.files.map { it.toDriveFile() }.toDriveSyncFiles()
+    }
+
+    override suspend fun listSyncFiles(folderIds: List<String>): Map<String, DriveSyncFiles> {
+        if (folderIds.isEmpty()) return emptyMap()
+        val grouped = folderIds.associateWith { mutableListOf<DriveFile>() }.toMutableMap()
+        folderIds.chunked(MaxParentsPerSyncFileQuery).forEach { chunk ->
+            val parentQuery = chunk.joinToString(separator = " or ") { folderId ->
+                "'${folderId.driveQueryLiteral()}' in parents"
+            }
+            val list = listFiles(
+                query = "trashed=false and mimeType != '$FolderMimeType' and ($parentQuery)",
+                fields = "nextPageToken, files(id, name, parents, thumbnailLink)",
+            )
+            list.files.map { it.toDriveFile() }.forEach { file ->
+                file.parents.forEach { parent ->
+                    grouped[parent]?.add(file)
+                }
+            }
+        }
+        return grouped.mapValues { (_, files) -> files.toDriveSyncFiles() }
     }
 
     override suspend fun getProgressFile(fileId: String): TtuProgress =
@@ -130,9 +160,31 @@ class GoogleDriveClient @Inject constructor(
         )
     }
 
+    override suspend fun uploadBookData(folderId: String, file: File) {
+        uploadMultipartFile(
+            folderId = folderId,
+            fileId = null,
+            name = file.name,
+            file = file,
+            contentType = "application/zip",
+        )
+    }
+
+    override suspend fun trashFile(fileId: String) {
+        val url = driveUrl(endpoint = "files/${fileId.urlPathSegment()}", queryParameters = mapOf("fields" to "id, trashed"))
+        val metadata = buildJsonObject { put("trashed", true) }.toString().toByteArray()
+        performRequest(
+            url = url,
+            method = "PATCH",
+            body = metadata,
+            contentType = "application/json",
+        )
+    }
+
     override fun clearCache() {
         rootFolderId = null
         titleToFolderId.clear()
+        clearGoogleDriveCoverCache(cacheDir)
         cachePreferences.edit()
             .remove(RootFolderIdKey)
             .remove(TitleFolderIdsKey)
@@ -140,15 +192,21 @@ class GoogleDriveClient @Inject constructor(
     }
 
     private suspend fun listFiles(query: String, fields: String): DriveFileListResponse {
-        val url = driveUrl(
-            endpoint = "files",
-            queryParameters = mapOf(
-                "q" to query,
-                "fields" to fields,
-            ),
-        )
-        val data = performRequest(url = url, method = "GET")
-        return json.decodeFromString(DriveFileListResponse.serializer(), data.decodeToString())
+        val files = mutableListOf<DriveFileResponse>()
+        var pageToken: String? = null
+        do {
+            val queryParameters = buildMap {
+                put("q", query)
+                put("fields", fields)
+                pageToken?.let { put("pageToken", it) }
+            }
+            val url = driveUrl(endpoint = "files", queryParameters = queryParameters)
+            val data = performRequest(url = url, method = "GET")
+            val response = json.decodeFromString(DriveFileListResponse.serializer(), data.decodeToString())
+            files += response.files
+            pageToken = response.nextPageToken
+        } while (!pageToken.isNullOrBlank())
+        return DriveFileListResponse(files = files)
     }
 
     private suspend fun createFolder(name: String, parentId: String): String {
@@ -167,9 +225,31 @@ class GoogleDriveClient @Inject constructor(
         return json.decodeFromString(DriveIdResponse.serializer(), data.decodeToString()).id
     }
 
-    private suspend fun downloadFile(fileId: String): ByteArray {
+    override suspend fun downloadFile(
+        fileId: String,
+        progress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+    ): ByteArray {
         val url = driveUrl(endpoint = "files/${fileId.urlPathSegment()}", queryParameters = mapOf("alt" to "media"))
-        return performRequest(url = url, method = "GET")
+        return performRequest(url = url, method = "GET").also { data ->
+            progress(data.size.toLong(), data.size.toLong())
+        }
+    }
+
+    override suspend fun downloadFileTo(
+        fileId: String,
+        destination: File,
+        progress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+    ) {
+        val url = driveUrl(endpoint = "files/${fileId.urlPathSegment()}", queryParameters = mapOf("alt" to "media"))
+        performDownload(url = url, destination = destination, progress = progress)
+    }
+
+    override suspend fun downloadThumbnailTo(
+        thumbnailLink: String,
+        destination: File,
+        progress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+    ) {
+        performDownload(url = thumbnailLink, destination = destination, progress = progress)
     }
 
     private suspend fun uploadJsonFile(folderId: String, fileId: String?, name: String, content: ByteArray) {
@@ -229,6 +309,45 @@ class GoogleDriveClient @Inject constructor(
         )
     }
 
+    private suspend fun uploadMultipartFile(
+        folderId: String,
+        fileId: String?,
+        name: String,
+        file: File,
+        contentType: String,
+    ) {
+        val metadata = buildJsonObject {
+            put("name", name)
+            if (fileId == null) {
+                put("parents", kotlinx.serialization.json.JsonArray(listOf(kotlinx.serialization.json.JsonPrimitive(folderId))))
+            }
+        }.toString().toByteArray()
+        val boundary = UUID.randomUUID().toString()
+        val prefix = ByteArrayOutputStream().apply {
+            writeUtf8("--$boundary\r\n")
+            writeUtf8("Content-Type: application/json; charset=UTF-8\r\n\r\n")
+            write(metadata)
+            writeUtf8("\r\n--$boundary\r\n")
+            writeUtf8("Content-Type: $contentType\r\n\r\n")
+        }.toByteArray()
+        val suffix = "\r\n--$boundary--\r\n".toByteArray(StandardCharsets.UTF_8)
+        val url = if (fileId == null) {
+            "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart"
+        } else {
+            "https://www.googleapis.com/upload/drive/v3/files/${fileId.urlPathSegment()}?uploadType=multipart"
+        }
+        performStreamingUpload(
+            url = url,
+            method = if (fileId == null) "POST" else "PATCH",
+            contentType = "multipart/related; boundary=$boundary",
+            contentLength = prefix.size.toLong() + file.length() + suffix.size.toLong(),
+        ) { output ->
+            output.write(prefix)
+            file.inputStream().use { input -> input.copyTo(output) }
+            output.write(suffix)
+        }
+    }
+
     private suspend fun performRequest(
         url: String,
         method: String,
@@ -236,9 +355,12 @@ class GoogleDriveClient @Inject constructor(
         contentType: String? = null,
         retry: Boolean = true,
     ): ByteArray = withContext(ioDispatcher) {
+        checkValidatedInternet()
         val token = tokenProvider.accessToken()
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = method
+            connectTimeout = HttpConnectTimeoutMillis
+            readTimeout = HttpReadTimeoutMillis
             setRequestProperty("Authorization", "Bearer $token")
             contentType?.let { setRequestProperty("Content-Type", it) }
             if (body != null) {
@@ -267,6 +389,109 @@ class GoogleDriveClient @Inject constructor(
         responseBytes
     }
 
+    private suspend fun performDownload(
+        url: String,
+        destination: File,
+        progress: (downloadedBytes: Long, totalBytes: Long?) -> Unit,
+        retry: Boolean = true,
+    ): Unit = withContext(ioDispatcher) {
+        checkValidatedInternet()
+        val token = tokenProvider.accessToken()
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = HttpConnectTimeoutMillis
+            readTimeout = HttpReadTimeoutMillis
+            setRequestProperty("Authorization", "Bearer $token")
+        }
+        val statusCode = connection.responseCode
+        if (statusCode == HttpURLConnection.HTTP_UNAUTHORIZED && retry) {
+            connection.disconnect()
+            tokenProvider.clearAccessToken(token)
+            return@withContext performDownload(url, destination, progress, retry = false)
+        }
+        if (statusCode >= 400) {
+            val responseBytes = connection.errorStream?.use { it.readBytes() } ?: ByteArray(0)
+            connection.disconnect()
+            throw GoogleDriveApiException(
+                message = responseBytes.driveErrorMessage() ?: "Request failed with status $statusCode",
+                statusCode = statusCode,
+            )
+        }
+        destination.parentFile?.mkdirs()
+        val total = connection.contentLengthLong.takeIf { it >= 0 }
+        var downloaded = 0L
+        connection.inputStream.use { input ->
+            destination.outputStream().use { output ->
+                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read == -1) break
+                    output.write(buffer, 0, read)
+                    downloaded += read.toLong()
+                    progress(downloaded, total)
+                }
+            }
+        }
+        connection.disconnect()
+        progress(downloaded, total)
+    }
+
+    private suspend fun performStreamingUpload(
+        url: String,
+        method: String,
+        contentType: String,
+        contentLength: Long,
+        retry: Boolean = true,
+        writer: (java.io.OutputStream) -> Unit,
+    ): ByteArray = withContext(ioDispatcher) {
+        checkValidatedInternet()
+        val token = tokenProvider.accessToken()
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = method
+            connectTimeout = HttpConnectTimeoutMillis
+            readTimeout = HttpReadTimeoutMillis
+            setRequestProperty("Authorization", "Bearer $token")
+            setRequestProperty("Content-Type", contentType)
+            setFixedLengthStreamingMode(contentLength)
+            doOutput = true
+        }
+        connection.outputStream.use(writer)
+        val statusCode = connection.responseCode
+        if (statusCode == HttpURLConnection.HTTP_UNAUTHORIZED && retry) {
+            connection.disconnect()
+            tokenProvider.clearAccessToken(token)
+            return@withContext performStreamingUpload(url, method, contentType, contentLength, retry = false, writer)
+        }
+        val responseBytes = if (statusCode >= 400) {
+            connection.errorStream?.use { it.readBytes() } ?: ByteArray(0)
+        } else {
+            connection.inputStream.use { it.readBytes() }
+        }
+        connection.disconnect()
+        if (statusCode >= 400) {
+            throw GoogleDriveApiException(
+                message = responseBytes.driveErrorMessage() ?: "Request failed with status $statusCode",
+                statusCode = statusCode,
+            )
+        }
+        responseBytes
+    }
+
+    private fun checkValidatedInternet() {
+        val network = connectivityManager?.activeNetwork
+            ?: throw GoogleDriveApiException(GoogleDriveApiException.NoInternetConnectionMessage)
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+            ?: throw GoogleDriveApiException(GoogleDriveApiException.NoInternetConnectionMessage)
+        if (!shouldAttemptDriveRequest(
+                hasActiveNetwork = true,
+                hasInternetCapability = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
+                hasValidatedCapability = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
+            )
+        ) {
+            throw GoogleDriveApiException(GoogleDriveApiException.NoInternetConnectionMessage)
+        }
+    }
+
     private fun cacheBookFolder(sanitizedTitle: String, folderId: String) {
         titleToFolderId[sanitizedTitle] = folderId
         cachePreferences.edit()
@@ -291,26 +516,45 @@ class GoogleDriveClient @Inject constructor(
         private const val TitleFolderIdsKey = "titleFolderIds"
         private const val FolderMimeType = "application/vnd.google-apps.folder"
         private const val RootFolderName = "ttu-reader-data"
+        private const val MaxParentsPerSyncFileQuery = 50
+        private const val HttpConnectTimeoutMillis = 15_000
+        private const val HttpReadTimeoutMillis = 30_000
     }
 }
 
 @Serializable
 private data class DriveFileListResponse(
     val files: List<DriveFileResponse> = emptyList(),
+    val nextPageToken: String? = null,
 )
 
 @Serializable
 private data class DriveFileResponse(
     val id: String,
     val name: String,
+    val parents: List<String> = emptyList(),
+    val thumbnailLink: String? = null,
 ) {
-    fun toDriveFile(): DriveFile = DriveFile(id = id, name = name)
+    fun toDriveFile(): DriveFile = DriveFile(id = id, name = name, parents = parents, thumbnailLink = thumbnailLink)
 }
 
 @Serializable
 private data class DriveIdResponse(
     val id: String,
 )
+
+internal fun List<DriveFile>.toDriveSyncFiles(): DriveSyncFiles =
+    DriveSyncFiles(
+        bookData = latestTtuFile("bookdata_", TtuSyncRules::parseBookDataTimestampMillis),
+        cover = firstOrNull { it.name.startsWith("cover_") },
+        progress = latestTtuFile("progress_", TtuSyncRules::parseProgressTimestampMillis),
+        statistics = latestTtuFile("statistics_", TtuSyncRules::parseStatisticsTimestampMillis),
+        audioBook = latestTtuFile("audioBook_", TtuSyncRules::parseAudioBookTimestampMillis),
+    )
+
+private fun List<DriveFile>.latestTtuFile(prefix: String, timestampMillis: (DriveFile) -> Long?): DriveFile? =
+    filter { it.name.startsWith(prefix) }
+        .maxByOrNull { timestampMillis(it) ?: Long.MIN_VALUE }
 
 private val json = Json {
     ignoreUnknownKeys = true

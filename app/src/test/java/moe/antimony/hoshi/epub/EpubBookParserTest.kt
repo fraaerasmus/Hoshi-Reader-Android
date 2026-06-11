@@ -3,6 +3,7 @@ package moe.antimony.hoshi.epub
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -95,6 +96,100 @@ class EpubBookParserTest {
         assertEquals(14, book.bookInfo.characterCount)
         assertEquals(true, book.chapters.any { chapter -> selfClosingScriptRegex.containsMatchIn(chapter.html) })
         assertEquals("image/jpeg", book.mediaType(book.coverHref.orEmpty()))
+    }
+
+    @Test
+    fun parsesPackedEpubByExtractingToManagedCache() {
+        val archive = tempFolder.newFile("packed.epub")
+        val cacheRoot = tempFolder.newFolder("packed-cache")
+        writeMinimalEpubArchive(archive, title = "Packed Book")
+
+        val book = EpubBookParser().parsePacked(archive, cacheRoot)
+
+        assertEquals("Packed Book", book.title)
+        assertEquals(listOf("OPS/text/chapter-1.xhtml", "OPS/text/chapter-2.xhtml"), book.chapters.map { it.href })
+        assertArrayEquals("body {}".toByteArray(), book.readResource("OPS/styles/book.css"))
+        assertTrue(cacheRoot.walkTopDown().any { it.name == "container.xml" })
+    }
+
+    @Test
+    fun parsesPackedEpubIntoStableCacheDirectoryForRepeatedReads() {
+        val archive = tempFolder.newFile("stable-packed.epub")
+        val cacheRoot = tempFolder.newFolder("stable-cache")
+        writeMinimalEpubArchive(archive, title = "Stable Packed Book")
+
+        val first = EpubBookParser().parsePacked(archive, cacheRoot)
+        val firstRoot = first.rootDirectory
+        val second = EpubBookParser().parsePacked(archive, cacheRoot)
+
+        assertEquals(firstRoot?.canonicalFile, second.rootDirectory?.canonicalFile)
+        assertEquals(1, cacheRoot.listFiles().orEmpty().count { it.isDirectory })
+    }
+
+    @Test
+    fun parsesPackedEpubReextractsIncompleteCacheBeforeReusingBookInfo() {
+        val archive = tempFolder.newFile("incomplete-cache.epub")
+        val cacheRoot = tempFolder.newFolder("incomplete-cache")
+        writeMinimalEpubArchive(archive, title = "Incomplete Cache Book")
+        val parser = EpubBookParser()
+        val first = parser.parsePacked(archive, cacheRoot)
+        val extractedRoot = requireNotNull(first.rootDirectory)
+        val missingChapter = extractedRoot.resolve("OPS/text/chapter-2.xhtml")
+        assertTrue(missingChapter.delete())
+
+        val second = parser.parsePacked(archive, cacheRoot, cachedBookInfo = first.bookInfo)
+
+        assertTrue(missingChapter.isFile)
+        assertArrayEquals(
+            "<html><body><p>Second</p></body></html>".toByteArray(),
+            second.readResource("OPS/text/chapter-2.xhtml"),
+        )
+    }
+
+    @Test
+    fun parsesPackedEpubKeepsOtherExtractionRootsReadableLikeIosTempStorage() {
+        val firstArchive = tempFolder.newFile("first-packed.epub")
+        val secondArchive = tempFolder.newFile("second-packed.epub")
+        val cacheRoot = tempFolder.newFolder("single-working-cache")
+        writeMinimalEpubArchive(firstArchive, title = "First Packed Book")
+        writeMinimalEpubArchive(secondArchive, title = "Second Packed Book")
+
+        val first = EpubBookParser().parsePacked(firstArchive, cacheRoot)
+        val firstRoot = first.rootDirectory?.canonicalFile
+        val second = EpubBookParser().parsePacked(secondArchive, cacheRoot)
+        val secondRoot = second.rootDirectory?.canonicalFile
+
+        assertTrue(secondRoot?.isDirectory == true)
+        assertTrue(firstRoot?.isDirectory == true)
+        assertArrayEquals("body {}".toByteArray(), first.readResource("OPS/styles/book.css"))
+        assertEquals(
+            setOf(firstRoot, secondRoot),
+            cacheRoot.listFiles().orEmpty().filter { it.isDirectory }.map { it.canonicalFile }.toSet(),
+        )
+    }
+
+    @Test
+    fun metadataEpubPathOutsideBookRootIsIgnored() {
+        val root = tempFolder.newFolder("book-root")
+        writeMinimalExtractedEpub(root, title = "Inside Book")
+        val outside = tempFolder.newFile("outside.epub")
+        writeMinimalEpubArchive(outside, title = "Outside Book")
+        root.resolve("metadata.json").writeText(
+            """
+            {
+              "id":"book",
+              "title":"Book",
+              "cover":null,
+              "folder":"book-root",
+              "lastAccess":0.0,
+              "epub":"../outside.epub"
+            }
+            """.trimIndent(),
+        )
+
+        val book = EpubBookParser().parse(root)
+
+        assertEquals("Inside Book", book.title)
     }
 
     @Test

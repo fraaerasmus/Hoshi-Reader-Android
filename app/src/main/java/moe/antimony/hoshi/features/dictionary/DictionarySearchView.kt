@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -62,6 +63,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.intl.LocaleList
@@ -72,6 +74,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.features.audio.AudioRequestHandler
 import moe.antimony.hoshi.features.audio.AudioSettings
 import moe.antimony.hoshi.features.audio.WordAudioPlayer
@@ -103,11 +106,21 @@ private const val DictionaryPopupBottomInset = 0.0
 private val DictionaryPullResetThreshold = DictionaryPullResetTriggerDistanceDp.dp
 
 internal fun dictionarySearchKeyboardOptions(
-    language: DictionaryLanguage = DictionaryLanguage.Default,
-): KeyboardOptions = KeyboardOptions(
-    imeAction = ImeAction.Search,
-    showKeyboardOnFocus = true,
-    hintLocales = LocaleList(Locale(language.keyboardLocaleTag)),
+    contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
+): KeyboardOptions =
+    KeyboardOptions(
+        imeAction = ImeAction.Search,
+        showKeyboardOnFocus = true,
+        hintLocales = LocaleList(Locale(contentLanguageProfile.inputLocaleTag)),
+    )
+
+internal fun dictionarySearchTextStyle(
+    baseStyle: TextStyle,
+    color: Color,
+    contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
+): TextStyle = baseStyle.copy(
+    color = color,
+    localeList = LocaleList(Locale(contentLanguageProfile.composeLocaleTag)),
 )
 
 internal fun dictionarySearchPopupOptions(
@@ -115,6 +128,7 @@ internal fun dictionarySearchPopupOptions(
     dictionarySettings: DictionarySettings,
     darkMode: Boolean,
     audioSettings: AudioSettings,
+    contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
     topInset: Double = DictionaryPopupTopInset,
 ): LookupPopupOptions = LookupPopupOptions(
     isVertical = false,
@@ -134,6 +148,7 @@ internal fun dictionarySearchPopupOptions(
     darkMode = darkMode,
     eInkMode = readerSettings.eInkMode,
     audioSettings = audioSettings,
+    contentLanguageProfile = contentLanguageProfile,
 )
 
 @Composable
@@ -159,8 +174,10 @@ fun DictionarySearchView(
     var pullDistancePx by remember { mutableFloatStateOf(0f) }
     var localFocusRequestKey by remember { mutableIntStateOf(0) }
     val localAudioRepository = appContainer.localAudioRepository
+    val dictionaryRepository = appContainer.dictionaryRepository
     val fontManager = appContainer.readerFontManager
     val fontFaceCss = fontManager.popupFontFaceCss()
+    val rootContentLanguageProfile = ContentLanguageProfile.Default
     val readerPopupBridgeHolder = remember { ReaderLookupPopupBridgeCallbackHolder() }
     val popupDarkMode = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val popupOptions = dictionarySearchPopupOptions(
@@ -168,6 +185,7 @@ fun DictionarySearchView(
         dictionarySettings = uiState.dictionarySettings,
         darkMode = popupDarkMode,
         audioSettings = uiState.audioSettings,
+        contentLanguageProfile = rootContentLanguageProfile,
         topInset = searchBarBottomDp,
     )
     val viewport = remember(viewportSize, density) {
@@ -204,6 +222,7 @@ fun DictionarySearchView(
         ankiUiState.popupSettings,
         fontFaceCss,
         readerSettings.popupScale,
+        rootContentLanguageProfile,
     ) {
         LookupPopupHtml.renderIframeDocument(
             assets = null,
@@ -220,19 +239,20 @@ fun DictionarySearchView(
             ankiSettings = ankiUiState.popupSettings,
             fontFaceCss = fontFaceCss,
             popupScale = readerSettings.popupScale,
+            contentLanguageProfile = rootContentLanguageProfile,
         )
     }
     val currentReaderPopupIframeDocument = rememberUpdatedState(readerPopupIframeDocument)
     val readerPopupIframeUrl = remember(readerPopupIframeDocument) {
         readerLookupPopupIframeUrl(readerPopupIframeDocument.hashCode())
     }
-    val readerPopupResourceHandler = remember(context, assets, fontManager, localAudioRepository) {
+    val readerPopupResourceHandler = remember(context, assets, fontManager, localAudioRepository, dictionaryRepository) {
         ReaderLookupPopupResourceHandler(
             context = context.applicationContext,
             assets = assets,
             fontManager = fontManager,
             audioRequestHandler = AudioRequestHandler(localAudioRepository),
-            imageRequestHandler = DictionaryImageRequestHandler(),
+            imageRequestHandler = DictionaryImageRequestHandler(dictionaryRepository::dictionaryMedia),
             iframeDocument = { currentReaderPopupIframeDocument.value },
         )
     }
@@ -562,6 +582,7 @@ fun DictionarySearchView(
             onQueryChange = searchViewModel::updateQuery,
             onSubmit = runLookup,
             focusRequestKey = focusRequestKey to localFocusRequestKey,
+            contentLanguageProfile = rootContentLanguageProfile,
             onBottomChanged = { bottomPx ->
                 searchBarBottomDp = with(density) { bottomPx.toDp().value.toDouble() }
             },
@@ -616,7 +637,7 @@ private fun DictionarySearchIframeHost(
                     onPullReleased = { currentOnPullReleased.value(it) },
                 )
                 loadDataWithBaseURL(
-                    "https://hoshi.local/dictionary/iframe-host.html",
+                    "https://appassets.androidplatform.net/dictionary/iframe-host.html",
                     lookupPopupIframeHostHtml(),
                     "text/html",
                     "UTF-8",
@@ -771,6 +792,7 @@ private fun DictionarySearchTopBar(
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
     focusRequestKey: Any,
+    contentLanguageProfile: ContentLanguageProfile,
     onBottomChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -793,6 +815,7 @@ private fun DictionarySearchTopBar(
                 onQueryChange = onQueryChange,
                 onSubmit = onSubmit,
                 focusRequestKey = focusRequestKey,
+                contentLanguageProfile = contentLanguageProfile,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -808,6 +831,7 @@ private fun DictionarySearchBar(
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
     focusRequestKey: Any,
+    contentLanguageProfile: ContentLanguageProfile,
     modifier: Modifier = Modifier,
 ) {
     val focusRequester = remember { FocusRequester() }
@@ -866,9 +890,13 @@ private fun DictionarySearchBar(
                     enabled = !isSearching,
                     lineLimits = hoshiSingleLineTextFieldLineLimits(),
                     scrollState = fieldScrollState,
-                    textStyle = MaterialTheme.typography.titleMedium.copy(color = fieldForegroundColor),
+                    textStyle = dictionarySearchTextStyle(
+                        baseStyle = MaterialTheme.typography.titleMedium,
+                        color = fieldForegroundColor,
+                        contentLanguageProfile = contentLanguageProfile,
+                    ),
                     cursorBrush = hoshiTextFieldCursorBrush(fieldForegroundColor),
-                    keyboardOptions = dictionarySearchKeyboardOptions(lookupLanguage),
+                    keyboardOptions = dictionarySearchKeyboardOptions(contentLanguageProfile),
                     onKeyboardAction = { onSubmit() },
                 )
             }

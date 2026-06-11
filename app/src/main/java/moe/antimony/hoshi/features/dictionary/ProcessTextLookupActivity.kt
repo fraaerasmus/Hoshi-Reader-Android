@@ -35,8 +35,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.ProcessTextLookupRequest
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.dictionary.DictionaryRepository
-import moe.antimony.hoshi.dictionary.LookupEngine
 import moe.antimony.hoshi.features.audio.AudioRequestHandler
 import moe.antimony.hoshi.features.audio.AudioSettings
 import moe.antimony.hoshi.features.audio.AudioSettingsRepository
@@ -105,6 +105,7 @@ class ProcessTextLookupActivity : ComponentActivity() {
                 ProcessTextLookupOverlay(
                     query = request.query,
                     readerSettings = loadedReaderSettings,
+                    contentLanguageProfile = ContentLanguageProfile.Default,
                     dependencies = dependencies,
                     onClose = ::finish,
                 )
@@ -117,6 +118,7 @@ class ProcessTextLookupActivity : ComponentActivity() {
 private fun ProcessTextLookupOverlay(
     query: String,
     readerSettings: ReaderSettings,
+    contentLanguageProfile: ContentLanguageProfile,
     dependencies: ProcessTextLookupDependencies,
     onClose: () -> Unit,
 ) {
@@ -139,6 +141,7 @@ private fun ProcessTextLookupOverlay(
         popupSettings?.dictionaryStyles,
         popupSettings?.dictionarySettings,
         popupSettings?.audioSettings,
+        contentLanguageProfile,
         readerSettings.popupSwipeThreshold,
         readerSettings.popupReducedMotionScrolling,
         readerSettings.popupReducedMotionScrollPercent,
@@ -164,6 +167,7 @@ private fun ProcessTextLookupOverlay(
             ankiSettings = ankiUiState.popupSettings,
             fontFaceCss = fontFaceCss,
             popupScale = readerSettings.popupScale,
+            contentLanguageProfile = contentLanguageProfile,
         )
     }
     val currentReaderPopupIframeDocument = rememberUpdatedState(readerPopupIframeDocument)
@@ -181,19 +185,19 @@ private fun ProcessTextLookupOverlay(
             assets = assets,
             fontManager = dependencies.readerFontManager,
             audioRequestHandler = AudioRequestHandler(dependencies.localAudioRepository),
-            imageRequestHandler = DictionaryImageRequestHandler(),
+            imageRequestHandler = DictionaryImageRequestHandler(dependencies.dictionaryRepository::dictionaryMedia),
             iframeDocument = { currentReaderPopupIframeDocument.value },
         )
     }
     val readerPopupBridgeHolder = remember { ReaderLookupPopupBridgeCallbackHolder() }
 
-    LaunchedEffect(query, readerSettings, darkMode) {
+    LaunchedEffect(query, readerSettings, darkMode, contentLanguageProfile) {
         runCatching {
             withContext(Dispatchers.IO) {
                 dependencies.dictionaryRepository.rebuildLookupQuery()
                 val dictionarySettings = dependencies.dictionarySettingsRepository.settings.first().normalized()
                 val audioSettings = dependencies.audioSettingsRepository.settings.first()
-                val styles = currentDictionaryStyles()
+                val styles = dependencies.dictionaryRepository.dictionaryStyles()
                 val selection = ReaderSelectionData(
                     text = query,
                     sentence = query,
@@ -201,7 +205,7 @@ private fun ProcessTextLookupOverlay(
                     normalizedOffset = 0,
                     sentenceOffset = 0,
                 )
-                val results = LookupEngine.lookup(
+                val results = dependencies.dictionaryRepository.lookup(
                     query,
                     dictionarySettings.maxResults,
                     dictionarySettings.scanLength,
@@ -215,6 +219,7 @@ private fun ProcessTextLookupOverlay(
                     audioSettings = audioSettings,
                     readerSettings = readerSettings,
                     darkMode = darkMode,
+                    contentLanguageProfile = contentLanguageProfile,
                 )
             }
         }.onSuccess { popup ->
@@ -294,6 +299,8 @@ private fun ProcessTextLookupOverlay(
         fun lookupChildPopup(selection: ReaderSelectionData): Pair<LookupPopupItem, Int>? =
             createLookupPopupItem(
                 selection = selection,
+                dictionaryStyles = popupSettings?.dictionaryStyles ?: dependencies.dictionaryRepository.dictionaryStyles(),
+                lookup = dependencies.dictionaryRepository::lookup,
                 options = LookupPopupOptions(
                     isVertical = false,
                     isFullWidth = false,
@@ -311,8 +318,8 @@ private fun ProcessTextLookupOverlay(
                     eInkMode = readerSettings.eInkMode,
                     audioSettings = popupSettings?.audioSettings ?: AudioSettings(),
                     popupActionBar = false,
+                    contentLanguageProfile = contentLanguageProfile,
                 ),
-                dictionaryStyles = popupSettings?.dictionaryStyles,
             )
         fun handleReaderPopupBridgeMessage(message: ReaderLookupPopupBridgeMessage) {
             when (message) {
@@ -493,7 +500,7 @@ private fun ProcessTextLookupIframeHost(
                 ReaderLookupPopupWebBridge.install(this, callbackHolder)
                 webViewClient = LookupPopupIframeWebViewClient(resourceHandler)
                 loadDataWithBaseURL(
-                    "https://hoshi.local/process-text/iframe-host.html",
+                    "https://appassets.androidplatform.net/process-text/iframe-host.html",
                     lookupPopupIframeHostHtml(dismissTopPopupOnOutsideTap = true),
                     "text/html",
                     "UTF-8",
@@ -517,6 +524,7 @@ private fun lookupPopupItem(
     audioSettings: AudioSettings,
     readerSettings: ReaderSettings,
     darkMode: Boolean,
+    contentLanguageProfile: ContentLanguageProfile,
 ): LookupPopupItem? {
     if (results.isEmpty()) return null
     return LookupPopupItem(
@@ -540,6 +548,7 @@ private fun lookupPopupItem(
             eInkMode = readerSettings.eInkMode,
             audioSettings = audioSettings,
             popupActionBar = false,
+            contentLanguageProfile = contentLanguageProfile,
         ),
     )
 }

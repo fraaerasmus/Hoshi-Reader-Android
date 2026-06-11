@@ -95,14 +95,14 @@ class ReaderSettingsTest {
 
         val css = ReaderContentStyles.styleTag(
             settings = settings,
-            fontFaceUrl = "https://hoshi.local/fonts/KleeOne-SemiBold.ttf",
+            fontFaceUrl = "https://appassets.androidplatform.net/fonts/KleeOne-SemiBold.ttf",
         )
 
         assertTrue(css.contains("@font-face"))
         assertTrue(css.contains("font-family: 'KleeOne-SemiBold';"))
-        assertTrue(css.contains("src: url('https://hoshi.local/fonts/KleeOne-SemiBold.ttf');"))
+        assertTrue(css.contains("src: url('https://appassets.androidplatform.net/fonts/KleeOne-SemiBold.ttf');"))
         assertTrue(css.contains("writing-mode: vertical-rl !important;"))
-        assertTrue(css.contains("font-family: 'KleeOne-SemiBold', serif !important;"))
+        assertTrue(css.contains("font-family: 'KleeOne-SemiBold', 'Noto Serif CJK JP', 'NotoSerifCJKjp-Regular', serif !important;"))
         assertTrue(css.contains("font-size: 28px !important;"))
         assertTrue(css.contains("line-height: 1.85 !important;"))
         assertTrue(css.contains("letter-spacing: 0.02em !important;"))
@@ -113,6 +113,35 @@ class ReaderSettingsTest {
         assertTrue(css.contains("column-gap: calc(var(--hoshi-vertical-padding-gap, 8vh) + 28px);"))
         assertTrue(css.contains("padding: var(--hoshi-vertical-padding-block, 4.0vh) 6.0vw !important;"))
         assertTrue(css.contains("padding-bottom: calc(var(--hoshi-vertical-padding-block, 4.0vh) + 28px) !important;"))
+    }
+
+    @Test
+    fun readerViewportCssLayoutPreseedsAndroidWebViewLayoutVariables() {
+        val layout = readerViewportCssLayout(
+            settings = ReaderSettings(
+                verticalWriting = true,
+                fontSize = 22,
+                horizontalPadding = 12,
+                verticalPadding = 10,
+            ),
+            viewportCssWidth = 360,
+            viewportCssHeight = 720,
+        )
+
+        assertEquals(742, layout.pageHeightPx)
+        assertEquals(360, layout.pageWidthPx)
+        assertEquals(36.0, layout.verticalPaddingBlockPx, 0.0)
+        assertEquals(72.0, layout.verticalPaddingGapPx, 0.0)
+        assertEquals(315, layout.imageMaxWidthPx)
+        assertEquals(648, layout.imageMaxHeightPx)
+
+        val css = layout.cssVariables()
+        assertTrue(css.contains("--page-height: 742px;"))
+        assertTrue(css.contains("--page-width: 360px;"))
+        assertTrue(css.contains("--hoshi-vertical-padding-block: 36.0px;"))
+        assertTrue(css.contains("--hoshi-vertical-padding-gap: 72.0px;"))
+        assertTrue(css.contains("--hoshi-image-max-width: 315px;"))
+        assertTrue(css.contains("--hoshi-image-max-height: 648px;"))
     }
 
     @Test
@@ -168,18 +197,16 @@ class ReaderSettingsTest {
     }
 
     @Test
-    fun readerCssMigratesLegacyIosPresetNamesToAndroidJapaneseFallbacks() {
-        val legacyMinchoCss = ReaderContentStyles.styleTag(
-            ReaderSettings(selectedFont = "Hiragino Mincho ProN"),
-        )
-        val legacyGothicCss = ReaderContentStyles.styleTag(
-            ReaderSettings(selectedFont = "Hiragino Kaku Gothic ProN"),
+    fun readerCssUsesFixedJapaneseContentFallbackFamilyForCustomFonts() {
+        val css = ReaderContentStyles.styleTag(
+            settings = ReaderSettings(selectedFont = "KleeOne-SemiBold"),
         )
 
-        assertTrue(legacyMinchoCss.contains("'Noto Serif CJK JP'"))
-        assertFalse(legacyMinchoCss.contains("Hiragino Mincho ProN"))
-        assertTrue(legacyGothicCss.contains("'Noto Sans CJK JP'"))
-        assertFalse(legacyGothicCss.contains("Hiragino Kaku Gothic ProN"))
+        assertTrue(
+            css.contains(
+                "font-family: 'KleeOne-SemiBold', 'Noto Serif CJK JP', 'NotoSerifCJKjp-Regular', serif !important;",
+            ),
+        )
     }
 
     @Test

@@ -36,6 +36,7 @@ data class BookMetadata(
     val folder: String?,
     val lastAccess: Double,
     val renamedTitle: String? = null,
+    val epub: String? = null,
 ) {
     val displayTitle: String
         get() = renamedTitle?.takeIf { it.isNotBlank() } ?: title.orEmpty()
@@ -67,8 +68,11 @@ class BookStorage(filesDir: File) {
 
     suspend fun loadAllBooks(): List<File> = repository.loadAllBooks()
 
-    suspend fun loadBookEntries(sortOption: BookSortOption = BookSortOption.Recent): List<BookEntry> =
-        repository.loadBookEntries(sortOption)
+    suspend fun loadBookEntries(
+        sortOption: BookSortOption = BookSortOption.Recent,
+        onLegacyBookMigrationProgress: (LegacyBookMigrationProgress) -> Unit = {},
+    ): List<BookEntry> =
+        repository.loadBookEntries(sortOption, onLegacyBookMigrationProgress)
 
     suspend fun loadBookEntry(bookId: String): BookEntry? = repository.loadBookEntry(bookId)
 
@@ -85,6 +89,8 @@ class BookStorage(filesDir: File) {
     }
 
     suspend fun coverFile(entry: BookEntry): File? = repository.coverFile(entry)
+
+    suspend fun epubFile(entry: BookEntry): File? = repository.epubFile(entry)
 
     suspend fun metadataCoverPath(bookRoot: File, coverHref: String?): String? =
         repository.metadataCoverPath(bookRoot, coverHref)

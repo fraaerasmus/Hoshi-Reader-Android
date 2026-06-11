@@ -2,6 +2,7 @@ package moe.antimony.hoshi.features.backup
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -44,7 +45,7 @@ import moe.antimony.hoshi.R
 import moe.antimony.hoshi.features.settings.SettingsDetailScaffold
 import moe.antimony.hoshi.importing.FileImportContent
 import moe.antimony.hoshi.importing.ImportFileType
-import moe.antimony.hoshi.importing.localizedImportMessage
+import moe.antimony.hoshi.importing.UnsupportedImportFileTypeException
 import moe.antimony.hoshi.importing.validateImportFile
 import moe.antimony.hoshi.ui.HoshiBlockingProgressOverlay
 
@@ -74,6 +75,12 @@ fun BackupSettingsView(
     val settingsBackupSaveFailed = stringResource(R.string.backup_settings_save_failed)
     val settingsRestored = stringResource(R.string.backup_settings_restored)
     val settingsRestoreFailed = stringResource(R.string.backup_settings_restore_failed)
+    val hoshiBackupUnsupported = stringResource(R.string.import_select_hoshi_backup)
+    val ttuExported = stringResource(R.string.backup_ttu_saved)
+    val ttuExportFailed = stringResource(R.string.backup_ttu_save_failed)
+    val ttuImported = stringResource(R.string.backup_ttu_restored)
+    val ttuImportFailed = stringResource(R.string.backup_ttu_restore_failed)
+    val ttuBackupUnsupported = stringResource(R.string.import_select_ttu_bookdata_backup)
     val booksExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri == null || operation != null) return@rememberLauncherForActivityResult
         operation = BackupOperation.Exporting
@@ -108,6 +115,23 @@ fun BackupSettingsView(
             )
         }
     }
+    val ttuExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri == null || operation != null) return@rememberLauncherForActivityResult
+        operation = BackupOperation.ExportingTtu
+        scope.launch {
+            val result = runCatching {
+                repository.exportTtuBookData(context.contentResolver, uri)
+            }
+            operation = null
+            snackbarHostState.showSnackbar(
+                if (result.isSuccess) {
+                    ttuExported
+                } else {
+                    result.exceptionOrNull().stableBackupFailureMessage(ttuExportFailed)
+                },
+            )
+        }
+    }
     val booksImporter = rememberLauncherForActivityResult(FileImportContent()) { uri ->
         if (uri == null || operation != null) return@rememberLauncherForActivityResult
         operation = BackupOperation.Restoring
@@ -124,7 +148,7 @@ fun BackupSettingsView(
                 if (result.isSuccess) {
                     booksRestored
                 } else {
-                    result.exceptionOrNull()?.localizedImportMessage(context, booksRestoreFailed) ?: booksRestoreFailed
+                    result.exceptionOrNull().stableBackupFailureMessage(booksRestoreFailed, hoshiBackupUnsupported)
                 },
             )
         }
@@ -143,8 +167,29 @@ fun BackupSettingsView(
                 if (result.isSuccess) {
                     dictionariesRestored
                 } else {
-                    result.exceptionOrNull()?.localizedImportMessage(context, dictionariesRestoreFailed)
-                        ?: dictionariesRestoreFailed
+                    result.exceptionOrNull().stableBackupFailureMessage(dictionariesRestoreFailed, hoshiBackupUnsupported)
+                },
+            )
+        }
+    }
+    val ttuImporter = rememberLauncherForActivityResult(FileImportContent()) { uri ->
+        if (uri == null || operation != null) return@rememberLauncherForActivityResult
+        operation = BackupOperation.ImportingTtu
+        scope.launch {
+            val result = runCatching {
+                context.contentResolver.validateImportFile(uri, ImportFileType.TtuBookDataBackup)
+                repository.restoreTtuBookData(context.contentResolver, uri)
+            }
+            operation = null
+            val restoredCount = result.getOrNull() ?: 0
+            if (restoredCount > 0) {
+                onBooksRestored()
+            }
+            snackbarHostState.showSnackbar(
+                when {
+                    result.isSuccess && restoredCount > 0 -> ttuImported
+                    result.isSuccess -> ttuImportFailed
+                    else -> result.exceptionOrNull().stableBackupFailureMessage(ttuImportFailed, ttuBackupUnsupported)
                 },
             )
         }
@@ -232,6 +277,17 @@ fun BackupSettingsView(
                         enabled = operation == null,
                     )
                 }
+                item {
+                    BackupSection(
+                        title = stringResource(R.string.backup_ttu_bookdata),
+                        footer = stringResource(R.string.backup_ttu_bookdata_description),
+                        onBackup = { ttuExporter.launch(ttuBookDataBackupFileName()) },
+                        onRestore = { ttuImporter.launch(ImportFileType.TtuBookDataBackup.mimeTypes) },
+                        enabled = operation == null,
+                        backupLabelRes = R.string.action_export,
+                        restoreLabelRes = R.string.action_import,
+                    )
+                }
             }
             operation?.let { current ->
                 HoshiBlockingProgressOverlay(
@@ -254,6 +310,8 @@ private fun BackupSection(
     onBackup: () -> Unit,
     onRestore: () -> Unit,
     enabled: Boolean,
+    @StringRes backupLabelRes: Int = R.string.backup_action_backup,
+    @StringRes restoreLabelRes: Int = R.string.backup_action_restore,
 ) {
     Text(
         text = title,
@@ -265,7 +323,7 @@ private fun BackupSection(
         ListItem(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             leadingContent = { Icon(Icons.Rounded.Upload, contentDescription = null) },
-            headlineContent = { Text(stringResource(R.string.backup_action_backup)) },
+            headlineContent = { Text(stringResource(backupLabelRes)) },
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(enabled = enabled, onClick = onBackup),
@@ -277,7 +335,7 @@ private fun BackupSection(
         ListItem(
             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
             leadingContent = { Icon(Icons.Rounded.Download, contentDescription = null) },
-            headlineContent = { Text(stringResource(R.string.backup_action_restore)) },
+            headlineContent = { Text(stringResource(restoreLabelRes)) },
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(enabled = enabled, onClick = onRestore),
@@ -311,4 +369,16 @@ private val SETTINGS_IMPORT_MIME_TYPES = arrayOf("application/json", "applicatio
 private enum class BackupOperation(val labelRes: Int) {
     Exporting(R.string.backup_archiving),
     Restoring(R.string.backup_restoring),
+    ExportingTtu(R.string.backup_exporting),
+    ImportingTtu(R.string.backup_importing),
 }
+
+internal fun Throwable?.stableBackupFailureMessage(
+    fallback: String,
+    unsupportedImportMessage: String? = null,
+): String =
+    if (this is UnsupportedImportFileTypeException && unsupportedImportMessage != null) {
+        unsupportedImportMessage
+    } else {
+        fallback
+    }

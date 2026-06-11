@@ -4,10 +4,10 @@ import android.content.Context
 import android.util.Log
 import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
-import de.manhhao.hoshi.HoshiDicts
 import javax.inject.Inject
 import javax.inject.Singleton
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.dictionary.DictionaryRepository
 import moe.antimony.hoshi.features.audio.LocalAudioFile
 import moe.antimony.hoshi.features.audio.LocalAudioRepository
 import moe.antimony.hoshi.features.audio.LocalAudioResolver
@@ -20,12 +20,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 @Singleton
-class AnkiRepository(
+internal class AnkiRepository(
     private val context: Context,
     private val backend: AnkiBackend,
     private val settingsRepository: AnkiSettingsRepository,
     private val localAudioRepository: LocalAudioRepository,
     private val ankiConnectBackendFactory: (String) -> AnkiBackend,
+    private val loadDictionaryMedia: (DictionaryMedia) -> ByteArray?,
 ) {
     @Inject
     constructor(
@@ -33,12 +34,29 @@ class AnkiRepository(
         backend: AnkiBackend,
         settingsRepository: AnkiSettingsRepository,
         localAudioRepository: LocalAudioRepository,
+        dictionaryRepository: DictionaryRepository,
     ) : this(
         context = context,
         backend = backend,
         settingsRepository = settingsRepository,
         localAudioRepository = localAudioRepository,
         ankiConnectBackendFactory = { endpoint: String -> AnkiConnectBackend(endpoint) },
+        loadDictionaryMedia = { media -> dictionaryRepository.dictionaryMedia(media.dictionary, media.path) },
+    )
+
+    internal constructor(
+        context: Context,
+        backend: AnkiBackend,
+        settingsRepository: AnkiSettingsRepository,
+        localAudioRepository: LocalAudioRepository,
+        ankiConnectBackendFactory: (String) -> AnkiBackend = { endpoint: String -> AnkiConnectBackend(endpoint) },
+    ) : this(
+        context = context,
+        backend = backend,
+        settingsRepository = settingsRepository,
+        localAudioRepository = localAudioRepository,
+        ankiConnectBackendFactory = ankiConnectBackendFactory,
+        loadDictionaryMedia = { null },
     )
 
     val settings: Flow<AnkiSettings> = settingsRepository.settings
@@ -161,7 +179,7 @@ class AnkiRepository(
         val noteType = availableNoteTypes.firstOrNull { it.id == settings.selectedNoteTypeId }
             ?: settings.selectedNoteTypeName?.let { name -> availableNoteTypes.firstOrNull { it.name == name } }
             ?: return@withContext false
-        val fieldMappings = settings.fieldMappings
+        val fieldMappings = settings.fieldMappings.activeAnkiFieldMappings(noteType)
         val payload = runCatching { AnkiMiningPayload.fromJson(rawPayload) }.getOrNull()
             ?: return@withContext false
         val needsCover = fieldMappings.referencesAnkiHandlebar("{book-cover}")
@@ -252,8 +270,7 @@ class AnkiRepository(
 
     private fun addDictionaryMedia(media: DictionaryMedia, activeBackend: AnkiBackend, backendKind: AnkiBackendKind): String? =
         runCatching {
-            val data = HoshiDicts.getMediaFile(HoshiDicts.lookupObject, media.dictionary, media.path)
-                ?: return null
+            val data = loadDictionaryMedia(media) ?: return null
             val file = mediaCacheFile("hoshi_dict_${data.contentHashCode()}.${media.path.substringAfterLast('.', "bin")}")
             file.writeBytes(data)
             addMediaFile(file.absolutePath, file.name, mimeTypeForPath(media.path), activeBackend, backendKind)
@@ -361,26 +378,14 @@ internal fun selectNoteTypeAfterFetch(
 ): AnkiNoteType =
     noteTypes.firstOrNull { it.id == current.selectedNoteTypeId }
         ?: current.selectedNoteTypeName?.let { name -> noteTypes.firstOrNull { it.name == name } }
-        ?: noteTypes.firstOrNull { LapisPreset.matches(it) }
+        ?: noteTypes.firstOrNull { AnkiFieldTemplates.matches(it) }
         ?: noteTypes.first()
 
 internal fun fieldMappingsAfterFetch(
     selectedNoteType: AnkiNoteType,
     current: AnkiSettings,
 ): Map<String, String> =
-    if (LapisPreset.matches(selectedNoteType) && !currentSelectionMatchesLapis(current)) {
-        LapisPreset.applyDefaults(selectedNoteType, emptyMap())
-    } else {
-        current.fieldMappings
-    }
-
-private fun currentSelectionMatchesLapis(current: AnkiSettings): Boolean =
-    current.availableNoteTypes.firstOrNull {
-        it.id == current.selectedNoteTypeId || it.name == current.selectedNoteTypeName
-    }
-        ?.let(LapisPreset::matches)
-        ?: current.selectedNoteTypeName?.contains("lapis", ignoreCase = true)
-        ?: false
+    AnkiFieldTemplates.applyDefaultsIfUnmapped(selectedNoteType, current.fieldMappings)
 
 sealed interface AnkiFetchResult {
     data class Success(

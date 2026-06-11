@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
@@ -69,6 +70,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.features.reader.ReaderSettings
+import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
 import moe.antimony.hoshi.ui.hoshiOutlinedTextFieldColors
 import moe.antimony.hoshi.ui.hoshiSingleLineTextFieldLineLimits
@@ -84,9 +87,13 @@ fun SyncSettingsView(
     val resources = LocalResources.current
     val appContainer = LocalHoshiUiDependencies.current
     val repository = appContainer.syncSettingsRepository
+    val readerSettingsRepository = appContainer.readerSettingsRepository
+    val sasayakiSettingsRepository = appContainer.sasayakiSettingsRepository
     val authorizer = appContainer.deviceCodeDriveAuthorizer
     val scope = rememberCoroutineScope()
     val settings = repository.settings.collectAsLoadedSettings()
+    val readerSettings = readerSettingsRepository.settings.collectAsLoadedSettings()
+    val sasayakiSettings = sasayakiSettingsRepository.settings.collectAsLoadedSettings()
     var authStatus by remember { mutableStateOf<DriveAuthStatus?>(null) }
     var directionMenuExpanded by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -96,14 +103,30 @@ fun SyncSettingsView(
     var clientSecret by remember { mutableStateOf("") }
     var devicePrompt by remember { mutableStateOf<DeviceCodePrompt?>(null) }
     var pollIntervalSeconds by remember { mutableStateOf(5L) }
+    var showSignOutConfirmation by remember { mutableStateOf(false) }
+    var showClearCacheConfirmation by remember { mutableStateOf(false) }
     val screenState = SyncSettingsScreenState(settings = settings, authStatus = authStatus)
     val currentSettings = settings
+    val currentReaderSettings = readerSettings
+    val currentSasayakiSettings = sasayakiSettings
     val currentAuthStatus = authStatus
     val connectionActions = currentAuthStatus?.let { syncConnectionActions(it, isAuthorizing) }
 
     fun save(next: SyncSettings) {
         scope.launch {
             repository.update { next }
+        }
+    }
+
+    fun saveReaderSettings(next: ReaderSettings) {
+        scope.launch {
+            readerSettingsRepository.update { next }
+        }
+    }
+
+    fun saveSasayakiSettings(next: SasayakiSettings) {
+        scope.launch {
+            sasayakiSettingsRepository.update { next }
         }
     }
 
@@ -210,7 +233,7 @@ fun SyncSettingsView(
     fun signOut() {
         scope.launch {
             authorizer.revokeAccess()
-            appContainer.googleDriveClient.clearCache()
+            repository.clearGoogleDriveCache()
             authStatus = authorizer.status()
             message = null
             copyMessage = null
@@ -219,7 +242,58 @@ fun SyncSettingsView(
         }
     }
 
+    fun clearCache() {
+        scope.launch {
+            repository.clearGoogleDriveCache()
+            message = resources.getString(R.string.sync_cache_cleared)
+        }
+    }
+
     BackHandler(onBack = onClose)
+    if (showSignOutConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showSignOutConfirmation = false },
+            title = { Text(stringResource(R.string.sync_sign_out_title)) },
+            text = { Text(stringResource(R.string.sync_sign_out_confirmation)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showSignOutConfirmation = false
+                        signOut()
+                    },
+                ) {
+                    Text(stringResource(R.string.action_sign_out))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSignOutConfirmation = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+    if (showClearCacheConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showClearCacheConfirmation = false },
+            title = { Text(stringResource(R.string.sync_clear_cache_title)) },
+            text = { Text(stringResource(R.string.sync_clear_cache_confirmation)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showClearCacheConfirmation = false
+                        clearCache()
+                    },
+                ) {
+                    Text(stringResource(R.string.sync_clear_cache))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearCacheConfirmation = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
     val colorScheme = MaterialTheme.colorScheme
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -248,57 +322,107 @@ fun SyncSettingsView(
             contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             item {
-                if (!screenState.isContentReady || currentSettings == null || currentAuthStatus == null) {
+                if (
+                    !screenState.isContentReady ||
+                    currentSettings == null ||
+                    currentReaderSettings == null ||
+                    currentSasayakiSettings == null ||
+                    currentAuthStatus == null
+                ) {
                     return@item
                 }
-                SettingsCard {
-                    ListItem(
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        headlineContent = { Text(stringResource(R.string.action_enable)) },
-                        trailingContent = {
-                            Switch(
-                                checked = currentSettings.enabled,
-                                onCheckedChange = { save(currentSettings.copy(enabled = it)) },
+                Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                    SettingsCard {
+                        ListItem(
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            headlineContent = { Text(stringResource(R.string.action_enable)) },
+                            trailingContent = {
+                                Switch(
+                                    checked = currentSettings.enabled,
+                                    onCheckedChange = { save(currentSettings.copy(enabled = it)) },
+                                )
+                            },
+                        )
+                    }
+                    if (currentSettings.enabled) {
+                        SettingsSectionTitle(stringResource(R.string.sync_section_behaviour))
+                        SettingsCard {
+                            ListItem(
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                headlineContent = { Text(stringResource(R.string.sync_direction)) },
+                                trailingContent = {
+                                    Box {
+                                        TextButton(onClick = { directionMenuExpanded = true }) {
+                                            Text(stringResource(currentSettings.mode.labelRes))
+                                        }
+                                        DropdownMenu(
+                                            expanded = directionMenuExpanded,
+                                            onDismissRequest = { directionMenuExpanded = false },
+                                        ) {
+                                            SyncMode.entries.forEach { mode ->
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(mode.labelRes)) },
+                                                    onClick = {
+                                                        directionMenuExpanded = false
+                                                        save(currentSettings.copy(mode = mode))
+                                                    },
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
                             )
-                        },
-                    )
-                    SettingsDivider()
-                    ListItem(
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        headlineContent = { Text(stringResource(R.string.sync_direction)) },
-                        trailingContent = {
-                            Box {
-                                TextButton(onClick = { directionMenuExpanded = true }) {
-                                    Text(stringResource(currentSettings.mode.labelRes))
+                            SettingsDivider()
+                            ListItem(
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                headlineContent = { Text(stringResource(R.string.sync_auto_sync)) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = currentSettings.autoSyncEnabled,
+                                        onCheckedChange = { save(currentSettings.copy(autoSyncEnabled = it)) },
+                                    )
+                                },
+                            )
+                        }
+                        SettingsSectionTitle(stringResource(R.string.sync_section_data))
+                        SettingsCard {
+                            syncSettingsDataRows(
+                                syncSettings = currentSettings,
+                                readerSettings = currentReaderSettings,
+                                sasayakiSettings = currentSasayakiSettings,
+                            ).forEachIndexed { index, row ->
+                                if (index > 0) {
+                                    SettingsDivider()
                                 }
-                                DropdownMenu(
-                                    expanded = directionMenuExpanded,
-                                    onDismissRequest = { directionMenuExpanded = false },
-                                ) {
-                                    SyncMode.entries.forEach { mode ->
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(mode.labelRes)) },
-                                            onClick = {
-                                                directionMenuExpanded = false
-                                                save(currentSettings.copy(mode = mode))
+                                ListItem(
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    headlineContent = { Text(stringResource(row.titleRes)) },
+                                    supportingContent = row.supportingTextRes?.let { labelRes ->
+                                        { Text(stringResource(labelRes)) }
+                                    },
+                                    trailingContent = {
+                                        Switch(
+                                            checked = row.checked,
+                                            onCheckedChange = { checked ->
+                                                when (row.kind) {
+                                                    SyncSettingsDataRowKind.UploadBooks ->
+                                                        save(currentSettings.copy(uploadBooks = checked))
+                                                    SyncSettingsDataRowKind.SyncStats ->
+                                                        saveReaderSettings(
+                                                            currentReaderSettings.copy(statisticsSyncEnabled = checked),
+                                                        )
+                                                    SyncSettingsDataRowKind.SyncAudiobookProgress ->
+                                                        saveSasayakiSettings(
+                                                            currentSasayakiSettings.copy(syncEnabled = checked),
+                                                        )
+                                                }
                                             },
                                         )
-                                    }
-                                }
+                                    },
+                                )
                             }
-                        },
-                    )
-                    SettingsDivider()
-                    ListItem(
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        headlineContent = { Text(stringResource(R.string.sync_auto_sync)) },
-                        trailingContent = {
-                            Switch(
-                                checked = currentSettings.autoSyncEnabled,
-                                onCheckedChange = { save(currentSettings.copy(autoSyncEnabled = it)) },
-                            )
-                        },
-                    )
+                        }
+                    }
                 }
             }
             item {
@@ -416,11 +540,19 @@ fun SyncSettingsView(
                     }
                     if (connectionActions.showSignOut) {
                         OutlinedButton(
-                            onClick = ::signOut,
+                            onClick = { showSignOutConfirmation = true },
                             enabled = connectionActions.signOutEnabled,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text(stringResource(R.string.action_sign_out))
+                        }
+                    }
+                    if (screenState.showClearCacheAction) {
+                        OutlinedButton(
+                            onClick = { showClearCacheConfirmation = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.sync_clear_cache))
                         }
                     }
                     GoogleCloudOAuthSetupCard()
@@ -459,6 +591,16 @@ private fun GoogleCloudOAuthSetupCard() {
             }
         }
     }
+}
+
+@Composable
+private fun SettingsSectionTitle(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+    )
 }
 
 @Composable
@@ -577,6 +719,52 @@ private val SyncMode.labelRes: Int
         SyncMode.Auto -> R.string.sync_mode_auto
         SyncMode.Manual -> R.string.sync_mode_manual
     }
+
+internal enum class SyncSettingsDataRowKind {
+    UploadBooks,
+    SyncStats,
+    SyncAudiobookProgress,
+}
+
+internal data class SyncSettingsDataRow(
+    val kind: SyncSettingsDataRowKind,
+    @param:StringRes val titleRes: Int,
+    @param:StringRes val supportingTextRes: Int? = null,
+    val checked: Boolean,
+)
+
+internal fun syncSettingsDataRows(
+    syncSettings: SyncSettings,
+    readerSettings: ReaderSettings,
+    sasayakiSettings: SasayakiSettings,
+): List<SyncSettingsDataRow> = buildList {
+    add(
+        SyncSettingsDataRow(
+            kind = SyncSettingsDataRowKind.UploadBooks,
+            titleRes = R.string.sync_upload_books,
+            supportingTextRes = R.string.sync_upload_books_description,
+            checked = syncSettings.uploadBooks,
+        ),
+    )
+    if (readerSettings.enableStatistics) {
+        add(
+            SyncSettingsDataRow(
+                kind = SyncSettingsDataRowKind.SyncStats,
+                titleRes = R.string.sync_stats,
+                checked = readerSettings.statisticsSyncEnabled,
+            ),
+        )
+    }
+    if (sasayakiSettings.enabled) {
+        add(
+            SyncSettingsDataRow(
+                kind = SyncSettingsDataRowKind.SyncAudiobookProgress,
+                titleRes = R.string.sync_audiobook_progress,
+                checked = sasayakiSettings.syncEnabled,
+            ),
+        )
+    }
+}
 
 @Composable
 private fun SettingsCard(content: @Composable () -> Unit) {

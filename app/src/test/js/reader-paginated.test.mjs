@@ -8,7 +8,30 @@ const readerContinuousUrl = new URL('../../main/assets/hoshi-web/reader/reader-c
 
 function readerSource(url) {
     return fs.readFileSync(url, 'utf8')
-        .replace('__HOSHI_HIGHLIGHTS_SCRIPT__', '');
+        .replace('__HOSHI_HIGHLIGHTS_SCRIPT__', '')
+        .replaceAll('__HOSHI_RESTORE_TOKEN_LITERAL__', JSON.stringify('restore-token'))
+        .replaceAll('__HOSHI_BOTTOM_OVERLAP_PX__', '0')
+        .replaceAll('__HOSHI_VERTICAL_PADDING_BLOCK_RATIO__', '0')
+        .replaceAll('__HOSHI_VERTICAL_PADDING_GAP_RATIO__', '0')
+        .replaceAll('__HOSHI_IMAGE_WIDTH_VIEWPORT_RATIO__', '1')
+        .replaceAll('__HOSHI_IMAGE_HEIGHT_VIEWPORT_RATIO__', '1')
+        .replaceAll('__HOSHI_IMAGE_WIDTH_REDUCTION_PX__', '0')
+        .replaceAll('__HOSHI_BLUR_IMAGES__', 'false')
+        .replaceAll('__HOSHI_TRAILING_SPACER_HEIGHT_LITERAL__', JSON.stringify('0px'))
+        .replaceAll('__HOSHI_TRAILING_SPACER_WIDTH_LITERAL__', JSON.stringify('0px'))
+        .replaceAll('__HOSHI_RESTORE_SCRIPTS__', '');
+}
+
+function testStyle() {
+    const values = new Map();
+    return {
+        setProperty(name, value) {
+            values.set(name, value);
+        },
+        getPropertyValue(name) {
+            return values.get(name) ?? '';
+        },
+    };
 }
 
 class TestNode {
@@ -75,9 +98,33 @@ class TestElement extends TestNode {
         super(1);
         this.tagName = tagName.toUpperCase();
         this.childNodes = [];
+        this.className = '';
+        this.style = testStyle();
+        this.classList = {
+            add: (...names) => {
+                const classes = new Set(this.className.split(/\s+/).filter(Boolean));
+                names.forEach((name) => classes.add(name));
+                this.className = [...classes].join(' ');
+            },
+            remove: (...names) => {
+                const remove = new Set(names);
+                this.className = this.className
+                    .split(/\s+/)
+                    .filter((name) => name && !remove.has(name))
+                    .join(' ');
+            },
+            contains: (name) => {
+                return this.className.split(/\s+/).includes(name);
+            },
+        };
     }
 
     appendChild(child) {
+        if (child.nodeType === 11) {
+            [...child.childNodes].forEach((fragmentChild) => this.appendChild(fragmentChild));
+            child.childNodes = [];
+            return child;
+        }
         child.parentNode?.removeChild(child);
         child.parentNode = this;
         this.childNodes.push(child);
@@ -104,6 +151,18 @@ class TestElement extends TestNode {
         }
         return child;
     }
+
+    remove() {
+        this.parentNode?.removeChild(this);
+    }
+
+    addEventListener() {}
+
+    getAttribute() {
+        return null;
+    }
+
+    setAttribute() {}
 
     normalize() {
         const normalized = [];
@@ -151,6 +210,102 @@ class TestFragment extends TestNode {
         this.childNodes.push(child);
         return child;
     }
+
+    removeChild(child) {
+        const index = this.childNodes.indexOf(child);
+        if (index >= 0) {
+            this.childNodes.splice(index, 1);
+            child.parentNode = null;
+        }
+        return child;
+    }
+}
+
+class TestRange {
+    constructor() {
+        this.node = null;
+        this.startNode = null;
+        this.startOffset = 0;
+        this.endNode = null;
+        this.endOffset = 0;
+        this.insertionParent = null;
+        this.insertionIndex = null;
+    }
+
+    selectNodeContents(node) {
+        this.node = node;
+        this.startNode = node;
+        this.startOffset = 0;
+        this.endNode = node;
+        this.endOffset = node.textContent?.length ?? 0;
+    }
+
+    setStart(node, offset = 0) {
+        this.node = node;
+        this.startNode = node;
+        this.startOffset = offset;
+    }
+
+    setEnd(node, offset = node.textContent?.length ?? 0) {
+        this.endNode = node;
+        this.endOffset = offset;
+    }
+
+    extractContents() {
+        const fragment = new TestFragment();
+        if (this.startNode !== this.endNode || this.startNode?.nodeType !== 3) return fragment;
+        const textNode = this.startNode;
+        const parent = textNode.parentNode;
+        if (!parent) return fragment;
+        const index = parent.childNodes.indexOf(textNode);
+        if (index < 0) return fragment;
+        const value = textNode.nodeValue;
+        const before = value.slice(0, this.startOffset);
+        const selected = value.slice(this.startOffset, this.endOffset);
+        const after = value.slice(this.endOffset);
+        const replacements = [];
+        if (before) replacements.push(new TestText(before));
+        if (after) replacements.push(new TestText(after));
+        replacements.forEach((node) => {
+            node.parentNode = parent;
+        });
+        parent.childNodes.splice(index, 1, ...replacements);
+        textNode.parentNode = null;
+        this.insertionParent = parent;
+        this.insertionIndex = before ? index + 1 : index;
+        if (selected) fragment.appendChild(new TestText(selected));
+        return fragment;
+    }
+
+    insertNode(node) {
+        if (!this.insertionParent || this.insertionIndex === null) return;
+        node.parentNode?.removeChild(node);
+        node.parentNode = this.insertionParent;
+        this.insertionParent.childNodes.splice(this.insertionIndex, 0, node);
+        this.insertionIndex += 1;
+    }
+
+    getClientRects() {
+        return this.node?.rects ?? [];
+    }
+
+    getBoundingClientRect() {
+        const rects = this.getClientRects();
+        if (!rects.length) {
+            return { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 };
+        }
+        const left = Math.min(...rects.map((rect) => rect.left));
+        const right = Math.max(...rects.map((rect) => rect.right));
+        const top = Math.min(...rects.map((rect) => rect.top));
+        const bottom = Math.max(...rects.map((rect) => rect.bottom));
+        return { left, right, top, bottom, width: right - left, height: bottom - top };
+    }
+
+    detach() {}
+}
+
+function testRect(top, bottom, left = 0, right = 20) {
+    return { left, right, top, bottom, width: right - left, height: bottom - top };
 }
 
 function queryRuby(root) {
@@ -163,9 +318,28 @@ function queryRuby(root) {
     return result;
 }
 
-function loadReader(body, sourceUrl = readerPaginatedUrl) {
+function queryByTag(root, tagName) {
+    const result = [];
+    const normalizedTag = tagName.toUpperCase();
+    const visit = (node) => {
+        if (node.nodeType === 1 && node.tagName === normalizedTag) result.push(node);
+        if (node.childNodes) node.childNodes.forEach(visit);
+    };
+    visit(root);
+    return result;
+}
+
+function loadReader(body, sourceUrl = readerPaginatedUrl, options = {}) {
+    const head = new TestElement('head');
+    const documentElement = new TestElement('html');
+    documentElement.appendChild(head);
+    documentElement.appendChild(body);
+    const documentHead = Object.hasOwn(options, 'documentHead') ? options.documentHead : head;
     const document = {
         body,
+        head: documentHead,
+        documentElement,
+        fonts: { ready: Promise.resolve() },
         readyState: 'loading',
         createDocumentFragment() {
             return new TestFragment();
@@ -176,26 +350,61 @@ function loadReader(body, sourceUrl = readerPaginatedUrl) {
         createElement(tagName) {
             return new TestElement(tagName);
         },
+        createRange() {
+            return new TestRange();
+        },
+        createTreeWalker(root) {
+            const nodes = [];
+            const visit = (node) => {
+                if (node.nodeType === 3) nodes.push(node);
+                node.childNodes?.forEach(visit);
+            };
+            visit(root);
+            let index = 0;
+            return {
+                nextNode() {
+                    return nodes[index++] ?? null;
+                },
+            };
+        },
+        querySelector(selector) {
+            if (selector !== 'meta[name="viewport"]') return null;
+            return head.childNodes.find((node) => node.tagName === 'META' && node.name === 'viewport') ?? null;
+        },
         querySelectorAll(selector) {
-            return selector === 'ruby' ? queryRuby(body) : [];
+            if (selector === 'ruby') return queryRuby(body);
+            if (selector === 'img') return queryByTag(body, 'img');
+            return [];
+        },
+        getElementsByTagName(tagName) {
+            return tagName.toLowerCase() === 'head' ? [head] : [];
         },
         addEventListener() {},
     };
     const window = {
         addEventListener() {},
+        innerHeight: 800,
+        innerWidth: 480,
+        scrollX: 0,
+        scrollY: 0,
+        scrollTo() {},
         getComputedStyle() {
             return { writingMode: 'vertical-rl', getPropertyValue: () => '' };
         },
     };
+    const css = options.css ?? { highlights: { delete() {}, set() {} } };
     vm.runInNewContext(readerSource(sourceUrl), {
-        CSS: { highlights: { delete() {}, set() {} } },
+        CSS: css,
         document,
-        Highlight: class {},
         Node: { ELEMENT_NODE: 1, TEXT_NODE: 3 },
         NodeFilter: { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2 },
+        setTimeout(callback) {
+            callback();
+            return 0;
+        },
         window,
     });
-    return window.hoshiReader;
+    return { reader: window.hoshiReader, document, head };
 }
 
 function rubyParagraph() {
@@ -233,7 +442,7 @@ function textRunAfter(node) {
 
 function assertRubyTextNodesAreNormalized(sourceUrl) {
     const { paragraph, ruby } = rubyParagraphWithWhitespaceTextNodes();
-    const reader = loadReader(paragraph, sourceUrl);
+    const { reader } = loadReader(paragraph, sourceUrl);
 
     assert.equal(typeof reader.normalizeReaderText, 'function');
     reader.normalizeReaderText(paragraph);
@@ -251,7 +460,7 @@ test('paginated reader re-stabilizes ruby-adjacent text after unwrap normalizes 
     const wrapper = new TestElement('span');
     wrapper.appendChild(new TestText('追加'));
     paragraph.appendChild(wrapper);
-    const reader = loadReader(paragraph);
+    const { reader } = loadReader(paragraph);
 
     reader.unwrap([wrapper]);
 
@@ -261,7 +470,7 @@ test('paginated reader re-stabilizes ruby-adjacent text after unwrap normalizes 
 test('paginated reader-specific text normalization keeps ruby-adjacent text stable', () => {
     const { paragraph, ruby } = rubyParagraph();
     paragraph.normalize();
-    const reader = loadReader(paragraph);
+    const { reader } = loadReader(paragraph);
 
     assert.equal(typeof reader.normalizeReaderText, 'function');
     reader.normalizeReaderText(paragraph);
@@ -273,10 +482,124 @@ test('paginated reader removes ruby whitespace text nodes and wraps base text no
     assertRubyTextNodesAreNormalized(readerPaginatedUrl);
 });
 
+test('paginated restoreProgress at chapter start avoids eager pagination metrics', async () => {
+    const body = new TestElement('body');
+    const { reader } = loadReader(body);
+    const scrolls = [];
+    let builtMetrics = 0;
+    let restored = 0;
+
+    reader.getScrollContext = () => ({
+        vertical: true,
+        scrollEl: body,
+        pageSize: 800,
+        maxScroll: 4000,
+    });
+    reader.setPagePosition = (_context, position) => {
+        scrolls.push(position);
+        return position;
+    };
+    reader.registerSnapScroll = () => {};
+    reader.refreshSasayakiCuePresentation = () => {};
+    reader.notifyRestoreComplete = () => {
+        restored += 1;
+    };
+    reader.buildPaginationMetrics = () => {
+        builtMetrics += 1;
+        return { minScroll: 800, maxScroll: 3200, totalChars: 1, progressStops: [] };
+    };
+
+    await reader.restoreProgress(0);
+
+    assert.deepEqual(scrolls, [0]);
+    assert.equal(restored, 1);
+    assert.equal(builtMetrics, 0);
+});
+
+test('paginated content metrics include final partial page when real text reaches it', () => {
+    const body = new TestElement('body');
+    body.scrollTop = 0;
+    body.scrollHeight = 4250;
+    const intro = new TestText('始');
+    intro.rects = [testRect(0, 40)];
+    const tail = new TestText('終');
+    tail.rects = [testRect(4000, 4100)];
+    body.appendChild(intro);
+    body.appendChild(tail);
+    const { reader } = loadReader(body);
+    reader.pageHeight = 800;
+    reader.pageWidth = 480;
+
+    const metrics = reader.buildPaginationMetrics();
+
+    assert.equal(metrics.maxScroll, 3450);
+});
+
+test('paginated forward navigation reaches final partial page', () => {
+    const body = new TestElement('body');
+    body.scrollTop = 3200;
+    const { reader } = loadReader(body);
+    reader.getScrollContext = () => ({
+        vertical: true,
+        scrollEl: body,
+        pageSize: 800,
+        maxScroll: 3450,
+    });
+    reader.paginationMetrics = { minScroll: 0, maxScroll: 3450, totalChars: 1, progressStops: [] };
+    reader.refreshSasayakiCuePresentation = () => {};
+
+    const result = reader.paginate('forward');
+
+    assert.equal(result, 'scrolled');
+    assert.equal(body.scrollTop, 3450);
+});
+
+test('paginated backward navigation leaves final partial page by one page', () => {
+    const body = new TestElement('body');
+    body.scrollTop = 3450;
+    const { reader } = loadReader(body);
+    reader.getScrollContext = () => ({
+        vertical: true,
+        scrollEl: body,
+        pageSize: 800,
+        maxScroll: 3450,
+    });
+    reader.paginationMetrics = { minScroll: 0, maxScroll: 3450, totalChars: 1, progressStops: [] };
+    reader.refreshSasayakiCuePresentation = () => {};
+
+    const result = reader.paginate('backward');
+
+    assert.equal(result, 'scrolled');
+    assert.equal(body.scrollTop, 3200);
+});
+
+test('reader initialization completes when an image has already failed loading', async () => {
+    for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
+        const body = new TestElement('body');
+        const image = new TestElement('img');
+        image.complete = true;
+        image.naturalWidth = 0;
+        image.naturalHeight = 0;
+        body.appendChild(image);
+        const { reader } = loadReader(body, sourceUrl);
+        let offsetsBuilt = 0;
+        reader.buildNodeOffsets = () => {
+            offsetsBuilt += 1;
+        };
+
+        reader.initialize();
+        for (let i = 0; i < 5; i += 1) {
+            await Promise.resolve();
+        }
+
+        assert.equal(offsetsBuilt, 1);
+    }
+});
+
 test('continuous reader stabilizes vertical ruby-adjacent text like paginated reader', () => {
     const { paragraph, ruby } = rubyParagraph();
     paragraph.normalize();
-    const reader = loadReader(paragraph, readerContinuousUrl);
+    const { reader } = loadReader(paragraph, readerContinuousUrl);
 
     assert.equal(typeof reader.stabilizeRubyAdjacentTextNodes, 'function');
     reader.stabilizeRubyAdjacentTextNodes();
@@ -287,7 +610,7 @@ test('continuous reader stabilizes vertical ruby-adjacent text like paginated re
 test('continuous reader-specific text normalization keeps ruby-adjacent text stable', () => {
     const { paragraph, ruby } = rubyParagraph();
     paragraph.normalize();
-    const reader = loadReader(paragraph, readerContinuousUrl);
+    const { reader } = loadReader(paragraph, readerContinuousUrl);
 
     assert.equal(typeof reader.normalizeReaderText, 'function');
     reader.normalizeReaderText(paragraph);
@@ -304,9 +627,49 @@ test('continuous reader re-stabilizes ruby-adjacent text after unwrap normalizes
     const wrapper = new TestElement('span');
     wrapper.appendChild(new TestText('追加'));
     paragraph.appendChild(wrapper);
-    const reader = loadReader(paragraph, readerContinuousUrl);
+    const { reader } = loadReader(paragraph, readerContinuousUrl);
 
     reader.unwrap([wrapper]);
 
     assert.deepEqual(textRunAfter(ruby).slice(0, 4), ['。', 'そ', 'れ', '追']);
+});
+
+test('Sasayaki highlight applies active DOM state without CSS Highlight API', () => {
+    for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
+        const body = new TestElement('body');
+        body.appendChild(new TestText('蒸し暑い'));
+        let cssHighlightSetCount = 0;
+        const css = {
+            highlights: {
+                delete() {},
+                set() {
+                    cssHighlightSetCount += 1;
+                },
+            },
+        };
+        const { reader } = loadReader(body, sourceUrl, { css });
+        reader.isEInkMode = () => false;
+
+        reader.applySasayakiCues([{ id: 'cue', start: 0, length: 4 }]);
+        reader.highlightSasayakiCue('cue', false);
+
+        const wrapper = body.firstChild;
+        assert.equal(body.childNodes.length, 1);
+        assert.equal(wrapper.nodeType, 1);
+        assert.equal(wrapper.classList.contains('hoshi-sasayaki-cue'), true);
+        assert.equal(wrapper.classList.contains('hoshi-sasayaki-active'), true);
+        assert.equal(wrapper.textContent, '蒸し暑い');
+        assert.equal(cssHighlightSetCount, 0);
+    }
+});
+
+test('reader initialization requires XHTML document.head like iOS', () => {
+    for (const sourceUrl of [readerPaginatedUrl, readerContinuousUrl]) {
+        const body = new TestElement('body');
+        const { reader, document } = loadReader(body, sourceUrl, { documentHead: null });
+
+        assert.equal(document.head, null);
+
+        assert.throws(() => reader.initialize(), /appendChild/);
+    }
 });

@@ -10,18 +10,49 @@ The format follows a Keep a Changelog style, and release sections use Semantic V
 - Add a dictionary lookup language setting with multilingual hoshidicts lookup support across reader popups, recursive lookups, Dictionary search, and Android Process Text.
 - Add Settings profiles so users can switch between multiple learning languages and keep each profile's lookup language and enabled dictionaries separate.
 - Add settings backup and restore as a JSON file from Advanced > Backup, including Google Drive and Anki credentials so a new install can take over; the file holds those credentials in plain text, so keep it private and delete it after importing.
+## [v1.1.5] - 2026-06-11
+
+### Added
+
+- Add shelf renaming from each shelf row's management menu.
+- Add iOS-style automatic dictionary updates with Daily, Weekly, and Monthly intervals, Last Update display, foreground checks on unmetered networks, shared import/update busy state, and partial-failure handling for manual updates.
+- Add Anki field templates for Lapis, Kiku, and Senren models using Hoshi's Android Lapis defaults on the corresponding model fields, plus additional glossary handlebars for brief, no-dictionary, selected-dictionary fallback, and per-dictionary glossary variants.
+
+### Changed
+
+- Update the ッツ Sync setup guidance to link to Hoshi Reader's ッツ Sync guide and match the Android Device Code client setup steps.
+
+### Fixed
+
+- Keep the shelf management dialog usable for long custom-shelf lists.
+- Keep long bookshelf shelf names from wrapping over the book count and expansion chevron.
+- Recover packed EPUB reader caches when a cached chapter file is missing, preventing migrated books from showing a WebView 404 for an otherwise valid chapter.
+- Improve lookup popup responsiveness after repeated lookups by removing obsolete native button frame synchronization from iframe popups.
+- Keep Sasayaki reader highlights from clipping the left edge of non-ruby characters in vertical writing mode.
+- Keep reader page turns responsive after entering chapters with Sasayaki cues by avoiding duplicate WebView cue reapplication.
+
+## [v1.1.4] - 2026-06-08
+
+### Added
+
+- Show the installed WebView package and version in Settings -> Diagnostics.
+- Add iOS-compatible Books backup storage, EPUB export, ッツ bookdata import/export with edge-case handling, Google Drive Upload Books sync, and remote-only book import/trash actions.
+
+### Changed
+
+- Prepare existing books for the new backup-compatible storage, with Bookshelf progress shown.
+- Align Dictionary search and Process Text lookup popups with Reader behavior.
+- Tighten Dictionary search layout and interactions, including replace-in-place searches and active-tab refocus.
 
 ### Fixed
 
 - Keep the Advanced Audio Local source switch synchronized with the Local Audio setting, preventing duplicate Local sources when turning it off from the source list.
 - Show the update prompt during the same app session when the startup update check finds a new APK, instead of waiting until the next launch.
-- Import EPUB archives that use stored ZIP entries with data descriptors, matching iOS for books that previously failed during import.
-- Prevent vertical reader text in paginated and continuous modes from prematurely wrapping after furigana, and keep ruby-aware lookup highlights from expanding into adjacent kanji.
-- Keep bottom safe-area reader taps dismissing lookup popups or toggling Focus Mode, prevent blurred vertical images from disappearing at zero horizontal padding, and keep ruby lookup stable when EPUB ruby markup contains whitespace.
-- Trim unmatched quotation brackets from reader lookup sentences before Anki mining, matching iOS for quoted multi-sentence passages. #98
-- Keep Dictionary search results tight below a Material-style top search field, allow new searches to replace the current results, add a guarded pull-to-clear/show-keyboard gesture that ignores recursive popup scrolling, and refocus with all search text selected when tapping the active Dictionary tab.
-- Keep iframe lookup popups ready for the next word tap immediately after closing a recursive popup, and let blank parent popup areas dismiss child popups.
-- Keep Dictionary search and Process Text lookup popups on the same iframe popup path as Reader, preserving recursive lookup, dismissal, audio, Anki, and dictionary media behavior without the legacy native popup overlay.
+- Import stored-entry EPUB ZIP archives that previously failed.
+- Improve vertical reader and ruby handling across pagination, lookup highlights, safe-area taps, zero-padding blurred images, final partial pages, large images, and E-ink Sasayaki underlines.
+- Trim unmatched quotation brackets from reader lookup sentences before Anki mining. #98
+- Render Japanese text with Android Japanese font fallbacks in Reader, Dictionary search, Process Text, and lookup popups.
+- Keep Reader chapters visible when EPUB image resources are broken.
 
 ## [v1.1.3] - 2026-06-04
 

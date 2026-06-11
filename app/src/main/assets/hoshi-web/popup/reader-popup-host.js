@@ -1,5 +1,5 @@
 (function() {
-    const ORIGIN = 'https://hoshi.local';
+    const ORIGIN = 'https://appassets.androidplatform.net';
     const LAYER_ID = 'hoshi-reader-popup-layer';
     const ACTION_BAR_HEIGHT = 37;
     const SASAYAKI_BAR_HEIGHT = 37;
@@ -56,7 +56,7 @@
     }
 
     function icon(name) {
-        return `https://hoshi.local/popup/icons/${name}.svg`;
+        return `https://appassets.androidplatform.net/popup/icons/${name}.svg`;
     }
 
     function frameContentTop(payload) {
@@ -450,14 +450,24 @@
         return bStart <= aEnd + tolerance && bEnd >= aStart - tolerance;
     }
 
+    function rectRangeOverlapAmount(aStart, aEnd, bStart, bEnd) {
+        return Math.min(aEnd, bEnd) - Math.max(aStart, bStart);
+    }
+
+    function rectRangesSubstantiallyOverlap(aStart, aEnd, bStart, bEnd) {
+        const overlap = rectRangeOverlapAmount(aStart, aEnd, bStart, bEnd);
+        const shorter = Math.min(aEnd - aStart, bEnd - bStart);
+        return shorter > 0 && overlap > shorter / 2;
+    }
+
     function highlightRectsInlineAdjacent(a, b, verticalWriting) {
         const tolerance = HIGHLIGHT_INLINE_MERGE_TOLERANCE;
         if (verticalWriting) {
-            const sameColumn = rectRangesOverlap(a.x, a.x + a.width, b.x, b.x + b.width, tolerance);
+            const sameColumn = rectRangesSubstantiallyOverlap(a.x, a.x + a.width, b.x, b.x + b.width);
             const touches = rectRangesOverlap(a.y, a.y + a.height, b.y, b.y + b.height, tolerance);
             return sameColumn && touches;
         }
-        const sameLine = rectRangesOverlap(a.y, a.y + a.height, b.y, b.y + b.height, tolerance);
+        const sameLine = rectRangesSubstantiallyOverlap(a.y, a.y + a.height, b.y, b.y + b.height);
         const touches = rectRangesOverlap(a.x, a.x + a.width, b.x, b.x + b.width, tolerance);
         return sameLine && touches;
     }

@@ -1,6 +1,7 @@
 package moe.antimony.hoshi.features.reader
 
 import java.io.File
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.epub.HighlightColor
 
 internal object ReaderLayoutDefaults {
@@ -27,6 +28,7 @@ internal data class ReaderGeneratedLayout(
     val continuousBodyBottomPaddingCss: String,
     val paginatedColumnWidthCss: String,
     val imageWidthViewportRatio: Double,
+    val imageHeightViewportRatio: Double,
     val imageWidthReductionPx: Int,
 ) {
     companion object {
@@ -59,6 +61,7 @@ internal data class ReaderGeneratedLayout(
                 continuousBodyBottomPaddingCss = continuousBottomPadding,
                 paginatedColumnWidthCss = columnWidth,
                 imageWidthViewportRatio = imageRatio,
+                imageHeightViewportRatio = settings.imageHeightViewportRatio,
                 imageWidthReductionPx = if (settings.verticalWriting) 1 else 0,
             )
         }
@@ -72,8 +75,19 @@ internal object ReaderContentStyles {
         systemDark: Boolean = false,
         sasayakiTextColor: Long = 0xFF000000,
         sasayakiBackgroundColor: Long = 0x6687CEEB,
+        contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
         readerCssTemplate: String? = null,
-    ): String = "<style>\n${css(settings, fontFaceUrl, systemDark, sasayakiTextColor, sasayakiBackgroundColor, readerCssTemplate)}\n</style>"
+    ): String = "<style>\n${
+        css(
+            settings = settings,
+            fontFaceUrl = fontFaceUrl,
+            systemDark = systemDark,
+            sasayakiTextColor = sasayakiTextColor,
+            sasayakiBackgroundColor = sasayakiBackgroundColor,
+            contentLanguageProfile = contentLanguageProfile,
+            readerCssTemplate = readerCssTemplate,
+        )
+    }\n</style>"
 
     fun css(
         settings: ReaderSettings = ReaderSettings(),
@@ -81,13 +95,14 @@ internal object ReaderContentStyles {
         systemDark: Boolean = false,
         sasayakiTextColor: Long = 0xFF000000,
         sasayakiBackgroundColor: Long = 0x6687CEEB,
+        contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
         readerCssTemplate: String? = null,
     ): String {
         val textColor = settings.textColorCss(systemDark)
         val backgroundColor = settings.backgroundColorCss(systemDark)
-        val normalizedFont = ReaderFontManager.normalizeDefaultFont(settings.selectedFont)
+        val normalizedFont = settings.selectedFont
         val fontFaceFamily = normalizedFont.cssString()
-        val bodyFontFamily = normalizedFont.readerCssFontFamily()
+        val bodyFontFamily = normalizedFont.readerCssFontFamily(contentLanguageProfile)
         val fontFaceCss = fontFaceUrl?.let { url ->
             """
             @font-face {
@@ -265,13 +280,13 @@ private object ReaderCssTemplateSource {
 private fun String.cssString(): String =
     "'${replace("\\", "\\\\").replace("'", "\\'")}'"
 
-private fun String.readerCssFontFamily(): String = when (this) {
+private fun String.readerCssFontFamily(contentLanguageProfile: ContentLanguageProfile): String = when (this) {
     ReaderFontManager.defaultMinchoFont ->
-        "${cssString()}, 'NotoSerifCJKjp-Regular', serif"
+        contentLanguageProfile.readerSerifFontFamilyCss
     ReaderFontManager.defaultGothicFont ->
-        "${cssString()}, 'NotoSansCJKJP-Regular', sans-serif"
+        contentLanguageProfile.readerSansSerifFontFamilyCss
     else ->
-        "${cssString()}, serif"
+        "${cssString()}, ${contentLanguageProfile.readerSerifFontFamilyCss}"
 }
 
 private fun String.cssSingleQuotedUrl(): String =

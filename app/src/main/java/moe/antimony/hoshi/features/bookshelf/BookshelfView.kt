@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.LruCache
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -35,8 +36,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.rememberTextFieldState
@@ -51,10 +54,12 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Done
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Keyboard
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
@@ -71,6 +76,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -86,6 +92,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -96,6 +105,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -121,6 +131,7 @@ import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.BookShelf
 import moe.antimony.hoshi.epub.BookSortOption
 import moe.antimony.hoshi.features.reader.ReaderSettings
+import moe.antimony.hoshi.features.sync.DriveAuthStatus
 import moe.antimony.hoshi.features.sync.SyncDirection
 import moe.antimony.hoshi.features.sync.SyncMode
 import moe.antimony.hoshi.features.sync.SyncSettings
@@ -162,6 +173,7 @@ fun BookshelfView(
     val syncSettings by appContainer.syncSettingsRepository.settings.collectAsStateWithLifecycle(
         initialValue = SyncSettings(),
     )
+    var driveAuthStatus by remember { mutableStateOf<DriveAuthStatus?>(null) }
     val readerSettings by appContainer.readerSettingsRepository.settings.collectAsStateWithLifecycle(
         initialValue = ReaderSettings(),
     )
@@ -172,7 +184,10 @@ fun BookshelfView(
     val uiState by booksViewModel.uiState.collectAsStateWithLifecycle()
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var contextMenuTarget by remember { mutableStateOf<BookContextMenuTarget?>(null) }
+    var remoteContextMenuTarget by remember { mutableStateOf<RemoteBookContextMenuTarget?>(null) }
     var deleteCandidate by remember { mutableStateOf<BookEntry?>(null) }
+    var remoteDeleteCandidate by remember { mutableStateOf<RemoteBookEntry?>(null) }
+    var exportCandidate by remember { mutableStateOf<BookEntry?>(null) }
     var markReadCandidate by remember { mutableStateOf<BookEntry?>(null) }
     var renameCandidate by remember { mutableStateOf<BookEntry?>(null) }
     val folderScanner = remember(context) { SafImportDirectoryScanner(context.contentResolver) }
@@ -212,6 +227,13 @@ fun BookshelfView(
         }
     }
 
+    val epubExporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/epub+zip")) { uri ->
+        val candidate = exportCandidate
+        exportCandidate = null
+        if (uri == null || candidate == null) return@rememberLauncherForActivityResult
+        booksViewModel.exportBook(candidate, uri)
+    }
+
     fun launchBookImporter() {
         importer.launch(ImportFileType.Epub.mimeTypes)
     }
@@ -222,6 +244,14 @@ fun BookshelfView(
 
     LaunchedEffect(refreshKey) {
         booksViewModel.reloadBookEntries()
+    }
+
+    LaunchedEffect(syncSettings.enabled, refreshKey) {
+        driveAuthStatus = if (syncSettings.enabled) {
+            appContainer.deviceCodeDriveAuthorizer.status()
+        } else {
+            null
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -248,9 +278,14 @@ fun BookshelfView(
         modifier = modifier,
         layoutSpec = layoutSpec,
         bookEntries = uiState.bookEntries,
+        remoteBookEntries = uiState.remoteBookEntries,
         sections = uiState.sections,
         bookProgressById = uiState.bookProgressById,
+        remoteProgressById = uiState.remoteProgressById,
+        remoteImportProgressById = uiState.remoteImportProgressById,
+        remoteBusyBookIds = uiState.remoteBusyBookIds,
         coverSourcesById = uiState.coverSourcesById,
+        remoteCoverSourcesById = uiState.remoteCoverSourcesById,
         sortOption = uiState.sortOption,
         hasLoadedBooks = uiState.hasLoadedBooks,
         isLoading = uiState.isLoading,
@@ -275,9 +310,24 @@ fun BookshelfView(
         onImportFiles = ::launchBookImporter,
         onImportFolder = ::launchBookFolderImporter,
         onOpenBook = booksViewModel::openBook,
+        onRefreshRemoteBooks = booksViewModel::refreshRemoteBooks,
+        onImportRemoteBook = { entry ->
+            booksViewModel.importRemoteBook(
+                entry = entry,
+                syncStats = syncSettings.enabled && readerSettings.statisticsSyncEnabled,
+                syncAudioBook = sasayakiSettings.enabled && sasayakiSettings.syncEnabled,
+            )
+        },
+        onDeleteRemoteCandidate = { remoteDeleteCandidate = it },
         contextMenuTarget = contextMenuTarget,
         onContextMenuTargetChange = { contextMenuTarget = it },
+        remoteContextMenuTarget = remoteContextMenuTarget,
+        onRemoteContextMenuTargetChange = { remoteContextMenuTarget = it },
         onDeleteCandidate = { deleteCandidate = it },
+        onExportCandidate = { entry ->
+            exportCandidate = entry
+            epubExporter.launch("${entry.displayTitle.sanitizeExportFileName()}.epub")
+        },
         onMarkReadCandidate = { markReadCandidate = it },
         onRenameCandidate = {
             renameCandidate = it
@@ -289,6 +339,7 @@ fun BookshelfView(
             onOpenSasayakiMatch(SasayakiMatchRequest(entry.metadata.id, entry))
         },
         syncSettings = syncSettings,
+        driveAuthStatus = driveAuthStatus,
         onSyncBook = { entry, direction ->
             booksViewModel.syncBook(
                 entry = entry,
@@ -341,6 +392,29 @@ fun BookshelfView(
             },
             dismissButton = {
                 TextButton(onClick = { deleteCandidate = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+
+    remoteDeleteCandidate?.let { candidate ->
+        AlertDialog(
+            onDismissRequest = { remoteDeleteCandidate = null },
+            title = { Text(stringResource(R.string.bookshelf_delete_remote_book_title_format, candidate.title)) },
+            text = { Text(stringResource(R.string.bookshelf_delete_remote_book_confirmation)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        booksViewModel.deleteRemoteBook(candidate)
+                        remoteDeleteCandidate = null
+                    },
+                ) {
+                    Text(stringResource(R.string.action_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { remoteDeleteCandidate = null }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },
@@ -442,6 +516,7 @@ fun BookshelfView(
             onShowReadingChange = booksViewModel::changeShowReading,
             onCreateShelf = booksViewModel::createShelf,
             onDeleteShelf = booksViewModel::deleteShelf,
+            onRenameShelf = booksViewModel::renameShelf,
             onMoveShelf = booksViewModel::moveShelf,
             onDismiss = { showShelfManagement = false },
         )
@@ -513,6 +588,7 @@ internal fun HoshiMainShell(
 }
 
 internal const val CompactNavigationBarTag = "compact-navigation-bar"
+internal const val ShelfManagementShelfListTag = "shelf-management-shelf-list"
 
 @Composable
 private fun HoshiCompactBottomNavigation(
@@ -583,9 +659,19 @@ private fun MainShellFontWeight.toFontWeight(): FontWeight =
         MainShellFontWeight.SemiBold -> FontWeight.SemiBold
     }
 
+private fun MainShellTextOverflow.toTextOverflow(): TextOverflow =
+    when (this) {
+        MainShellTextOverflow.Clip -> TextOverflow.Clip
+        MainShellTextOverflow.Ellipsis -> TextOverflow.Ellipsis
+    }
+
 internal data class BookContextMenuTarget(
     val sectionKey: String,
     val bookId: String,
+)
+
+internal data class RemoteBookContextMenuTarget(
+    val remoteBookId: String,
 )
 
 internal fun bookContextMenuTarget(
@@ -604,14 +690,132 @@ internal fun isBookContextMenuExpanded(
 ): Boolean =
     activeTarget == bookContextMenuTarget(section, entry)
 
+internal fun remoteBookContextMenuTarget(entry: RemoteBookEntry): RemoteBookContextMenuTarget =
+    RemoteBookContextMenuTarget(remoteBookId = entry.id)
+
+internal fun isRemoteBookContextMenuExpanded(
+    activeTarget: RemoteBookContextMenuTarget?,
+    entry: RemoteBookEntry,
+): Boolean =
+    activeTarget == remoteBookContextMenuTarget(entry)
+
+internal fun shouldEnableBookshelfPullRefresh(
+    syncSettings: SyncSettings,
+    authStatus: DriveAuthStatus?,
+    hasLoadedBooks: Boolean,
+    isSelecting: Boolean,
+    fileTaskBlocked: Boolean,
+): Boolean =
+    shouldLoadRemoteBooks(syncSettings, authStatus ?: DriveAuthStatus.NotConnected) &&
+        hasLoadedBooks &&
+        !isSelecting &&
+        !fileTaskBlocked
+
+private fun LazyGridScope.googleDriveSection(
+    remoteBookEntries: List<RemoteBookEntry>,
+    remoteProgressById: Map<String, Double>,
+    remoteImportProgressById: Map<String, Double>,
+    remoteBusyBookIds: Set<String>,
+    remoteCoverSourcesById: Map<String, BookCoverSource>,
+    layoutSpec: MainShellLayoutSpec,
+    contentWidthDp: Int,
+    fileTaskBlocked: Boolean,
+    isSelecting: Boolean,
+    shelfExpansionState: Map<String, Boolean>,
+    onShelfExpandedChange: (String, Boolean) -> Unit,
+    onImportRemoteBook: (RemoteBookEntry) -> Unit,
+    onDeleteRemoteCandidate: (RemoteBookEntry) -> Unit,
+    remoteContextMenuTarget: RemoteBookContextMenuTarget?,
+    onRemoteContextMenuTargetChange: (RemoteBookContextMenuTarget?) -> Unit,
+) {
+    if (remoteBookEntries.isEmpty()) return
+    val presentation = googleDriveSectionPresentation(shelfExpansionState, isSelecting)
+    item(
+        key = "header:google-drive",
+        contentType = "sectionHeader",
+        span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) },
+    ) {
+        BookshelfSectionHeader(
+            title = stringResource(R.string.bookshelf_section_google_drive),
+            count = remoteBookEntries.size,
+            layoutSpec = layoutSpec,
+            isCollapsible = presentation.isCollapsible,
+            isExpanded = presentation.isExpanded,
+            enabled = presentation.allowsHitTesting && !fileTaskBlocked,
+            onToggle = {
+                onShelfExpandedChange(GoogleDriveSectionCollapseKey, !presentation.isExpanded)
+            },
+            modifier = Modifier.alpha(presentation.alpha),
+        )
+    }
+    if (presentation.isExpanded) {
+        items(
+            items = remoteBookEntries,
+            key = { "google-drive:${it.id}" },
+            contentType = { "remoteBook" },
+        ) { entry ->
+            Box {
+                RemoteBookGridCell(
+                    entry = entry,
+                    progress = remoteProgressById[entry.id] ?: 0.0,
+                    downloadProgress = remoteImportProgressById[entry.id],
+                    coverSource = remoteCoverSourcesById[entry.id],
+                    layoutSpec = layoutSpec,
+                    enabled = presentation.allowsHitTesting && !fileTaskBlocked && entry.id !in remoteBusyBookIds,
+                    onImport = { onImportRemoteBook(entry) },
+                    onOpenContextMenu = { onRemoteContextMenuTargetChange(remoteBookContextMenuTarget(entry)) },
+                    modifier = Modifier.alpha(presentation.alpha),
+                )
+                RemoteBookContextMenu(
+                    entry = entry,
+                    expanded = isRemoteBookContextMenuExpanded(remoteContextMenuTarget, entry),
+                    onDismiss = { onRemoteContextMenuTargetChange(null) },
+                    onDeleteCandidate = onDeleteRemoteCandidate,
+                )
+            }
+        }
+    } else {
+        item(
+            key = "preview:google-drive",
+            contentType = "collapsedPreview",
+            span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) },
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .alpha(presentation.alpha)
+                    .clickable(enabled = presentation.allowsHitTesting && !fileTaskBlocked) {
+                        onShelfExpandedChange(GoogleDriveSectionCollapseKey, true)
+                    },
+                horizontalArrangement = Arrangement.spacedBy(CollapsedShelfCoverSpacingDp.dp),
+            ) {
+                val collapsedCoverWidthDp = layoutSpec.collapsedShelfPreviewCoverWidthDp(contentWidthDp)
+                remoteBookEntries
+                    .take(layoutSpec.collapsedShelfPreviewColumns(contentWidthDp))
+                    .forEach { entry ->
+                        BookCoverCard(
+                            coverSource = remoteCoverSourcesById[entry.id],
+                            modifier = Modifier.width(collapsedCoverWidthDp.dp),
+                        )
+                    }
+            }
+        }
+    }
+}
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun BooksTab(
     layoutSpec: MainShellLayoutSpec,
     bookEntries: List<BookEntry>,
+    remoteBookEntries: List<RemoteBookEntry>,
     sections: List<BookshelfSectionModel>,
     bookProgressById: Map<String, Double>,
+    remoteProgressById: Map<String, Double>,
+    remoteImportProgressById: Map<String, Double>,
+    remoteBusyBookIds: Set<String>,
     coverSourcesById: Map<String, BookCoverSource>,
+    remoteCoverSourcesById: Map<String, BookCoverSource>,
     sortOption: BookSortOption,
     hasLoadedBooks: Boolean,
     isLoading: Boolean,
@@ -633,15 +837,22 @@ private fun BooksTab(
     onImportFiles: () -> Unit,
     onImportFolder: () -> Unit,
     onOpenBook: (BookEntry) -> Unit,
+    onRefreshRemoteBooks: () -> Unit,
+    onImportRemoteBook: (RemoteBookEntry) -> Unit,
+    onDeleteRemoteCandidate: (RemoteBookEntry) -> Unit,
     contextMenuTarget: BookContextMenuTarget?,
     onContextMenuTargetChange: (BookContextMenuTarget?) -> Unit,
+    remoteContextMenuTarget: RemoteBookContextMenuTarget?,
+    onRemoteContextMenuTargetChange: (RemoteBookContextMenuTarget?) -> Unit,
     onDeleteCandidate: (BookEntry) -> Unit,
+    onExportCandidate: (BookEntry) -> Unit,
     onMarkReadCandidate: (BookEntry) -> Unit,
     onRenameCandidate: (BookEntry) -> Unit,
     onMoveBook: (BookEntry, String?) -> Unit,
     sasayakiEnabled: Boolean,
     onMatchSasayaki: (BookEntry) -> Unit,
     syncSettings: SyncSettings,
+    driveAuthStatus: DriveAuthStatus?,
     onSyncBook: (BookEntry, SyncDirection?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -693,7 +904,7 @@ private fun BooksTab(
                     CircularProgressIndicator()
                 }
                 !hasLoadedBooks -> Box(Modifier.fillMaxSize())
-                hasLoadedBooks && bookEntries.isEmpty() -> EmptyBooksView(
+                hasLoadedBooks && bookEntries.isEmpty() && remoteBookEntries.isEmpty() -> EmptyBooksView(
                     enabled = !fileTaskBlocked,
                     onImport = onImportFiles,
                     modifier = Modifier
@@ -703,9 +914,25 @@ private fun BooksTab(
                         .padding(horizontal = layoutSpec.pageHorizontalPaddingDp.dp),
                 )
                 else -> CompositionLocalProvider(LocalOverscrollFactory provides null) {
+                    val pullRefreshState = rememberPullToRefreshState()
+                    val pullRefreshEnabled = shouldEnableBookshelfPullRefresh(
+                        syncSettings = syncSettings,
+                        authStatus = driveAuthStatus,
+                        hasLoadedBooks = hasLoadedBooks,
+                        isSelecting = isSelecting,
+                        fileTaskBlocked = fileTaskBlocked,
+                    )
+                    Box(modifier = contentModifier.fillMaxHeight()) {
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(layoutSpec.bookGridColumns(contentWidthDp)),
-                        modifier = contentModifier.fillMaxHeight(),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pullToRefresh(
+                                isRefreshing = false,
+                                state = pullRefreshState,
+                                enabled = pullRefreshEnabled,
+                                onRefresh = onRefreshRemoteBooks,
+                            ),
                         contentPadding = PaddingValues(
                             start = layoutSpec.pageHorizontalPaddingDp.dp,
                             end = layoutSpec.pageHorizontalPaddingDp.dp,
@@ -715,7 +942,28 @@ private fun BooksTab(
                         horizontalArrangement = Arrangement.spacedBy(layoutSpec.bookGridSpacingDp.dp),
                         verticalArrangement = Arrangement.spacedBy(layoutSpec.bookGridVerticalSpacingDp.dp),
                     ) {
-                        sections.filter { it.books.isNotEmpty() }.forEach { section ->
+                        val visibleSections = sections.filter { it.books.isNotEmpty() }
+                        val googleDriveIndex = googleDriveSectionInsertionIndex(visibleSections)
+                        visibleSections.forEachIndexed { sectionIndex, section ->
+                            if (sectionIndex == googleDriveIndex) {
+                                googleDriveSection(
+                                    remoteBookEntries = remoteBookEntries,
+                                    remoteProgressById = remoteProgressById,
+                                    remoteImportProgressById = remoteImportProgressById,
+                                    remoteBusyBookIds = remoteBusyBookIds,
+                                    remoteCoverSourcesById = remoteCoverSourcesById,
+                                    layoutSpec = layoutSpec,
+                                    contentWidthDp = contentWidthDp,
+                                    fileTaskBlocked = fileTaskBlocked,
+                                    isSelecting = isSelecting,
+                                    shelfExpansionState = shelfExpansionState,
+                                    onShelfExpandedChange = onShelfExpandedChange,
+                                    onImportRemoteBook = onImportRemoteBook,
+                                    onDeleteRemoteCandidate = onDeleteRemoteCandidate,
+                                    remoteContextMenuTarget = remoteContextMenuTarget,
+                                    onRemoteContextMenuTargetChange = onRemoteContextMenuTargetChange,
+                                )
+                            }
                             val collapseKey = section.collapseKey
                             val isExpanded = if (!section.isCollapsible) {
                                 true
@@ -776,6 +1024,7 @@ private fun BooksTab(
                                             onMarkReadCandidate = onMarkReadCandidate,
                                             onRenameCandidate = onRenameCandidate,
                                             onDeleteCandidate = onDeleteCandidate,
+                                            onExportCandidate = onExportCandidate,
                                             syncSettings = syncSettings,
                                             onSyncBook = onSyncBook,
                                         )
@@ -809,6 +1058,33 @@ private fun BooksTab(
                                 }
                             }
                         }
+                        if (googleDriveIndex == visibleSections.size) {
+                            googleDriveSection(
+                                remoteBookEntries = remoteBookEntries,
+                                remoteProgressById = remoteProgressById,
+                                remoteImportProgressById = remoteImportProgressById,
+                                remoteBusyBookIds = remoteBusyBookIds,
+                                remoteCoverSourcesById = remoteCoverSourcesById,
+                                layoutSpec = layoutSpec,
+                                contentWidthDp = contentWidthDp,
+                                fileTaskBlocked = fileTaskBlocked,
+                                isSelecting = isSelecting,
+                                shelfExpansionState = shelfExpansionState,
+                                onShelfExpandedChange = onShelfExpandedChange,
+                                onImportRemoteBook = onImportRemoteBook,
+                                onDeleteRemoteCandidate = onDeleteRemoteCandidate,
+                                remoteContextMenuTarget = remoteContextMenuTarget,
+                                onRemoteContextMenuTargetChange = onRemoteContextMenuTargetChange,
+                            )
+                        }
+                    }
+                    if (pullRefreshEnabled) {
+                        PullToRefreshDefaults.Indicator(
+                            modifier = Modifier.align(Alignment.TopCenter),
+                            isRefreshing = false,
+                            state = pullRefreshState,
+                        )
+                    }
                     }
                 }
             }
@@ -1021,26 +1297,34 @@ private fun BookshelfSectionHeader(
     layoutSpec: MainShellLayoutSpec,
     isCollapsible: Boolean = false,
     isExpanded: Boolean = true,
+    enabled: Boolean = true,
     onToggle: () -> Unit = {},
+    modifier: Modifier = Modifier,
 ) {
+    val textLayout = bookshelfHeaderTextLayout()
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clickable(enabled = isCollapsible, onClick = onToggle)
+            .clickable(enabled = isCollapsible && enabled, onClick = onToggle)
             .padding(vertical = layoutSpec.shelfHeaderVerticalPaddingDp.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = title,
+            modifier = if (textLayout.titleUsesRemainingWidth) Modifier.weight(1f, fill = false) else Modifier,
             style = layoutSpec.shelfTitleTextStyle.toTextStyle(),
             fontWeight = layoutSpec.shelfTitleFontWeight.toFontWeight(),
             color = MaterialTheme.colorScheme.onBackground,
+            maxLines = textLayout.titleMaxLines,
+            overflow = textLayout.titleOverflow.toTextOverflow(),
         )
         Spacer(Modifier.width(12.dp))
         Text(
             text = count.toString(),
             style = layoutSpec.shelfCountTextStyle.toTextStyle(),
             color = Color(0xFF8C8C92),
+            maxLines = textLayout.countMaxLines,
+            softWrap = textLayout.countSoftWrap,
         )
         if (isCollapsible) {
             Spacer(Modifier.width(8.dp))
@@ -1127,6 +1411,47 @@ private fun BookGridCell(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+@Composable
+private fun RemoteBookGridCell(
+    entry: RemoteBookEntry,
+    progress: Double,
+    downloadProgress: Double?,
+    coverSource: BookCoverSource?,
+    layoutSpec: MainShellLayoutSpec,
+    enabled: Boolean,
+    onImport: () -> Unit,
+    onOpenContextMenu: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.combinedClickable(
+            enabled = enabled,
+            onClick = onImport,
+            onLongClick = onOpenContextMenu,
+        ),
+    ) {
+        BookCoverCard(coverSource = coverSource)
+        Spacer(Modifier.height(6.dp))
+        ReadingProgressPill(progress = progress)
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = entry.title,
+            style = layoutSpec.bookTitleTextStyle.toTextStyle(),
+            fontWeight = layoutSpec.bookTitleFontWeight.toFontWeight(),
+            color = if (enabled) MaterialTheme.colorScheme.onBackground else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        downloadProgress?.let { value ->
+            Spacer(Modifier.height(4.dp))
+            LinearProgressIndicator(
+                progress = { value.coerceIn(0.0, 1.0).toFloat() },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 
@@ -1320,6 +1645,7 @@ private fun BookContextMenu(
     onMarkReadCandidate: (BookEntry) -> Unit,
     onRenameCandidate: (BookEntry) -> Unit,
     onDeleteCandidate: (BookEntry) -> Unit,
+    onExportCandidate: (BookEntry) -> Unit,
     syncSettings: SyncSettings,
     onSyncBook: (BookEntry, SyncDirection?) -> Unit,
 ) {
@@ -1397,6 +1723,13 @@ private fun BookContextMenu(
             },
         )
         DropdownMenuItem(
+            text = { Text(stringResource(R.string.bookshelf_export_epub)) },
+            onClick = {
+                onExportCandidate(entry)
+                onDismiss()
+            },
+        )
+        DropdownMenuItem(
             text = { Text(stringResource(R.string.action_delete)) },
             onClick = {
                 onDeleteCandidate(entry)
@@ -1418,6 +1751,27 @@ private fun BookContextMenu(
         onDismiss = onDismiss,
         onSyncBook = onSyncBook,
     )
+}
+
+@Composable
+private fun RemoteBookContextMenu(
+    entry: RemoteBookEntry,
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onDeleteCandidate: (RemoteBookEntry) -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+    ) {
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.bookshelf_delete_remote_book)) },
+            onClick = {
+                onDeleteCandidate(entry)
+                onDismiss()
+            },
+        )
+    }
 }
 
 @Composable
@@ -1487,12 +1841,13 @@ private fun MoveDestinationMenu(
 }
 
 @Composable
-private fun ShelfManagementDialog(
+internal fun ShelfManagementDialog(
     shelves: List<BookShelf>,
     showReading: Boolean,
     onShowReadingChange: (Boolean) -> Unit,
     onCreateShelf: (String) -> Unit,
     onDeleteShelf: (String) -> Unit,
+    onRenameShelf: (String, String) -> Unit,
     onMoveShelf: (Int, Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1504,86 +1859,88 @@ private fun ShelfManagementDialog(
         scrollState = newShelfNameScrollState,
     )
     val trimmedName = newShelfName.trim()
+    val shelfNames = remember(shelves) { shelves.mapTo(mutableSetOf()) { it.name } }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.bookshelf_manage_shelves)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.bookshelf_reading_shelf), style = MaterialTheme.typography.bodyLarge)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(ShelfManagementShelfListTag),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item(key = "reading-shelf") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.bookshelf_reading_shelf), style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                stringResource(R.string.bookshelf_reading_shelf_description),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Switch(
+                            checked = showReading,
+                            onCheckedChange = onShowReadingChange,
+                        )
+                    }
+                }
+                item(key = "reading-shelf-divider") {
+                    HorizontalDivider()
+                }
+                item(key = "shelves-heading") {
+                    Text(stringResource(R.string.bookshelf_shelves), style = MaterialTheme.typography.titleMedium)
+                }
+                if (shelves.isEmpty()) {
+                    item(key = "empty-shelves") {
                         Text(
-                            stringResource(R.string.bookshelf_reading_shelf_description),
-                            style = MaterialTheme.typography.bodySmall,
+                            stringResource(R.string.bookshelf_no_shelves),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Switch(
-                        checked = showReading,
-                        onCheckedChange = onShowReadingChange,
-                    )
-                }
-                HorizontalDivider()
-                Text(stringResource(R.string.bookshelf_shelves), style = MaterialTheme.typography.titleMedium)
-                if (shelves.isEmpty()) {
-                    Text(
-                        stringResource(R.string.bookshelf_no_shelves),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 } else {
-                    shelves.forEachIndexed { index, shelf ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = shelf.name,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            IconButton(
-                                onClick = { onMoveShelf(index, index - 1) },
-                                enabled = index > 0,
-                            ) {
-                                Icon(Icons.Rounded.ArrowUpward, contentDescription = stringResource(R.string.bookshelf_move_shelf_up))
-                            }
-                            IconButton(
-                                onClick = { onMoveShelf(index, index + 1) },
-                                enabled = index < shelves.lastIndex,
-                            ) {
-                                Icon(Icons.Rounded.ArrowDownward, contentDescription = stringResource(R.string.bookshelf_move_shelf_down))
-                            }
-                            IconButton(onClick = { onDeleteShelf(shelf.name) }) {
-                                Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.bookshelf_delete_shelf))
-                            }
-                        }
+                    itemsIndexed(
+                        items = shelves,
+                        key = { _, shelf -> shelf.name },
+                    ) { index, shelf ->
+                        ShelfManagementShelfRow(
+                            shelf = shelf,
+                            index = index,
+                            lastIndex = shelves.lastIndex,
+                            shelfNames = shelfNames,
+                            onDeleteShelf = onDeleteShelf,
+                            onRenameShelf = onRenameShelf,
+                            onMoveShelf = onMoveShelf,
+                        )
                     }
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    OutlinedTextField(
-                        state = newShelfNameState,
-                        label = { Text(stringResource(R.string.bookshelf_shelf_name)) },
-                        lineLimits = hoshiSingleLineTextFieldLineLimits(),
-                        scrollState = newShelfNameScrollState,
-                        colors = hoshiOutlinedTextFieldColors(),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(
-                        onClick = {
-                            onCreateShelf(trimmedName)
-                            newShelfName = ""
-                        },
-                        enabled = trimmedName.isNotEmpty(),
+                item(key = "new-shelf") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.bookshelf_add_shelf))
+                        OutlinedTextField(
+                            state = newShelfNameState,
+                            label = { Text(stringResource(R.string.bookshelf_shelf_name)) },
+                            lineLimits = hoshiSingleLineTextFieldLineLimits(),
+                            scrollState = newShelfNameScrollState,
+                            colors = hoshiOutlinedTextFieldColors(),
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(
+                            onClick = {
+                                onCreateShelf(trimmedName)
+                                newShelfName = ""
+                            },
+                            enabled = trimmedName.isNotEmpty(),
+                        ) {
+                            Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.bookshelf_add_shelf))
+                        }
                     }
                 }
             }
@@ -1594,6 +1951,122 @@ private fun ShelfManagementDialog(
             }
         },
     )
+}
+
+@Composable
+private fun ShelfManagementShelfRow(
+    shelf: BookShelf,
+    index: Int,
+    lastIndex: Int,
+    shelfNames: Set<String>,
+    onDeleteShelf: (String) -> Unit,
+    onRenameShelf: (String, String) -> Unit,
+    onMoveShelf: (Int, Int) -> Unit,
+) {
+    var isRenaming by remember(shelf.name) { mutableStateOf(false) }
+    var draftName by remember(shelf.name) { mutableStateOf(shelf.name) }
+    if (isRenaming) {
+        val draftScrollState = rememberScrollState()
+        val draftNameState = rememberSyncedTextFieldState(
+            value = draftName,
+            onValueChange = { draftName = it },
+            scrollState = draftScrollState,
+        )
+        val trimmedName = draftName.trim()
+        val isDuplicateName = trimmedName != shelf.name && trimmedName in shelfNames
+        val canSaveName = trimmedName.isNotEmpty() && !isDuplicateName
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Column(Modifier.weight(1f)) {
+                OutlinedTextField(
+                    state = draftNameState,
+                    label = { Text(stringResource(R.string.bookshelf_shelf_name)) },
+                    lineLimits = hoshiSingleLineTextFieldLineLimits(),
+                    scrollState = draftScrollState,
+                    colors = hoshiOutlinedTextFieldColors(),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    isError = isDuplicateName,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (isDuplicateName) {
+                    Text(
+                        text = stringResource(R.string.bookshelf_shelf_name_exists),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+            IconButton(
+                onClick = {
+                    if (trimmedName != shelf.name) {
+                        onRenameShelf(shelf.name, trimmedName)
+                    }
+                    isRenaming = false
+                },
+                enabled = canSaveName,
+            ) {
+                Icon(Icons.Rounded.Done, contentDescription = stringResource(R.string.bookshelf_save_shelf_name))
+            }
+        }
+    } else {
+        var menuExpanded by remember { mutableStateOf(false) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = shelf.name,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    Icon(Icons.Rounded.MoreVert, contentDescription = stringResource(R.string.action_more))
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.bookshelf_rename_shelf)) },
+                        leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                        onClick = {
+                            draftName = shelf.name
+                            isRenaming = true
+                            menuExpanded = false
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.bookshelf_move_shelf_up)) },
+                        leadingIcon = { Icon(Icons.Rounded.ArrowUpward, contentDescription = null) },
+                        enabled = index > 0,
+                        onClick = {
+                            onMoveShelf(index, index - 1)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.bookshelf_move_shelf_down)) },
+                        leadingIcon = { Icon(Icons.Rounded.ArrowDownward, contentDescription = null) },
+                        enabled = index < lastIndex,
+                        onClick = {
+                            onMoveShelf(index, index + 1)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.bookshelf_delete_shelf)) },
+                        leadingIcon = { Icon(Icons.Rounded.Delete, contentDescription = null) },
+                        onClick = {
+                            onDeleteShelf(shelf.name)
+                            menuExpanded = false
+                        },
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -1783,3 +2256,9 @@ private fun ChevronRightGlyph(color: Color, modifier: Modifier = Modifier) {
         modifier = modifier,
     )
 }
+
+private fun String.sanitizeExportFileName(): String =
+    split(Regex("[\\\\/:*?\"<>|\\n\\r\\u0000-\\u001F]"))
+        .joinToString("_")
+        .trim()
+        .ifBlank { "book" }

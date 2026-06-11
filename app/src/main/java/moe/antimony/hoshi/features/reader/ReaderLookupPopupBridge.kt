@@ -406,7 +406,7 @@ private fun JsonObject.boolean(name: String): Boolean? =
 
 private val readerPopupJson = Json { encodeDefaults = true }
 
-private const val PopupIframeUrl = "https://hoshi.local/popup/iframe.html"
+private const val PopupIframeUrl = "https://appassets.androidplatform.net/popup/iframe.html"
 
 internal fun readerLookupPopupIframeUrl(cacheKey: Int? = null): String =
     cacheKey?.let { "$PopupIframeUrl?v=$it" } ?: PopupIframeUrl
@@ -428,7 +428,7 @@ internal object ReaderLookupPopupWebBridge {
         WebViewCompat.addWebMessageListener(
             webView,
             "HoshiReaderPopup",
-            setOf("https://hoshi.local"),
+            setOf("https://appassets.androidplatform.net"),
         ) { _, message, _, _, _ ->
             val data = message.data ?: return@addWebMessageListener
             val parsed = ReaderLookupPopupBridgeMessage.fromJson(data) ?: return@addWebMessageListener
@@ -444,17 +444,19 @@ internal class ReaderLookupPopupResourceHandler(
     private val assets: LookupPopupAssets,
     private val fontManager: ReaderFontManager,
     private val audioRequestHandler: AudioRequestHandler,
-    private val imageRequestHandler: DictionaryImageRequestHandler = DictionaryImageRequestHandler(),
+    private val imageRequestHandler: DictionaryImageRequestHandler,
     private val iframeDocument: () -> String,
 ) {
     fun handle(uri: Uri): WebResourceResponse? =
-        handlePopupAssetRequest(uri)
-            ?: handleFontRequest(uri)
-            ?: imageRequestHandler.handleImageRequest(uri)
-            ?: audioRequestHandler.handleAudioRequest(uri.toString())
+        when (readerLookupPopupAppAssetRoute(uri.scheme, uri.host, uri.path)) {
+            ReaderLookupPopupAppAssetRoute.Popup -> handlePopupAssetRequest(uri) ?: notFoundResponse()
+            ReaderLookupPopupAppAssetRoute.Font -> handleFontRequest(uri) ?: notFoundResponse()
+            ReaderLookupPopupAppAssetRoute.Image -> imageRequestHandler.handleImageRequest(uri) ?: notFoundResponse()
+            null -> imageRequestHandler.handleImageRequest(uri) ?: audioRequestHandler.handleAudioRequest(uri.toString())
+        }
 
     private fun handlePopupAssetRequest(uri: Uri): WebResourceResponse? {
-        if (uri.scheme != "https" || uri.host != "hoshi.local" || !uri.path.orEmpty().startsWith("/popup/")) return null
+        if (uri.scheme != "https" || uri.host != "appassets.androidplatform.net" || !uri.path.orEmpty().startsWith("/popup/")) return null
         val path = uri.path.orEmpty()
         if (path == "/popup/iframe.html") {
             return textResponse("text/html", iframeDocument())
@@ -481,7 +483,7 @@ internal class ReaderLookupPopupResourceHandler(
     }
 
     private fun handleFontRequest(uri: Uri): WebResourceResponse? {
-        if (uri.scheme != "https" || uri.host != "hoshi.local") return null
+        if (uri.scheme != "https" || uri.host != "appassets.androidplatform.net") return null
         val fileName = uri.lastPathSegment?.takeIf { uri.path.orEmpty().startsWith("/fonts/") } ?: return null
         val fontFile = fontManager.fontFileForRequest(fileName) ?: return null
         return WebResourceResponse(
@@ -497,6 +499,39 @@ internal class ReaderLookupPopupResourceHandler(
             "UTF-8",
             ByteArrayInputStream(content.toByteArray(Charsets.UTF_8)),
         )
+
+    private fun notFoundResponse(): WebResourceResponse =
+        WebResourceResponse(
+            "text/plain",
+            "UTF-8",
+            404,
+            "Not Found",
+            mapOf("Access-Control-Allow-Origin" to "*"),
+            ByteArrayInputStream(ByteArray(0)),
+        )
+}
+
+internal enum class ReaderLookupPopupAppAssetRoute {
+    Popup,
+    Font,
+    Image,
+}
+
+internal fun readerLookupPopupAppAssetRoute(
+    scheme: String?,
+    host: String?,
+    path: String?,
+): ReaderLookupPopupAppAssetRoute? {
+    if (!scheme.equals("https", ignoreCase = true) || !host.equals("appassets.androidplatform.net", ignoreCase = true)) {
+        return null
+    }
+    val localPath = path.orEmpty()
+    return when {
+        localPath.startsWith("/popup/") -> ReaderLookupPopupAppAssetRoute.Popup
+        localPath.startsWith("/fonts/") -> ReaderLookupPopupAppAssetRoute.Font
+        localPath == "/image" -> ReaderLookupPopupAppAssetRoute.Image
+        else -> null
+    }
 }
 
 private fun File.popupFontMediaType(): String =

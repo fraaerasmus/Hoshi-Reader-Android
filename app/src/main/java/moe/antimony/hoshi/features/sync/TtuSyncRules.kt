@@ -28,6 +28,20 @@ object TtuSyncRules {
         }
     }
 
+    fun desanitizeTtuFilename(name: String): String {
+        var result = name
+            .replace("~ttu-star~", "*")
+        if (result.endsWith("~ttu-spc~")) {
+            result = result.removeSuffix("~ttu-spc~") + " "
+        }
+        if (result.endsWith("~ttu-dend~")) {
+            result = result.removeSuffix("~ttu-dend~") + "."
+        }
+        return result.replace(Regex("%([0-9A-Fa-f]{2})")) { match ->
+            match.groupValues[1].toInt(16).toChar().toString()
+        }
+    }
+
     fun appleReferenceSecondsToUnixMillis(appleReferenceSeconds: Double): Long =
         (appleReferenceSeconds * 1_000.0 + AppleReferenceEpochMillis).toLong()
 
@@ -35,11 +49,25 @@ object TtuSyncRules {
         (unixMillis - AppleReferenceEpochMillis).toDouble() / 1_000.0
 
     fun parseProgressTimestampMillis(file: DriveFile?): Long? {
+        return parseTtuTimestamp(file, prefix = "progress_", index = 3)
+    }
+
+    fun parseProgressValue(file: DriveFile?): Double? {
         val name = file?.name ?: return null
         if (!name.startsWith("progress_")) return null
-        val parts = name.split("_")
-        if (parts.size <= 4) return null
-        return parts[3].toLongOrNull()
+        return name.removeSuffix(".json").split("_").getOrNull(4)?.toDoubleOrNull()
+    }
+
+    fun parseBookDataTimestampMillis(file: DriveFile?): Long? {
+        return parseTtuTimestamp(file, prefix = "bookdata_", index = 4)
+    }
+
+    fun parseStatisticsTimestampMillis(file: DriveFile?): Long? {
+        return parseTtuTimestamp(file, prefix = "statistics_", index = 3)
+    }
+
+    fun parseAudioBookTimestampMillis(file: DriveFile?): Long? {
+        return parseTtuTimestamp(file, prefix = "audioBook_", index = 3)
     }
 
     fun determineDirection(local: Bookmark?, remoteProgressFile: DriveFile?): SyncDirection {
@@ -166,6 +194,12 @@ object TtuSyncRules {
     }
 
     private const val AppleReferenceEpochMillis = 978_307_200_000L
+
+    private fun parseTtuTimestamp(file: DriveFile?, prefix: String, index: Int): Long? {
+        val name = file?.name ?: return null
+        if (!name.startsWith(prefix)) return null
+        return name.split("_").getOrNull(index)?.toLongOrNull()
+    }
 }
 
 data class CoverMetadata(

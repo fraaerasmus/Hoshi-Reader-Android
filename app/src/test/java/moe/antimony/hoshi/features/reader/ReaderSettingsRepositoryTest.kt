@@ -82,7 +82,7 @@ class ReaderSettingsRepositoryTest {
                 customBackgroundColor = 0xFF112233,
                 customTextColor = 0xFF445566,
                 customInfoColor = 0xFF778899,
-                selectedFont = "Hiragino Mincho ProN",
+                selectedFont = ReaderFontManager.defaultMinchoFont,
                 fontSize = 29,
                 continuousMode = true,
                 chapterSwipeDistance = 120,

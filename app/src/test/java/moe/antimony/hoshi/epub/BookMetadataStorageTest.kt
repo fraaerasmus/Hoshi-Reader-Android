@@ -2,6 +2,9 @@ package moe.antimony.hoshi.epub
 
 
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray
@@ -11,8 +14,11 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 import java.nio.file.Files
 import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 
 class BookMetadataStorageTest {
     @Test
@@ -23,6 +29,7 @@ class BookMetadataStorageTest {
         val metadata = BookMetadata(
             id = bookId,
             title = "屍人荘の殺人",
+            epub = "book-a.epub",
             renamedTitle = "Custom Shelf Title",
             cover = "Books/book-a/cover.jpg",
             folder = "book-a",
@@ -35,6 +42,7 @@ class BookMetadataStorageTest {
         assertEquals(bookId, saved.getValue("id").jsonPrimitive.content)
         UUID.fromString(saved.getValue("id").jsonPrimitive.content)
         assertEquals("屍人荘の殺人", saved.getValue("title").jsonPrimitive.content)
+        assertEquals("book-a.epub", saved.getValue("epub").jsonPrimitive.content)
         assertEquals("Custom Shelf Title", saved.getValue("renamedTitle").jsonPrimitive.content)
         assertEquals("Books/book-a/cover.jpg", saved.getValue("cover").jsonPrimitive.content)
         assertEquals("book-a", saved.getValue("folder").jsonPrimitive.content)
@@ -60,8 +68,192 @@ class BookMetadataStorageTest {
         val metadata = requireNotNull(storage.loadMetadata(bookRoot))
 
         assertEquals("Original Title", metadata.title)
+        assertEquals(null, metadata.epub)
         assertEquals(null, metadata.renamedTitle)
         assertEquals("Original Title", metadata.displayTitle)
+    }
+
+    @Test
+    fun loadBookEntriesMigratesLegacyExtractedBookToPackedEpub() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-packed-migration").toFile())
+        val root = storage.createBookDirectory("legacy-book")
+        writeMinimalExtractedEpub(root, title = "Legacy Book")
+        root.resolve("cover.jpg").writeBytes(byteArrayOf(9, 8, 7))
+        root.resolve("bookmark.json").writeText("""{"chapterIndex":0,"progress":0.0,"characterCount":0}""")
+        val id = UUID.randomUUID().toString()
+        storage.saveMetadata(
+            root,
+            BookMetadata(
+                id = id,
+                title = "Legacy Book",
+                cover = "Books/legacy-book/cover.jpg",
+                folder = "legacy-book",
+                lastAccess = 1.0,
+            ),
+        )
+
+        val entry = storage.loadBookEntries().single()
+
+        assertEquals("legacy-book.epub", entry.metadata.epub)
+        assertEquals("legacy-book.epub", storage.loadMetadata(root)?.epub)
+        assertTrue(root.resolve("legacy-book.epub").isFile)
+        assertTrue(root.resolve("metadata.json").isFile)
+        assertTrue(root.resolve("bookmark.json").isFile)
+        assertTrue(root.resolve("cover.jpg").isFile)
+        assertEquals(listOf(9, 8, 7), root.resolve("cover.jpg").readBytes().map(Byte::toInt))
+        assertFalse(root.resolve("META-INF").exists())
+        assertFalse(root.resolve("OPS").exists())
+        ZipFile(root.resolve("legacy-book.epub")).use { zip ->
+            val first = zip.entries().nextElement()
+            assertEquals("mimetype", first.name)
+            assertEquals(ZipEntry.STORED, first.method)
+            assertEquals("application/epub+zip", zip.getInputStream(first).readBytes().decodeToString())
+        }
+    }
+
+    @Test
+    fun loadBookEntriesReportsLegacyPackedMigrationProgress() = runBlocking {
+        val repository = BookRepository(Files.createTempDirectory("hoshi-packed-migration-progress").toFile())
+        val first = repository.createBookDirectory("legacy-first")
+        val second = repository.createBookDirectory("legacy-second")
+        val modern = repository.createBookDirectory("modern-book")
+        writeMinimalExtractedEpub(first, title = "Legacy First")
+        writeMinimalExtractedEpub(second, title = "Legacy Second")
+        writeMinimalEpubArchive(modern.resolve("modern-book.epub"), title = "Modern Book")
+        listOf(first, second, modern).forEach { root ->
+            repository.saveMetadata(
+                root,
+                BookMetadata(
+                    id = UUID.randomUUID().toString(),
+                    title = root.name,
+                    cover = null,
+                    folder = root.name,
+                    lastAccess = 1.0,
+                    epub = root.resolve("${root.name}.epub").takeIf(File::isFile)?.name,
+                ),
+            )
+        }
+        val progress = mutableListOf<LegacyBookMigrationProgress>()
+
+        repository.loadBookEntries(onLegacyBookMigrationProgress = progress::add)
+
+        assertEquals(
+            listOf(
+                LegacyBookMigrationProgress(current = 1, total = 2),
+                LegacyBookMigrationProgress(current = 2, total = 2),
+            ),
+            progress,
+        )
+    }
+
+    @Test
+    fun loadBookEntriesSerializesConcurrentLegacyPackedMigration() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-packed-migration-concurrent").toFile())
+        val root = storage.createBookDirectory("legacy-book")
+        writeMinimalExtractedEpub(root, title = "Legacy Book")
+        root.resolve("OPS/padding.bin").writeBytes(ByteArray(2_000_000) { (it % 251).toByte() })
+        val id = UUID.randomUUID().toString()
+        storage.saveMetadata(
+            root,
+            BookMetadata(
+                id = id,
+                title = "Legacy Book",
+                cover = null,
+                folder = "legacy-book",
+                lastAccess = 1.0,
+            ),
+        )
+
+        val entries = (0 until 8)
+            .map { async(Dispatchers.IO) { storage.loadBookEntries().single() } }
+            .awaitAll()
+
+        assertEquals(List(8) { "legacy-book.epub" }, entries.map { it.metadata.epub })
+        assertEquals("legacy-book.epub", storage.loadMetadata(root)?.epub)
+        assertTrue(root.resolve("legacy-book.epub").isFile)
+        assertFalse(root.resolve(".legacy-book.epub.tmp").exists())
+        assertFalse(root.resolve("META-INF").exists())
+        assertFalse(root.resolve("OPS").exists())
+    }
+
+    @Test
+    fun loadBookEntriesMigratesLegacyBookWithoutPackingOrDeletingSasayakiAudio() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-packed-migration-sasayaki").toFile())
+        val root = storage.createBookDirectory("legacy-book")
+        writeMinimalExtractedEpub(root, title = "Legacy Book")
+        root.resolve("Sasayaki").mkdirs()
+        root.resolve("Sasayaki/sasayaki_audio.m4b").writeBytes(byteArrayOf(1, 2, 3))
+        root.resolve("sasayaki_playback.json").writeText("""{"lastPosition":12.0,"audioFileName":"sasayaki_audio.m4b"}""")
+        storage.saveMetadata(
+            root,
+            BookMetadata(
+                id = UUID.randomUUID().toString(),
+                title = "Legacy Book",
+                cover = null,
+                folder = "legacy-book",
+                lastAccess = 1.0,
+            ),
+        )
+
+        storage.loadBookEntries().single()
+
+        assertTrue(root.resolve("legacy-book.epub").isFile)
+        assertTrue(root.resolve("Sasayaki/sasayaki_audio.m4b").isFile)
+        assertTrue(root.resolve("sasayaki_playback.json").isFile)
+        ZipFile(root.resolve("legacy-book.epub")).use { zip ->
+            assertFalse(zip.entries().asSequence().any { it.name.startsWith("Sasayaki/") })
+            assertFalse(zip.entries().asSequence().any { it.name == "sasayaki_playback.json" })
+        }
+    }
+
+    @Test
+    fun loadBookEntriesLeavesLegacyBookUntouchedWhenPackedMigrationCannotParse() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-packed-migration-fail").toFile())
+        val root = storage.createBookDirectory("broken-book")
+        root.resolve("OPS/text").mkdirs()
+        root.resolve("OPS/text/chapter.xhtml").writeText("<html><body>Broken</body></html>")
+        storage.saveMetadata(
+            root,
+            BookMetadata(
+                id = UUID.randomUUID().toString(),
+                title = "Broken Book",
+                cover = null,
+                folder = "broken-book",
+                lastAccess = 1.0,
+            ),
+        )
+
+        val entry = storage.loadBookEntries().single()
+
+        assertEquals(null, entry.metadata.epub)
+        assertEquals(null, storage.loadMetadata(root)?.epub)
+        assertFalse(root.resolve("broken-book.epub").exists())
+        assertTrue(root.resolve("OPS/text/chapter.xhtml").isFile)
+    }
+
+    @Test
+    fun loadBookEntriesDoesNotTrustExistingPackedEpubUntilItCanParse() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-packed-existing-corrupt").toFile())
+        val root = storage.createBookDirectory("legacy-book")
+        writeMinimalExtractedEpub(root, title = "Legacy Book")
+        root.resolve("legacy-book.epub").writeText("not an epub")
+        storage.saveMetadata(
+            root,
+            BookMetadata(
+                id = UUID.randomUUID().toString(),
+                title = "Legacy Book",
+                cover = null,
+                folder = "legacy-book",
+                lastAccess = 1.0,
+            ),
+        )
+
+        val entry = storage.loadBookEntries().single()
+
+        assertEquals(null, entry.metadata.epub)
+        assertEquals(null, storage.loadMetadata(root)?.epub)
+        assertEquals("not an epub", root.resolve("legacy-book.epub").readText())
+        assertTrue(root.resolve("META-INF/container.xml").isFile)
     }
 
     @Test

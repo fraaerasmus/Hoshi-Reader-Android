@@ -11,6 +11,7 @@ import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.ReadingStatistics
 import moe.antimony.hoshi.epub.SasayakiPlaybackData
+import java.io.File
 
 @Singleton
 class SyncManager private constructor(
@@ -18,17 +19,20 @@ class SyncManager private constructor(
     private val drive: DriveSyncDataSource,
     private val ioDispatcher: CoroutineDispatcher,
     private val nowUnixMillis: () -> Long,
+    private val bookDataExporter: suspend (BookEntry) -> File?,
 ) {
     @Inject
     constructor(
         bookRepository: BookRepository,
         drive: DriveSyncDataSource,
+        bookDataConverter: TtuBookDataConverter,
         @IoDispatcher ioDispatcher: CoroutineDispatcher,
     ) : this(
         bookRepository = bookRepository,
         drive = drive,
         ioDispatcher = ioDispatcher,
         nowUnixMillis = { System.currentTimeMillis() },
+        bookDataExporter = bookDataConverter::exportBookData,
     )
 
     constructor(
@@ -39,17 +43,32 @@ class SyncManager private constructor(
         drive = drive,
         ioDispatcher = Dispatchers.IO,
         nowUnixMillis = { System.currentTimeMillis() },
+        bookDataExporter = { error("TTU bookdata export is not configured.") },
     )
 
     constructor(
         bookRepository: BookRepository,
         drive: DriveSyncDataSource,
         nowUnixMillis: () -> Long,
+        bookDataExporter: suspend (BookEntry) -> File? = { error("TTU bookdata export is not configured.") },
     ) : this(
         bookRepository = bookRepository,
         drive = drive,
         ioDispatcher = Dispatchers.IO,
         nowUnixMillis = nowUnixMillis,
+        bookDataExporter = bookDataExporter,
+    )
+
+    constructor(
+        bookRepository: BookRepository,
+        drive: DriveSyncDataSource,
+        bookDataExporter: suspend (BookEntry) -> File?,
+    ) : this(
+        bookRepository = bookRepository,
+        drive = drive,
+        ioDispatcher = Dispatchers.IO,
+        nowUnixMillis = { System.currentTimeMillis() },
+        bookDataExporter = bookDataExporter,
     )
 
     suspend fun syncBook(
@@ -59,13 +78,14 @@ class SyncManager private constructor(
         statsSyncMode: StatisticsSyncMode,
         syncAudioBook: Boolean,
         importOnly: Boolean = false,
+        syncBookData: Boolean = false,
     ): SyncResult =
         try {
-            syncBookOnce(entry, direction, syncStats, statsSyncMode, syncAudioBook, importOnly)
+            syncBookOnce(entry, direction, syncStats, statsSyncMode, syncAudioBook, importOnly, syncBookData)
         } catch (error: GoogleDriveApiException) {
             if (!error.isStaleCacheError) throw error
             drive.clearCache()
-            syncBookOnce(entry, direction, syncStats, statsSyncMode, syncAudioBook, importOnly)
+            syncBookOnce(entry, direction, syncStats, statsSyncMode, syncAudioBook, importOnly, syncBookData)
         }
 
     private suspend fun syncBookOnce(
@@ -75,6 +95,7 @@ class SyncManager private constructor(
         statsSyncMode: StatisticsSyncMode,
         syncAudioBook: Boolean,
         importOnly: Boolean,
+        syncBookData: Boolean,
     ): SyncResult {
         val title = entry.metadata.title ?: return SyncResult.Skipped
         entry.metadata.folder ?: return SyncResult.Skipped
@@ -92,8 +113,19 @@ class SyncManager private constructor(
         )
         val localBookmark = bookRepository.loadBookmark(entry.root)
         val syncFiles = drive.listSyncFiles(driveFolderId)
-        val syncDirection = direction ?: TtuSyncRules.determineDirection(localBookmark, syncFiles.progress)
 
+        if (syncBookData && !importOnly && direction != SyncDirection.ImportFromTtu && syncFiles.bookData == null) {
+            val bookData = bookDataExporter(entry)
+            if (bookData != null) {
+                try {
+                    drive.uploadBookData(driveFolderId, bookData)
+                } finally {
+                    bookData.delete()
+                }
+            }
+        }
+
+        val syncDirection = direction ?: TtuSyncRules.determineDirection(localBookmark, syncFiles.progress)
         if (syncDirection == SyncDirection.Synced) {
             return SyncResult.Synced(displayTitle)
         }
@@ -143,19 +175,27 @@ class SyncManager private constructor(
         syncAudioBook: Boolean,
     ): SyncResult {
         val progress = progressFileId?.let { drive.getProgressFile(it) } ?: return SyncResult.Skipped
+        val remoteStats = if (syncStats) {
+            statsFileId?.let { drive.getStatsFile(it) }.orEmpty()
+        } else {
+            emptyList()
+        }
+        val remoteAudioBook = if (syncAudioBook) {
+            audioBookFileId?.let { drive.getAudioBookFile(it) }
+        } else {
+            null
+        }
+
         importProgress(entry, progress)
         if (syncStats) {
             val localStats = bookRepository.loadStatistics(entry.root)
-            val remoteStats = statsFileId?.let { drive.getStatsFile(it) }.orEmpty()
             val merged = TtuSyncRules.mergeStatistics(localStats, remoteStats, statsSyncMode)
             if (merged.isNotEmpty()) {
                 bookRepository.saveStatistics(entry.root, merged)
             }
         }
-        if (syncAudioBook) {
-            audioBookFileId?.let { fileId ->
-                importAudioBook(entry, drive.getAudioBookFile(fileId))
-            }
+        if (remoteAudioBook != null) {
+            importAudioBook(entry, remoteAudioBook)
         }
         return SyncResult.Imported(title, progress.exploredCharCount)
     }
@@ -174,30 +214,44 @@ class SyncManager private constructor(
     ): SyncResult {
         val bookmark = localBookmark ?: return SyncResult.Skipped
         val remoteProgress = progressFileId?.let { drive.getProgressFile(it) }
+        val remoteStats = if (syncStats) {
+            statsFileId?.let { drive.getStatsFile(it) }.orEmpty()
+        } else {
+            emptyList()
+        }
+        if (syncAudioBook && audioBookFileId != null) {
+            drive.getAudioBookFile(audioBookFileId)
+        }
+        val localStats = if (syncStats) {
+            bookRepository.loadStatistics(entry.root)
+        } else {
+            emptyList()
+        }
+        val playback = if (syncAudioBook) {
+            bookRepository.loadSasayakiPlayback(entry.root)
+        } else {
+            null
+        }
+
         exportProgress(entry, driveFolderId, progressFileId, bookmark, remoteProgress)
 
         if (syncStats) {
-            val remoteStats = statsFileId?.let { drive.getStatsFile(it) }.orEmpty()
-            val localStats = bookRepository.loadStatistics(entry.root)
             val statsToExport = TtuSyncRules.mergeStatistics(remoteStats, localStats, statsSyncMode)
             if (statsToExport.isNotEmpty()) {
                 drive.updateStatsFile(driveFolderId, statsFileId, statsToExport)
             }
         }
 
-        if (syncAudioBook) {
-            val playback = bookRepository.loadSasayakiPlayback(entry.root)
-            if (playback != null) {
-                drive.updateAudioBookFile(
-                    folderId = driveFolderId,
-                    fileId = audioBookFileId,
-                    audioBook = TtuAudioBook(
-                        title = title,
-                        playbackPosition = playback.lastPosition,
-                        lastAudioBookModified = nowUnixMillis(),
-                    ),
-                )
-            }
+        if (playback != null) {
+            drive.updateAudioBookFile(
+                folderId = driveFolderId,
+                fileId = audioBookFileId,
+                audioBook = TtuAudioBook(
+                    title = title,
+                    playbackPosition = playback.lastPosition,
+                    lastAudioBookModified = nowUnixMillis(),
+                ),
+            )
         }
         return SyncResult.Exported(title, bookmark.characterCount)
     }

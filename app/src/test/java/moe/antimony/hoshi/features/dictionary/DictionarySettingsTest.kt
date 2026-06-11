@@ -12,6 +12,9 @@ class DictionarySettingsTest {
         val settings = DictionarySettings()
 
         assertEquals(DictionaryLanguage.Japanese, settings.lookupLanguage)
+        assertTrue(settings.autoUpdateDictionaries)
+        assertEquals(DictionaryUpdateInterval.Weekly, settings.dictionaryUpdateInterval)
+        assertEquals(null, settings.lastDictionaryUpdateEpochMillis)
         assertFalse(settings.dictionaryTabDefault)
         assertTrue(settings.scanNonJapaneseText)
         assertEquals(16, settings.maxResults)
@@ -35,4 +38,12 @@ class DictionarySettingsTest {
         assertEquals(1, settings.scanLength)
     }
 
+    @Test
+    fun updateIntervalsUseIosDurations() {
+        assertEquals(24L * 60L * 60L * 1000L, DictionaryUpdateInterval.Daily.intervalMillis)
+        assertEquals(7L * 24L * 60L * 60L * 1000L, DictionaryUpdateInterval.Weekly.intervalMillis)
+        assertEquals(30L * 24L * 60L * 60L * 1000L, DictionaryUpdateInterval.Monthly.intervalMillis)
+        assertEquals(DictionaryUpdateInterval.Weekly, DictionaryUpdateInterval.fromRawValue("Weekly"))
+        assertEquals(null, DictionaryUpdateInterval.fromRawValue("Yearly"))
+    }
 }

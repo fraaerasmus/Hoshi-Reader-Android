@@ -2,18 +2,15 @@ package moe.antimony.hoshi.features.dictionary
 
 import android.net.Uri
 import android.webkit.WebResourceResponse
-import de.manhhao.hoshi.HoshiDicts
 import java.io.ByteArrayInputStream
 
 internal class DictionaryImageRequestHandler(
-    private val loadMedia: (dictionary: String, path: String) -> ByteArray? = { dictionary, path ->
-        HoshiDicts.getMediaFile(HoshiDicts.lookupObject, dictionary, path)
-    },
+    private val loadMedia: (dictionary: String, path: String) -> ByteArray?,
 ) {
     fun handleImageRequest(uri: Uri): WebResourceResponse? {
         val isIosImageScheme = uri.scheme == "image"
         val isAndroidImageEndpoint = uri.scheme == "https" &&
-            uri.host == "hoshi.local" &&
+            uri.host == "appassets.androidplatform.net" &&
             uri.path == "/image"
         if (!isIosImageScheme && !isAndroidImageEndpoint) return null
         val dictionary = uri.getQueryParameter("dictionary").orEmpty()

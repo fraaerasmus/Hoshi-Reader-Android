@@ -4,6 +4,14 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import moe.antimony.hoshi.epub.BookMetadata
+import moe.antimony.hoshi.epub.BookRepository
+import moe.antimony.hoshi.epub.Bookmark
+import moe.antimony.hoshi.epub.EpubArchiveExtractor
+import moe.antimony.hoshi.epub.EpubBookParser
+import moe.antimony.hoshi.epub.ReadingStatistics
+import moe.antimony.hoshi.epub.SasayakiPlaybackData
+import moe.antimony.hoshi.epub.writeMinimalExtractedEpub
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -14,6 +22,7 @@ import java.io.ByteArrayOutputStream
 import java.nio.file.Files
 import java.time.Instant
 import java.time.ZoneId
+import java.util.UUID
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -243,6 +252,113 @@ class HoshiBackupRepositoryTest {
         assertFalse(zipEntryNames(output.toByteArray()).any { it == "Dictionaries/" || it.startsWith("Dictionaries/") })
     }
 
+    @Test
+    fun exportAndRestoreTtuBookDataMergesBookdataProgressAndStatistics() = runBlocking {
+        val sourceDir = Files.createTempDirectory("hoshi-ttu-backup-source").toFile()
+        val sourceRepository = BookRepository(sourceDir)
+        val sourceEntry = sourceRepository.createPackedTestBook("TTU Book")
+        sourceRepository.saveBookmark(sourceEntry.root, Bookmark(0, 0.5, 5, 10.0))
+        sourceRepository.saveStatistics(
+            sourceEntry.root,
+            listOf(ReadingStatistics(title = "TTU Book", dateKey = "2026-06-06", charactersRead = 5, lastStatisticModified = 100)),
+        )
+        val output = ByteArrayOutputStream()
+
+        HoshiBackupRepository(sourceDir).exportTtuBookData(output)
+
+        val entries = zipEntryNames(output.toByteArray())
+        assertTrue(entries.any { it.startsWith("TTU Book/bookdata_") && it.endsWith(".zip") })
+        assertTrue(entries.any { it.startsWith("TTU Book/progress_") && it.endsWith(".json") })
+        assertTrue(entries.any { it.startsWith("TTU Book/statistics_") && it.endsWith(".json") })
+
+        val targetDir = Files.createTempDirectory("hoshi-ttu-backup-target").toFile()
+        val targetRepository = BookRepository(targetDir)
+        HoshiBackupRepository(targetDir).restoreTtuBookData(ByteArrayInputStream(output.toByteArray()))
+        val restored = targetRepository.loadBookEntries().single()
+
+        assertEquals("TTU Book", restored.metadata.title)
+        assertTrue(restored.root.resolve(restored.metadata.epub!!).isFile)
+        assertEquals(5, targetRepository.loadBookmark(restored.root)?.characterCount)
+        assertEquals(5, targetRepository.loadStatistics(restored.root).single().charactersRead)
+    }
+
+    @Test
+    fun ttuBookDataBackupDoesNotExportOrRestoreSasayakiAudioBookSidecarsLikeIos() = runBlocking {
+        val sourceDir = Files.createTempDirectory("hoshi-ttu-backup-audio-source").toFile()
+        val sourceRepository = BookRepository(sourceDir)
+        val sourceEntry = sourceRepository.createPackedTestBook("TTU Audio Book")
+        sourceRepository.saveSasayakiPlayback(sourceEntry.root, SasayakiPlaybackData(lastPosition = 44.0))
+        val output = ByteArrayOutputStream()
+
+        HoshiBackupRepository(sourceDir).exportTtuBookData(output)
+
+        val entries = zipEntryNames(output.toByteArray())
+        assertFalse(entries.any { it.substringAfter('/').startsWith("audioBook_") })
+        val targetDir = Files.createTempDirectory("hoshi-ttu-backup-audio-target").toFile()
+        val targetRepository = BookRepository(targetDir)
+        val existing = targetRepository.createPackedTestBook("TTU Audio Book")
+        targetRepository.saveSasayakiPlayback(existing.root, SasayakiPlaybackData(lastPosition = 12.0))
+
+        HoshiBackupRepository(targetDir).restoreTtuBookData(ByteArrayInputStream(output.toByteArray()))
+
+        assertEquals(12.0, targetRepository.loadSasayakiPlayback(existing.root)?.lastPosition)
+    }
+
+    @Test
+    fun restoreTtuBookDataReturnsZeroWhenArchiveContainsNoBookdata() = runBlocking {
+        val output = ByteArrayOutputStream()
+        ZipOutputStream(output).use { zip ->
+            zip.writeTextEntry("Not TTU/readme.txt", "not bookdata")
+        }
+        val targetDir = Files.createTempDirectory("hoshi-empty-ttu-backup-target").toFile()
+        val targetRepository = BookRepository(targetDir)
+
+        val restored = HoshiBackupRepository(targetDir).restoreTtuBookData(ByteArrayInputStream(output.toByteArray()))
+
+        assertEquals(0, restored)
+        assertTrue(targetRepository.loadBookEntries().isEmpty())
+    }
+
+    @Test
+    fun exportTtuBookDataDisambiguatesDuplicateVisibleTitles() = runBlocking {
+        val sourceDir = Files.createTempDirectory("hoshi-ttu-backup-duplicate-title").toFile()
+        val sourceRepository = BookRepository(sourceDir)
+        val first = sourceRepository.createPackedTestBook("First Book")
+        val second = sourceRepository.createPackedTestBook("Second Book")
+        listOf(first, second).forEachIndexed { index, entry ->
+            val cover = entry.root.resolve("cover.jpg")
+            cover.writeBytes(byteArrayOf(index.toByte()))
+            sourceRepository.saveMetadata(
+                entry.root,
+                entry.metadata.copy(
+                    renamedTitle = "Same Title",
+                    cover = "Books/${entry.root.name}/cover.jpg",
+                ),
+            )
+        }
+        val output = ByteArrayOutputStream()
+
+        HoshiBackupRepository(sourceDir).exportTtuBookData(output)
+
+        val entries = zipEntryNames(output.toByteArray())
+        val bookFolders = entries
+            .filter { it.contains("/bookdata_") }
+            .map { it.substringBefore('/') }
+            .distinct()
+        assertEquals(2, bookFolders.size)
+        assertTrue("Same Title" in bookFolders)
+        assertEquals(2, entries.count { it.endsWith("/cover_1_6.jpg") })
+    }
+
+    @Test
+    fun ttuBookDataBackupFileNameMatchesIosTimestampShapeAndExtension() {
+        val instant = Instant.parse("2026-05-10T07:08:09Z")
+
+        val name = ttuBookDataBackupFileName(instant, ZoneId.of("UTC"))
+
+        assertEquals("hoshi_ttu_export_2026-05-10_07-08-09.zip", name)
+    }
+
     private fun zipEntryNames(bytes: ByteArray): List<String> {
         val names = mutableListOf<String>()
         ZipInputStream(ByteArrayInputStream(bytes)).use { zip ->
@@ -328,6 +444,27 @@ class HoshiBackupRepositoryTest {
         return patched
     }
 
+    private suspend fun BookRepository.createPackedTestBook(title: String): moe.antimony.hoshi.epub.BookEntry {
+        val root = createBookDirectory(title)
+        val extracted = root.parentFile!!.resolve(".${root.name}-extracted").also { it.deleteRecursively() }
+        writeMinimalExtractedEpub(extracted, title = title)
+        val epub = root.resolve("${root.name}.epub")
+        EpubArchiveExtractor().createArchive(extracted, epub)
+        extracted.deleteRecursively()
+        val parsed = EpubBookParser().parse(root)
+        val metadata = BookMetadata(
+            id = UUID.randomUUID().toString(),
+            title = title,
+            cover = null,
+            folder = root.name,
+            lastAccess = 0.0,
+            epub = epub.name,
+        )
+        saveMetadata(root, metadata)
+        saveBookInfo(root, parsed.bookInfo)
+        return moe.antimony.hoshi.epub.BookEntry(root, metadata)
+    }
+
     private fun ushort(offset: Int, bytes: ByteArray): Int =
         (bytes[offset].toInt() and 0xff) or ((bytes[offset + 1].toInt() and 0xff) shl 8)
 
@@ -355,6 +492,12 @@ class HoshiBackupRepositoryTest {
         }
         fail("Missing zip signature: $signature")
         return -1
+    }
+
+    private fun ZipOutputStream.writeTextEntry(path: String, value: String) {
+        putNextEntry(ZipEntry(path))
+        write(value.toByteArray())
+        closeEntry()
     }
 
     private data class LocalFileHeader(

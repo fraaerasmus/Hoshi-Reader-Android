@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 import java.nio.file.Files
 
 class ProcessExitDiagnosticsTest {
@@ -15,6 +14,8 @@ class ProcessExitDiagnosticsTest {
             versionName = "0.1.5",
             versionCode = 105,
             sdkInt = 35,
+            webViewPackageName = "com.google.android.webview",
+            webViewVersionName = "125.0.6422.165",
             capturedCrashes = listOf(
                 CapturedCrashRecord(
                     timestampMillis = 1_700_000_000_123,
@@ -47,12 +48,30 @@ class ProcessExitDiagnosticsTest {
         assertTrue(text.contains("Package: moe.antimony.hoshi.debug"))
         assertTrue(text.contains("Version: 0.1.5 (105)"))
         assertTrue(text.contains("Android SDK: 35"))
+        assertTrue(text.contains("WebView: com.google.android.webview 125.0.6422.165"))
         assertTrue(text.contains("Captured Crash 1"))
         assertTrue(text.contains("java.util.regex.PatternSyntaxException"))
         assertTrue(text.contains("AnkiRepositoryKt.<clinit>"))
         assertTrue(text.contains("Reason: Java crash"))
         assertTrue(text.contains("Description: FATAL EXCEPTION: main"))
         assertTrue(text.contains("java.lang.IllegalStateException: boom"))
+    }
+
+    @Test
+    fun shareTextExplainsWhenCurrentWebViewPackageIsUnavailable() {
+        val report = ProcessExitDiagnosticsReport(
+            packageName = "moe.antimony.hoshi.debug",
+            versionName = "0.1.5",
+            versionCode = 105,
+            sdkInt = 35,
+            webViewPackageName = null,
+            webViewVersionName = null,
+            records = emptyList(),
+        )
+
+        val text = report.toShareText()
+
+        assertTrue(text.contains("WebView: unavailable"))
     }
 
     @Test

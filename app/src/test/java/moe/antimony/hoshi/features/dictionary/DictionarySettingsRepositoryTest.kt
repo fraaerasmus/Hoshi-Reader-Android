@@ -32,6 +32,9 @@ class DictionarySettingsRepositoryTest {
     fun migratesLegacySharedPreferencesSettingsOnceAndKeepsNormalization() = runBlocking {
         val legacy = FakeLegacyDictionarySettingsSource(
             DictionarySettings(
+                autoUpdateDictionaries = false,
+                dictionaryUpdateInterval = DictionaryUpdateInterval.Monthly,
+                lastDictionaryUpdateEpochMillis = 1_800_000_000_000L,
                 dictionaryTabDefault = true,
                 lookupLanguage = DictionaryLanguage.French,
                 scanNonJapaneseText = false,
@@ -53,6 +56,9 @@ class DictionarySettingsRepositoryTest {
         repository(legacy).use { repository ->
             val migrated = repository.settings.first()
 
+            assertFalse(migrated.autoUpdateDictionaries)
+            assertEquals(DictionaryUpdateInterval.Monthly, migrated.dictionaryUpdateInterval)
+            assertEquals(1_800_000_000_000L, migrated.lastDictionaryUpdateEpochMillis)
             assertTrue(migrated.dictionaryTabDefault)
             assertEquals(DictionaryLanguage.French, migrated.lookupLanguage)
             assertFalse(migrated.scanNonJapaneseText)
@@ -80,6 +86,9 @@ class DictionarySettingsRepositoryTest {
         repository().use { repository ->
             repository.update {
                 it.copy(
+                    autoUpdateDictionaries = false,
+                    dictionaryUpdateInterval = DictionaryUpdateInterval.Daily,
+                    lastDictionaryUpdateEpochMillis = 1_900_000_000_000L,
                     dictionaryTabDefault = true,
                     lookupLanguage = DictionaryLanguage.German,
                     scanNonJapaneseText = false,
@@ -100,6 +109,9 @@ class DictionarySettingsRepositoryTest {
 
             val saved = repository.settings.first()
 
+            assertFalse(saved.autoUpdateDictionaries)
+            assertEquals(DictionaryUpdateInterval.Daily, saved.dictionaryUpdateInterval)
+            assertEquals(1_900_000_000_000L, saved.lastDictionaryUpdateEpochMillis)
             assertTrue(saved.dictionaryTabDefault)
             assertEquals(DictionaryLanguage.German, saved.lookupLanguage)
             assertFalse(saved.scanNonJapaneseText)

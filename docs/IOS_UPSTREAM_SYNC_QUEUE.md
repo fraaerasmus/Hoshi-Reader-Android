@@ -9,47 +9,7 @@ This document tracks open Android work after checking iOS upstream `develop`.
 
 ## Current Queue
 
-### 1. Dictionary automatic updates
-
-Status: pending Android sync.
-
-Commit:
-
-- `94d0c41` - dictionary auto updates.
-
-Why this is broader:
-
-- It crosses settings, dictionary repository import/update code, app foreground lifecycle, network constraints, partial-failure behavior, and update-result persistence.
-
-iOS behavior to mirror:
-
-- Dictionary settings show an Updates section when installed dictionaries are updatable.
-- Users can enable automatic updates, choose Daily/Weekly/Monthly, and see the last successful update time or Never.
-- On app activation, iOS checks elapsed interval and installed updatable dictionaries before starting updates.
-- Automatic update sessions disallow expensive and constrained network access.
-- Failed dictionaries do not cancel the whole batch; last-update time advances after at least one successful check/import.
-- Manual update still reports failures.
-- Updated dictionaries import into a temporary directory first, then replace the installed copy.
-
-Android current gap:
-
-- Android supports manual update checks for installed updatable dictionaries, preserving enabled state, order, and collapsed-title migration on rename.
-- Android lacks automatic update settings, last-update display, activation-triggered checks, non-expensive network gating, partial-failure batch behavior, and temp-then-move update import.
-
-Suggested slice:
-
-- Add persisted auto-update settings and localized settings UI.
-- Use Android network APIs/WorkManager constraints after confirming the current recommended Jetpack behavior.
-- Make repository update import transactional per dictionary and record last successful update after at least one success.
-
-Validation:
-
-- Install an updatable dictionary, open Dictionaries, and confirm automatic update controls, interval choices, last update, and manual Update.
-- Foreground the app on an allowed network after the interval elapses; confirm update runs without blocking dictionary use.
-- Simulate one failure and one success; confirm success is applied, manual failure is surfaced, and last-update advances only after success.
-- Confirm failed imports leave installed dictionaries intact.
-
-### 2. Dictionary lookup normalization and query rebuild threading
+### 1. Dictionary lookup normalization and query rebuild threading
 
 Status: pending Android sync.
 
@@ -71,13 +31,12 @@ iOS behavior to mirror:
 Android current gap:
 
 - `third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts` is still at `497578824f...`, while iOS now uses `1198201a...`; Android therefore lacks the new native text processors and their `utf8proc` / kanji-processor dependencies.
-- `DictionaryRepository.rebuildLookupQuery()` and `DictionaryLookupQueryService.rebuild()` synchronously call `HoshiDicts.rebuildQuery(...)`. `DictionarySearchViewModel` wraps search rebuilds in `withContext(ioDispatcher)`, but the repository/service contract itself does not enforce an IO boundary or stale-build tokening for other callers.
-- `LookupEngine.lookup()` and `LookupEngine.getStyles()` read the singleton `HoshiDicts.lookupObject` directly, so there is no Android-side ready/empty guard equivalent if query rebuild becomes asynchronous.
+- `DictionaryRepository.rebuildLookupQuery()` and `DictionaryLookupQueryService.rebuild()` still run synchronously on the caller's dispatcher. Dictionary mutation callers use IO dispatchers, but the repository/service contract itself does not expose an asynchronous rebuild API.
 
 Suggested slice:
 
 - Update `third_party/hoshidicts-kotlin-bridge` and nested hoshidicts submodules to the new native revision, wiring any new CMake/JNI dependencies without changing Android lookup models unnecessarily.
-- Move lookup rebuild ownership to a coroutine/dispatcher-aware service API with stale-build protection, then adapt Dictionary tab, Bookshelf startup, backup restore, dictionary import/update, reader lookup, and process-text lookup callers.
+- Move lookup rebuild ownership to a coroutine/dispatcher-aware service API if rebuild callers need service-enforced IO dispatching after the native revision update.
 - Add behavior tests around lookup rebuild ordering and native normalization where feasible; if native fixture coverage is limited, add a small tracked dictionary fixture or construct one in test.
 
 Validation:
@@ -86,108 +45,41 @@ Validation:
 - Import, enable/disable, reorder, delete, update, and backup-restore dictionaries while search/reader lookup is active; confirm the UI remains responsive and stale rebuilds do not replace newer dictionaries.
 - `./gradlew test` and `./gradlew assembleDebug` on a clean native build after submodule updates.
 
-### 3. Anki field templates, dictionary IPA display, and glossary handlebars
+### 2. Dictionary IPA display
 
-Status: pending Android sync; native frequency-sort dependency already present, newer normalization dependency tracked separately above.
+Status: pending Android sync; deferred while Anki template and glossary handlebar work is completed separately.
 
 Commits:
 
-- `8ffca61` - autofill Lapis, Kiku, and Senren field mappings.
-- `8ef25f4` - glossary-brief, glossary-first-brief, selected-glossary-fallback, selected-glossary-brief, selected-glossary-brief-fallback handlebars.
 - `36be339` - support for IPA dicts.
-- `5cbdaa8` - glossary-no-dictionary, use regex to create alt glossary handlebars.
 
 Why this follows lookup normalization:
 
-- IPA pitch display and Anki glossary payloads are generated from lookup data. Land the native normalization/query rebuild slice first, then adjust payload and settings-template semantics.
+- IPA pitch display is generated from lookup data. Land the native normalization/query rebuild slice first, then expose transcription data through the bridge and popup payload.
 
 iOS behavior to mirror:
 
-- Anki settings autofill field mappings for Lapis, Kiku, and Senren note types when no fields in the selected model are already mapped. Selecting/fetching a note type triggers autofill, but existing user mappings block automatic replacement.
 - Pitch dictionaries can provide IPA/transcription strings alongside numeric pitch positions. Popup pitch groups render both, and duplicate pitch positions are still deduplicated across dictionaries.
-- Anki mining supports new glossary handlebar variants:
-  - brief variants strip glossary header labels.
-  - no-dictionary variants remove dictionary names from labels.
-  - selected-glossary fallback variants fall back to the first glossary when no selected dictionary value exists.
-  - per-dictionary `{single-glossary-<dict>-brief}` and `{single-glossary-<dict>-no-dictionary}` are supported even if not all variants are shown in the insertion picker.
 
 Android current gap:
 
 - The Android hoshidicts bridge submodule is already at the newer `497578824f...` native revision, matching the iOS package update context and covering the native frequency-sort change from `e70008d`.
-- Android JNI models currently expose `pitchPositions` but not transcription/IPA strings.
-- Android popup HTML and Anki renderer support core glossary and selected/single glossary handlebar values, but not the new brief/no-dictionary/fallback variants.
-- Android `LapisPreset` supports only Lapis-like fields. `AnkiViewModel.selectNoteType()` currently replaces mappings with `LapisPreset.applyDefaults(noteType, emptyMap())`, so Kiku/Senren are not autofilled and existing user mappings can be cleared on note-type selection instead of preserving iOS's "autofill only when no selected-model fields are mapped" behavior.
+- `third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts/include/hoshidicts/query.hpp` already has `PitchEntry.transcriptions`, but `app/src/main/java/de/manhhao/hoshi/HoshiDicts.kt` and `third_party/hoshidicts-kotlin-bridge/app/src/main/cpp/hoshidicts_jni.cpp` still expose only `pitchPositions`.
+- `LookupPopupHtml.toEntryJson()` still serializes pitch groups with only `pitchPositions`, and `app/src/main/assets/hoshi-web/popup/popup.js` still renders pitch groups without transcription rows.
 
 Suggested slice:
 
-- Extend the bridge-facing pitch model only if `third_party/hoshidicts-kotlin-bridge` exposes transcription data; otherwise document the bridge gap first.
+- Extend the bridge-facing pitch model by updating the hoshidicts Kotlin/JNI bridge submodule and Android model copy to expose `transcriptions`.
 - Render IPA/transcription rows in popup pitch groups without breaking compact pitch and pitch deduplication behavior.
-- Add Anki handlebar rendering and focused tests for brief, no-dictionary, fallback, and per-dictionary suffix forms.
-- Replace `LapisPreset` with a template set covering Lapis, Kiku, and Senren field names, and gate autofill so existing selected-model field mappings are never overwritten.
-- Keep insertion UI aligned with iOS by hiding advanced variants that iOS does not surface directly.
 
 Validation:
 
 - Import an IPA-capable pitch dictionary and confirm lookup popups show transcription rows.
-- Fetch/select Lapis, Kiku, and Senren models through AnkiDroid and AnkiConnect; confirm only empty model mappings are autofilled and custom mappings persist.
-- Mine Anki notes through AnkiDroid and AnkiConnect with each new handlebar variant, including dictionary media embedding and selected-dictionary fallback.
-
-### 4. TTU/Google Drive book data sync, backup import/export, and remote bookshelf
-
-Status: pending Android sync; replaces the earlier book-storage deferral with a concrete TTU bookdata queue.
-
-Commits:
-
-- `67bdbb9` - add option to export epubs.
-- `1aaee97` - prevent autosync being stuck when mobile data is disabled.
-- `c2e1c09` - ttu book sync (#63).
-- `32d76d2` - some edge cases in ttu bookdata.
-
-Why this is a large dependent slice:
-
-- This crosses bookshelf state, Drive listing and cache invalidation, remote cover thumbnails, EPUB export, TTU `bookdata_*.zip` conversion, backup import/export, reader-open import-only behavior, and existing progress/statistics/Sasayaki sync.
-
-iOS behavior to mirror:
-
-- Book context menus can share/export the stored EPUB when `metadata.epub` is available.
-- Sync settings include cache clearing, sign-out confirmation, and separate Data toggles for uploading book data, statistics, and audiobook progress.
-- Bookshelf shows remote Google Drive books that are not present locally, using Drive cover thumbnails and remote progress where available.
-- Tapping a remote book imports its TTU bookdata from Google Drive, then removes it from the remote-only section.
-- Remote Google Drive books can be deleted/trash-moved from the remote-only section.
-- Backup settings can export all local books as TTU-compatible bookdata zip folders and import TTU backup zips, merging new books and overwriting stats/progress for existing books.
-- Sync uploads bookdata only when enabled and missing remotely; existing progress/statistics/audio sync remains independent.
-- Drive requests detect no network before request execution so autosync does not hang behind disabled mobile data.
-- TTU conversion preserves/sanitizes XHTML wrappers, images, cover, CSS, table of contents, progress, statistics, and edge cases around `<br>`, `<hr>`, and wrapper divs.
-
-Android current gap:
-
-- Android has the first Google Drive progress/statistics/Sasayaki sync slice and uses Device Code auth, but it does not list/import/delete remote-only Drive books.
-- Android sync does not upload/download TTU bookdata zips or expose an Upload Books toggle.
-- Android Backup supports `.hoshi` Books/Dictionaries archives but not TTU backup import/export.
-- Android `BookMetadata`/repository still use extracted EPUB roots and do not retain a packed EPUB filename for direct EPUB export.
-- Network unavailability is handled in parts of authorization/sync, but the exact autosync no-network stuck case needs re-checking against Android's Drive client.
-
-Suggested slice:
-
-- Split into smaller Android work:
-  1. Drive data-source support for paginated folder listing, per-folder sync file listing, remote cover thumbnail caching, cache clear, and trash.
-  2. Remote-only bookshelf section and import/delete UI with localized strings.
-  3. EPUB retention/export strategy that is compatible with the deferred packed-EPUB storage decision.
-  4. TTU bookdata converter and Backup import/export flows.
-  5. Sync Upload Books setting and bookdata upload/import-only reader behavior.
-  6. Network-unavailable autosync guard.
-- Confirm Android Drive API, SAF, and background/network constraints against current Google/Jetpack docs before implementation.
-
-Validation:
-
-- On a user-configured Google Drive project, list remote-only ッツ books, show covers/progress, import one book, delete one remote book, and clear cached folder IDs/covers.
-- Export an Android book as EPUB and as TTU backup; import the TTU backup into iOS/ッツ where possible.
-- Import an iOS/ッツ TTU backup into Android; verify reader open, cover, progress, statistics, and Sasayaki progress.
-- Disable network/mobile data during autosync and confirm it fails or defers without hanging.
-- Regression-test existing manual sync, reader auto import/export, close/background export flush, statistics Merge/Replace, and Sasayaki last-position sync.
 
 ## Covered Or No Android Action
 
+- `94d0c41`: Android now mirrors dictionary automatic updates. Updatable dictionaries show an Updates section with automatic update controls, Daily/Weekly/Monthly intervals, Last Update/Never display, manual Update, foreground-triggered WorkManager checks constrained to unmetered networks, shared import/update busy state across the Dictionary UI and automatic updates, per-dictionary partial-failure handling, last-update persistence after at least one successful check/import, and staged import replacement that leaves failed dictionaries intact.
+- `ab6722e`, `67bdbb9`, `1aaee97`, `c2e1c09`, `32d76d2`: Android now covers the TTU/Google Drive book-data slice. Book folders retain `<folder>.epub` and `BookMetadata.epub`; legacy extracted books are repacked only after parse verification; Books can export stored EPUBs; Backup settings expose TTU bookdata export/import; Google Drive sync lists remote book folders, discovers TTU sidecars, uploads missing bookdata when Upload Books is enabled, imports remote-only books, trashes remote folders, clears cached Drive IDs/covers, and only preflights for an active network with internet capability before Drive REST requests.
 - `73a9e62`: Android now mirrors the Dictionary pull-to-clear/show-keyboard slice with reader-style iframe search results, localized pull/release labels, active Dictionary tab refocus/select-all, and measured search-result placement below the search field.
 - `a713c0c`: iOS keeps command-center previous/next cue controls wired even when skip controls are enabled. Android already keeps cue navigation available through reader chrome, Sasayaki sheet controls, and media-session previous/next commands.
 - `09951b4`, `612d350`, `ad71067`, `4b26d8a`, `172577c`, `be42499`: iOS version/build bumps only.
@@ -201,31 +93,22 @@ Validation:
 - `147e3b9`: Android already ships default English and Simplified Chinese resources with localization tests. Future queue items that add user-visible strings still need the normal paired `values` / `values-zh-rCN` updates.
 - `61306c7`: formatting and whitespace cleanup only.
 - `32aa342`: Android now sanitizes Calibre-like EPUB CSS rules in `ReaderResourceSanitizer`, with behavior coverage for writing mode, line height, height, positive text indentation, negative text indentation, non-Calibre rules, and appended default body line height.
-- `2ffde40`: iOS changed NWPathMonitor gating to block only explicitly unsatisfied paths. Android `GoogleDriveClient.performRequest()` does not pre-block by path status, and device-code auth already treats transient network failures as retryable; the broader autosync no-network behavior remains tracked by `1aaee97`.
+- `2ffde40`: iOS changed NWPathMonitor gating to block only explicitly unsatisfied paths. Android Drive requests now only require an active network with `NET_CAPABILITY_INTERNET`; device-code auth still treats transient network failures as retryable.
 - `691baa2`, `323449c`: Android already localizes the Reading shelf title through `BookshelfSectionModel.titleRes = R.string.bookshelf_section_reading`, `BookshelfSectionHeader`, and paired English/Simplified Chinese resources.
 - `078d59f`: Android already overrides publisher column counts in paginated mode through `ReaderContentStyles` with `body * { column-count: auto !important; -webkit-column-count: auto !important; }`.
-- `1fcf287`: iOS SwiftUI file-importer placement fix. Android backup restore uses dedicated `rememberLauncherForActivityResult(FileImportContent())` launchers for `.hoshi` imports; TTU zip backup import/export remains part of the open TTU slice.
+- `1fcf287`: iOS SwiftUI file-importer placement fix. Android backup restore uses dedicated `rememberLauncherForActivityResult(FileImportContent())` launchers for `.hoshi` and TTU `.zip` imports.
 - `b1509d9`, `a7a8380`, `55a32cd`, `2b8a599`, `98b6534`: Android reader now matches this slice. `selection.js` keeps SVG containers outside image-hit blocking while preserving SVG `<image>` hits and emits per-character highlight ranges; `ReaderBottomSafeProgress` handles bottom safe-area taps for focus/popup dismissal; `ReaderGeneratedLayout` applies the vertical one-pixel image-width guard; paginated and continuous reader JS remove whitespace-only ruby text nodes and wrap ruby base text before lookup offsets are built.
+- `8ef25f4`, `5cbdaa8`, `8ffca61`: Android now covers the Anki template and glossary handlebar slice. `AnkiFieldTemplates` covers exact Lapis, Kiku, and Senren models using Hoshi's Android Lapis handlebar defaults on the corresponding model fields; fetch and note-type selection only autofill when selected-model fields are unmapped; `AnkiHandlebarRenderer` supports brief, no-dictionary, selected fallback, and suffixed single-glossary variants; dictionary-title update migration rewrites the supported per-dictionary variants; and the insertion picker exposes only the iOS-visible variants.
 
 ## Open Commit Inventory
 
 | Commit | Date | iOS summary | Android status |
 | --- | --- | --- | --- |
-| `94d0c41` | 2026-05-19 | Automatic dictionary updates | Pending |
-| `8ef25f4` | 2026-05-24 | New Anki glossary brief/fallback handlebars | Pending |
-| `67bdbb9` | 2026-05-25 | Export stored EPUB from book menu | Pending |
 | `36be339` | 2026-05-25 | IPA/transcription pitch dictionary display | Pending bridge/UI sync |
-| `1aaee97` | 2026-05-27 | Autosync no-network guard | Pending |
-| `c2e1c09` | 2026-05-28 | TTU book sync, remote Drive bookshelf, backup import/export | Pending |
-| `5cbdaa8` | 2026-05-29 | Glossary no-dictionary handlebars and regex stripping | Pending |
-| `32d76d2` | 2026-05-29 | TTU bookdata edge cases | Pending with TTU slice |
-| `8ffca61` | 2026-06-02 | Autofill Lapis, Kiku, and Senren Anki field mappings | Pending |
 | `0d6c072` | 2026-06-04 | hoshidicts normalization processor bump | Pending bridge/native sync |
 | `cfc1e50` | 2026-06-04 | Build lookup query off main thread | Pending |
 
 ## Suggested Implementation Order
 
-1. Dictionary automatic updates.
-2. Dictionary lookup normalization and query rebuild threading.
-3. Anki field templates, dictionary IPA display, and glossary handlebars.
-4. TTU/Google Drive bookdata sync, EPUB export, and backup import/export in smaller sub-slices.
+1. Dictionary lookup normalization and query rebuild threading.
+2. Dictionary IPA display.

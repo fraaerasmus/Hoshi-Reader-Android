@@ -1,8 +1,8 @@
 package moe.antimony.hoshi.features.dictionary
 
 import de.manhhao.hoshi.LookupResult
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.epub.SasayakiMatch
-import moe.antimony.hoshi.dictionary.LookupEngine
 import moe.antimony.hoshi.features.audio.AudioSettings
 import moe.antimony.hoshi.features.anki.AnkiMiningContext
 import moe.antimony.hoshi.features.reader.ReaderSelectionData
@@ -28,6 +28,7 @@ internal data class LookupPopupOptions(
     val popupActionBar: Boolean = false,
     val documentTitle: String? = null,
     val coverPath: String? = null,
+    val contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
 )
 
 internal data class LookupPopupItem(
@@ -58,6 +59,7 @@ internal data class LookupPopupState(
     val eInkMode: Boolean = false,
     val audioSettings: AudioSettings = AudioSettings(),
     val popupActionBar: Boolean = false,
+    val contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
     val ankiContext: AnkiMiningContext = AnkiMiningContext(sentence = selection.sentence),
 )
 
@@ -68,10 +70,11 @@ internal fun createLookupPopupItem(
     selection: ReaderSelectionData,
     options: LookupPopupOptions,
     dictionaryStyles: Map<String, String>? = null,
-    lookup: (String, Int, Int, String) -> List<de.manhhao.hoshi.LookupResult> = LookupEngine::lookup,
+    lookup: (String, Int, Int, String) -> List<de.manhhao.hoshi.LookupResult> = { _, _, _, _ -> emptyList() },
 ): Pair<LookupPopupItem, Int>? {
     val settings = options.dictionarySettings.normalized()
-    val styles = dictionaryStyles ?: currentDictionaryStyles()
+    val styles = dictionaryStyles.orEmpty()
+    val contentLanguageProfile = options.contentLanguageProfile
     val results = runCatching {
         lookup(selection.text, settings.maxResults, settings.scanLength, settings.lookupLanguage.code)
     }.getOrDefault(emptyList())
@@ -98,6 +101,7 @@ internal fun createLookupPopupItem(
             eInkMode = options.eInkMode,
             audioSettings = options.audioSettings,
             popupActionBar = options.popupActionBar,
+            contentLanguageProfile = contentLanguageProfile,
             ankiContext = AnkiMiningContext(
                 sentence = selection.sentence,
                 documentTitle = options.documentTitle,
@@ -107,11 +111,6 @@ internal fun createLookupPopupItem(
         ),
     ) to first.matched.codePointCount(0, first.matched.length)
 }
-
-internal fun currentDictionaryStyles(): Map<String, String> =
-    runCatching {
-        LookupEngine.getStyles().associate { it.dictName to it.styles }
-    }.getOrDefault(emptyMap())
 
 internal fun closeChildPopups(
     popups: List<LookupPopupItem>,

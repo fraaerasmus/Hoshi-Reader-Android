@@ -44,6 +44,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.LocalHoshiUiDependencies
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.HighlightColor
 import moe.antimony.hoshi.epub.ReadingStatistics
@@ -82,6 +83,7 @@ import kotlin.math.roundToInt
 fun ReaderWebView(
     book: EpubBook,
     bookRoot: File? = null,
+    bookCoverFile: File? = null,
     initialChapterIndex: Int = 0,
     initialProgress: Double = 0.0,
     readerSettings: ReaderSettings = ReaderSettings(),
@@ -130,8 +132,8 @@ fun ReaderWebView(
         isSasayakiPlaybackLoaded = true
     }
     val sasayakiAudioRepository = remember(bookRoot) { bookRoot?.let(::SasayakiAudioRepository) }
-    val sasayakiCoverFile = remember(bookRoot, book.coverHref) {
-        resolveBookCoverFile(bookRoot, book.coverHref)
+    val sasayakiCoverFile = remember(bookCoverFile) {
+        bookCoverFile?.takeIf { it.isFile }
     }
     var sasayakiPlayer by remember { mutableStateOf<SasayakiPlayer?>(null) }
     var pendingSasayakiCue by remember(book) { mutableStateOf<PendingSasayakiCue?>(null) }
@@ -187,6 +189,7 @@ fun ReaderWebView(
     val popupAssets = remember(context) { LookupPopupAssets.load(context) }
     val readerPopupBridgeHolder = remember { ReaderLookupPopupBridgeCallbackHolder() }
     val popupDarkMode = effectiveSettings.usesDarkInterface(systemDarkTheme)
+    val popupContentLanguageProfile = ContentLanguageProfile.Default
     val readerPopupIframeDocument = remember(
         dictionaryStyles,
         dictionarySettings,
@@ -201,6 +204,7 @@ fun ReaderWebView(
         ankiUiState.popupSettings,
         fontManager,
         effectiveSettings.popupScale,
+        popupContentLanguageProfile,
     ) {
         LookupPopupHtml.renderIframeDocument(
             assets = null,
@@ -217,6 +221,7 @@ fun ReaderWebView(
             ankiSettings = ankiUiState.popupSettings,
             fontFaceCss = fontManager.popupFontFaceCss(),
             popupScale = effectiveSettings.popupScale,
+            contentLanguageProfile = popupContentLanguageProfile,
         )
     }
     val currentReaderPopupIframeDocument = rememberUpdatedState(readerPopupIframeDocument)
@@ -237,13 +242,13 @@ fun ReaderWebView(
             null,
         )
     }
-    val readerPopupResourceHandler = remember(context, popupAssets, fontManager) {
+    val readerPopupResourceHandler = remember(context, popupAssets, fontManager, dictionaryRepository) {
         ReaderLookupPopupResourceHandler(
             context = context.applicationContext,
             assets = popupAssets,
             fontManager = fontManager,
             audioRequestHandler = AudioRequestHandler(LocalAudioRepository.fromContext(context.applicationContext)),
-            imageRequestHandler = DictionaryImageRequestHandler(),
+            imageRequestHandler = DictionaryImageRequestHandler(dictionaryRepository::dictionaryMedia),
             iframeDocument = { currentReaderPopupIframeDocument.value },
         )
     }
@@ -446,6 +451,7 @@ fun ReaderWebView(
                 audioSettings = audioSettings,
                 documentTitle = book.title,
                 coverPath = sasayakiCoverFile?.absolutePath,
+                contentLanguageProfile = popupContentLanguageProfile,
             ),
         )?.let { (popup, highlightCount) ->
             popup.copy(sasayakiCue = sasayakiCueForSelection(selection)) to highlightCount
@@ -473,6 +479,7 @@ fun ReaderWebView(
                 audioSettings = audioSettings,
                 documentTitle = book.title,
                 coverPath = sasayakiCoverFile?.absolutePath,
+                contentLanguageProfile = popupContentLanguageProfile,
             ),
         )?.let { (popup, highlightCount) ->
             popup.copy(sasayakiCue = sasayakiCueForSelection(selection)) to highlightCount
@@ -1234,6 +1241,7 @@ fun ReaderWebView(
                             jumpToPositionWithHistory(target.position, target.fragment)
                         },
                         scanNonJapaneseText = dictionarySettings.scanNonJapaneseText,
+                        contentLanguageProfile = popupContentLanguageProfile,
                         readerSettings = effectiveSettings,
                         chapterHighlightsJson = ReaderHighlights.chapterHighlightsJson(
                             highlights = highlights.orEmpty(),
@@ -1425,14 +1433,6 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
-}
-
-private fun resolveBookCoverFile(bookRoot: File?, coverHref: String?): File? {
-    val root = bookRoot?.canonicalFile ?: return null
-    val cover = coverHref?.takeIf { it.isNotBlank() } ?: return null
-    val file = root.resolve(cover).canonicalFile
-    if (file.path != root.path && !file.path.startsWith(root.path + File.separator)) return null
-    return file.takeIf { it.isFile }
 }
 
 private fun SasayakiMatch.toCueRange(): SasayakiCueRange =

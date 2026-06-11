@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageInfo
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.webkit.WebViewCompat
 import java.io.File
 import java.io.IOException
 import java.io.PrintWriter
@@ -49,6 +50,8 @@ data class ProcessExitDiagnosticsReport(
     val versionName: String,
     val versionCode: Long,
     val sdkInt: Int,
+    val webViewPackageName: String? = null,
+    val webViewVersionName: String? = null,
     val capturedCrashes: List<CapturedCrashRecord> = emptyList(),
     val records: List<ProcessExitRecord>,
 ) {
@@ -57,6 +60,13 @@ data class ProcessExitDiagnosticsReport(
         appendLine("Package: $packageName")
         appendLine("Version: $versionName ($versionCode)")
         appendLine("Android SDK: $sdkInt")
+        appendLine(
+            if (webViewPackageName.isNullOrBlank()) {
+                "WebView: unavailable"
+            } else {
+                "WebView: $webViewPackageName ${webViewVersionName?.takeIf { it.isNotBlank() } ?: "unknown"}"
+            },
+        )
         appendLine()
 
         if (capturedCrashes.isNotEmpty()) {
@@ -122,6 +132,7 @@ data class ProcessExitDiagnosticsReport(
 
 fun loadProcessExitDiagnosticsReport(context: Context, maxRecords: Int = 10): ProcessExitDiagnosticsReport {
     val packageInfo = context.packageManager.getHoshiPackageInfo(context.packageName)
+    val webViewPackageInfo = WebViewCompat.getCurrentWebViewPackage(context.applicationContext)
     val records = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         loadProcessExitRecords(context, maxRecords)
     } else {
@@ -132,6 +143,8 @@ fun loadProcessExitDiagnosticsReport(context: Context, maxRecords: Int = 10): Pr
         versionName = packageInfo.versionName ?: "unknown",
         versionCode = packageInfo.hoshiLongVersionCode(),
         sdkInt = Build.VERSION.SDK_INT,
+        webViewPackageName = webViewPackageInfo?.packageName,
+        webViewVersionName = webViewPackageInfo?.versionName,
         capturedCrashes = loadCapturedCrashDiagnostics(context.crashDiagnosticsDir()),
         records = records,
     )

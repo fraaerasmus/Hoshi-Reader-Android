@@ -9,6 +9,10 @@ import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.BookShelf
 import moe.antimony.hoshi.epub.BookSortOption
+import moe.antimony.hoshi.features.sync.DriveAuthStatus
+import moe.antimony.hoshi.features.sync.DriveFile
+import moe.antimony.hoshi.features.sync.DriveSyncFiles
+import moe.antimony.hoshi.features.sync.SyncSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -96,6 +100,112 @@ class MainShellUiTest {
         assertEquals(listOf("reading"), sections[0].books.map { it.metadata.id })
         assertEquals(listOf("shelved"), sections[1].books.map { it.metadata.id })
         assertEquals(listOf("unread", "reading"), sections[2].books.map { it.metadata.id })
+    }
+
+    @Test
+    fun googleDriveSectionIsInsertedBeforeUnshelvedLikeIos() {
+        val unread = bookEntry(id = "unread", title = "Unread", lastAccess = 3.0)
+        val shelved = bookEntry(id = "shelved", title = "Shelved", lastAccess = 1.0)
+
+        val sections = bookshelfSections(
+            entries = listOf(unread, shelved),
+            shelves = listOf(BookShelf(name = "Manga", bookIds = listOf("shelved"))),
+        )
+
+        assertEquals(listOf("Manga", "Unshelved"), sections.map { it.title })
+        assertEquals(1, googleDriveSectionInsertionIndex(sections))
+    }
+
+    @Test
+    fun googleDriveSectionPresentationMatchesIosCollapsedSelectionBehavior() {
+        val collapsed = googleDriveSectionPresentation(
+            shelfExpansionState = emptyMap(),
+            isSelecting = false,
+        )
+        val expanded = googleDriveSectionPresentation(
+            shelfExpansionState = mapOf(GoogleDriveSectionCollapseKey to true),
+            isSelecting = false,
+        )
+        val selecting = googleDriveSectionPresentation(
+            shelfExpansionState = mapOf(GoogleDriveSectionCollapseKey to true),
+            isSelecting = true,
+        )
+
+        assertTrue(collapsed.isCollapsible)
+        assertFalse(collapsed.isExpanded)
+        assertEquals(1.0f, collapsed.alpha)
+        assertTrue(collapsed.allowsHitTesting)
+        assertTrue(expanded.isExpanded)
+        assertFalse(selecting.isExpanded)
+        assertEquals(0.4f, selecting.alpha)
+        assertFalse(selecting.allowsHitTesting)
+    }
+
+    @Test
+    fun bookshelfPullRefreshIsEnabledOnlyForLoadedSyncShelfLikeIos() {
+        assertTrue(
+            shouldEnableBookshelfPullRefresh(
+                syncSettings = SyncSettings(enabled = true),
+                authStatus = DriveAuthStatus.Connected,
+                hasLoadedBooks = true,
+                isSelecting = false,
+                fileTaskBlocked = false,
+            ),
+        )
+        assertFalse(
+            shouldEnableBookshelfPullRefresh(
+                syncSettings = SyncSettings(enabled = false),
+                authStatus = DriveAuthStatus.Connected,
+                hasLoadedBooks = true,
+                isSelecting = false,
+                fileTaskBlocked = false,
+            ),
+        )
+        assertFalse(
+            shouldEnableBookshelfPullRefresh(
+                syncSettings = SyncSettings(enabled = true),
+                authStatus = DriveAuthStatus.NotConnected,
+                hasLoadedBooks = true,
+                isSelecting = false,
+                fileTaskBlocked = false,
+            ),
+        )
+        assertFalse(
+            shouldEnableBookshelfPullRefresh(
+                syncSettings = SyncSettings(enabled = true),
+                authStatus = DriveAuthStatus.Connected,
+                hasLoadedBooks = false,
+                isSelecting = false,
+                fileTaskBlocked = false,
+            ),
+        )
+        assertFalse(
+            shouldEnableBookshelfPullRefresh(
+                syncSettings = SyncSettings(enabled = true),
+                authStatus = DriveAuthStatus.Connected,
+                hasLoadedBooks = true,
+                isSelecting = true,
+                fileTaskBlocked = false,
+            ),
+        )
+        assertFalse(
+            shouldEnableBookshelfPullRefresh(
+                syncSettings = SyncSettings(enabled = true),
+                authStatus = DriveAuthStatus.Connected,
+                hasLoadedBooks = true,
+                isSelecting = false,
+                fileTaskBlocked = true,
+            ),
+        )
+    }
+
+    @Test
+    fun remoteBookLongPressTargetsContextMenuBeforeDeleteLikeIos() {
+        val remote = remoteEntry("drive-folder", "Remote Book")
+        val target = remoteBookContextMenuTarget(remote)
+
+        assertTrue(isRemoteBookContextMenuExpanded(target, remote))
+        assertFalse(isRemoteBookContextMenuExpanded(target, remoteEntry("other-folder", "Other")))
     }
 
     @Test
@@ -189,6 +299,17 @@ class MainShellUiTest {
     }
 
     @Test
+    fun bookshelfHeaderKeepsTrailingMetadataVisibleForLongShelfNames() {
+        val textLayout = bookshelfHeaderTextLayout()
+
+        assertEquals(1, textLayout.titleMaxLines)
+        assertEquals(MainShellTextOverflow.Ellipsis, textLayout.titleOverflow)
+        assertTrue(textLayout.titleUsesRemainingWidth)
+        assertEquals(1, textLayout.countMaxLines)
+        assertFalse(textLayout.countSoftWrap)
+    }
+
+    @Test
     fun mediumWindowsUseNavigationRailAndConstrainedBookGrid() {
         val spec = MainShellLayoutSpec.forWidthDp(700)
 
@@ -277,6 +398,20 @@ class MainShellUiTest {
                 cover = null,
                 folder = id,
                 lastAccess = lastAccess,
+            ),
+        )
+
+    private fun remoteEntry(id: String, title: String): RemoteBookEntry =
+        RemoteBookEntry(
+            id = id,
+            folderId = id,
+            folderName = title,
+            title = title,
+            syncFiles = DriveSyncFiles(
+                bookData = DriveFile("bookdata-$id", "bookdata_1_6_10_1000_1000.zip"),
+                progress = null,
+                statistics = null,
+                audioBook = null,
             ),
         )
 }

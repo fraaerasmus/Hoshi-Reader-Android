@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import moe.antimony.hoshi.di.ApplicationScope
 import moe.antimony.hoshi.dictionary.DictionaryRepository
 import moe.antimony.hoshi.epub.BookRepository
+import moe.antimony.hoshi.epub.EpubBookParser
 import moe.antimony.hoshi.features.audio.AudioSettingsRepository
 import moe.antimony.hoshi.features.audio.LocalAudioRepository
 import moe.antimony.hoshi.features.backup.HoshiBackupRepository
@@ -18,7 +19,6 @@ import moe.antimony.hoshi.features.reader.ReaderSettingsRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsRepository
 import moe.antimony.hoshi.features.storage.StorageCleanupRepository
 import moe.antimony.hoshi.features.sync.DeviceCodeDriveAuthorizer
-import moe.antimony.hoshi.features.sync.GoogleDriveClient
 import moe.antimony.hoshi.features.sync.SyncManager
 import moe.antimony.hoshi.features.sync.SyncSettingsRepository
 import moe.antimony.hoshi.features.update.AndroidUpdateDownloadManager
@@ -40,13 +40,13 @@ internal class HoshiUiDependencies @Inject constructor(
     private val syncSettingsRepositoryProvider: Lazy<SyncSettingsRepository>,
     private val updateSettingsRepositoryProvider: Lazy<UpdateSettingsRepository>,
     private val updateDownloadStoreProvider: Lazy<UpdateDownloadStore>,
+    private val epubBookParserProvider: Lazy<EpubBookParser>,
     private val readerFontManagerProvider: Lazy<ReaderFontManager>,
     private val localAudioRepositoryProvider: Lazy<LocalAudioRepository>,
     private val backupRepositoryProvider: Lazy<HoshiBackupRepository>,
     private val settingsBackupRepositoryProvider: Lazy<SettingsBackupRepository>,
     private val storageCleanupRepositoryProvider: Lazy<StorageCleanupRepository>,
     private val deviceCodeDriveAuthorizerProvider: Lazy<DeviceCodeDriveAuthorizer>,
-    private val googleDriveClientProvider: Lazy<GoogleDriveClient>,
     private val syncManagerProvider: Lazy<SyncManager>,
     private val updateDownloadManagerProvider: Lazy<AndroidUpdateDownloadManager>,
     private val updateCheckServiceProvider: Lazy<UpdateCheckService>,
@@ -64,13 +64,13 @@ internal class HoshiUiDependencies @Inject constructor(
     val syncSettingsRepository: SyncSettingsRepository get() = syncSettingsRepositoryProvider.get()
     val updateSettingsRepository: UpdateSettingsRepository get() = updateSettingsRepositoryProvider.get()
     val updateDownloadStore: UpdateDownloadStore get() = updateDownloadStoreProvider.get()
+    val epubBookParser: EpubBookParser get() = epubBookParserProvider.get()
     val readerFontManager: ReaderFontManager get() = readerFontManagerProvider.get()
     val localAudioRepository: LocalAudioRepository get() = localAudioRepositoryProvider.get()
     val backupRepository: HoshiBackupRepository get() = backupRepositoryProvider.get()
     val settingsBackupRepository: SettingsBackupRepository get() = settingsBackupRepositoryProvider.get()
     val storageCleanupRepository: StorageCleanupRepository get() = storageCleanupRepositoryProvider.get()
     val deviceCodeDriveAuthorizer: DeviceCodeDriveAuthorizer get() = deviceCodeDriveAuthorizerProvider.get()
-    val googleDriveClient: GoogleDriveClient get() = googleDriveClientProvider.get()
     val syncManager: SyncManager get() = syncManagerProvider.get()
     val updateDownloadManager: AndroidUpdateDownloadManager get() = updateDownloadManagerProvider.get()
     val updateCheckService: UpdateCheckService get() = updateCheckServiceProvider.get()

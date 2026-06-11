@@ -53,12 +53,16 @@ class ReaderPaginationScriptsTest {
 
     @Test
     fun exportsImageBoundsFromMeasuredViewportForAndroidWebView() {
-        val script = ReaderPaginationScripts.shellScript()
+        val layout = readerViewportCssLayout(
+            settings = ReaderSettings(verticalWriting = true),
+            viewportCssWidth = 480,
+            viewportCssHeight = 800,
+        )
 
-        assertTrue(script.contains("--hoshi-image-max-width"))
-        assertTrue(script.contains("--hoshi-image-max-height"))
-        assertTrue(script.contains("Math.floor(pageWidth * 0.95)"))
-        assertTrue(script.contains("pageHeight - 22"))
+        assertEquals(455, layout.imageMaxWidthPx)
+        assertEquals(800, layout.imageMaxHeightPx)
+        assertTrue(layout.cssVariables().contains("--hoshi-image-max-width: 455px;"))
+        assertTrue(layout.cssVariables().contains("--hoshi-image-max-height: 800px;"))
     }
 
     @Test
@@ -73,23 +77,54 @@ class ReaderPaginationScriptsTest {
             settings = ReaderSettings(continuousMode = true, verticalWriting = true),
         )
 
+        assertEquals(
+            455,
+            readerViewportCssLayout(ReaderSettings(verticalWriting = true), 480, 800).imageMaxWidthPx,
+        )
+        assertEquals(
+            456,
+            readerViewportCssLayout(ReaderSettings(verticalWriting = false), 480, 800).imageMaxWidthPx,
+        )
+        assertTrue(continuousVertical.contains("Math.max(1, Math.floor(window.innerWidth * 1.0) - 1)"))
         assertTrue(paginatedVertical.contains("Math.max(1, Math.floor(pageWidth * 0.95) - 1)"))
         assertTrue(paginatedHorizontal.contains("Math.max(1, Math.floor(pageWidth * 0.95) - 0)"))
-        assertTrue(continuousVertical.contains("Math.max(1, Math.floor(window.innerWidth * 1.0) - 1)"))
-        assertFalse(paginatedVertical.contains("__HOSHI_IMAGE_WIDTH_REDUCTION_PX__"))
+        assertFalse(paginatedVertical.contains("window.hoshiReaderViewport"))
+        assertFalse(paginatedHorizontal.contains("window.hoshiReaderViewport"))
         assertFalse(continuousVertical.contains("__HOSHI_IMAGE_WIDTH_REDUCTION_PX__"))
     }
 
     @Test
     fun exportsVerticalPaddingPxVariablesForAndroidWebView() {
-        val script = ReaderPaginationScripts.shellScript(
+        val layout = readerViewportCssLayout(
             settings = ReaderSettings(verticalPadding = 22),
+            viewportCssWidth = 480,
+            viewportCssHeight = 800,
         )
 
-        assertTrue(script.contains("--hoshi-vertical-padding-block"))
-        assertTrue(script.contains("window.innerHeight * 0.11"))
-        assertTrue(script.contains("--hoshi-vertical-padding-gap"))
-        assertTrue(script.contains("window.innerHeight * 0.22"))
+        assertEquals(88.0, layout.verticalPaddingBlockPx, 0.0)
+        assertEquals(176.0, layout.verticalPaddingGapPx, 0.0)
+        assertTrue(layout.cssVariables().contains("--hoshi-vertical-padding-block: 88.0px;"))
+        assertTrue(layout.cssVariables().contains("--hoshi-vertical-padding-gap: 176.0px;"))
+    }
+
+    @Test
+    fun verticalImageBoundsFitPaddedPageContentOnAndroidWebView() {
+        val settings = ReaderSettings(
+            verticalWriting = true,
+            fontSize = 28,
+            horizontalPadding = 14,
+            verticalPadding = 14,
+        )
+        val layout = readerViewportCssLayout(
+            settings = settings,
+            viewportCssWidth = 384,
+            viewportCssHeight = 801,
+        )
+        val script = ReaderPaginationScripts.shellScript(settings = settings)
+
+        assertEquals(688, layout.imageMaxHeightPx)
+        assertTrue(layout.cssVariables().contains("--hoshi-image-max-height: 688px;"))
+        assertTrue(script.contains("Math.max(1, Math.floor(window.innerHeight * 0.86))"))
     }
 
     @Test
@@ -148,7 +183,24 @@ class ReaderPaginationScriptsTest {
         )
 
         assertTrue(script.contains("var pageHeight = window.innerHeight + 0;"))
-        assertFalse(script.contains("var pageHeight = window.innerHeight + 22;"))
+        assertFalse(script.contains("window.innerHeight + 22"))
+    }
+
+    @Test
+    fun paginatedInitializeWritesRuntimeViewportCssVariables() {
+        val script = ReaderPaginationScripts.shellScript()
+        val initialize = script.substringAfter("window.hoshiReader.initialize = function()")
+            .substringBefore("function setupReaderImage")
+
+        assertTrue(initialize.contains("window.hoshiReader.pageHeight = pageHeight;"))
+        assertTrue(initialize.contains("window.hoshiReader.pageWidth = pageWidth;"))
+        assertTrue(initialize.contains("style.setProperty('--page-height'"))
+        assertTrue(initialize.contains("style.setProperty('--page-width'"))
+        assertTrue(initialize.contains("style.setProperty('--hoshi-vertical-padding-block'"))
+        assertTrue(initialize.contains("style.setProperty('--hoshi-vertical-padding-gap'"))
+        assertTrue(initialize.contains("style.setProperty('--hoshi-image-max-width'"))
+        assertTrue(initialize.contains("style.setProperty('--hoshi-image-max-height'"))
+        assertFalse(initialize.contains("window.hoshiReaderViewport"))
     }
 
     @Test
@@ -292,7 +344,8 @@ class ReaderPaginationScriptsTest {
         assertTrue(script.contains("var mediaStart = (context.vertical ? mediaRect.top : mediaRect.left) + currentScroll"))
         assertTrue(script.contains("var mediaEnd = (context.vertical ? mediaRect.bottom : mediaRect.right) + currentScroll"))
         assertTrue(script.contains("var minScroll = firstContentEdge === null ? 0"))
-        assertTrue(script.contains("var maxScroll = Math.min(maxAlignedScroll, lastContentScroll)"))
+        assertTrue(script.contains("var lastContentScroll = lastContentEdge <= 0 ? 0 : this.alignToPage(context, lastContentEdge - 1)"))
+        assertTrue(script.contains("var maxScroll = Math.min(context.maxScroll, lastContentScroll)"))
     }
 
     @Test

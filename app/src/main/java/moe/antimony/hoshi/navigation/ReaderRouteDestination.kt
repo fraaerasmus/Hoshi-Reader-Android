@@ -83,12 +83,14 @@ internal fun ReaderRouteDestination(
 
     suspend fun exportBook(entry: BookEntry) {
         runCatching {
+            val currentSyncSettings = syncSettings ?: appContainer.syncSettingsRepository.settings.first()
             appContainer.syncManager.syncBook(
                 entry = entry,
                 direction = SyncDirection.ExportToTtu,
                 syncStats = readerSettings.statisticsSyncEnabled,
                 statsSyncMode = readerSettings.statisticsSyncMode,
                 syncAudioBook = autoSyncState.shouldSyncAudioBook,
+                syncBookData = currentSyncSettings.uploadBooks,
             )
         }.onSuccess { result ->
             Log.d(ReaderAutoSyncLogTag, "Reader auto export finished: ${result::class.java.simpleName}")
@@ -146,6 +148,7 @@ internal fun ReaderRouteDestination(
         is ReaderRouteLoadState.Ready -> ReaderWebView(
             book = state.book,
             bookRoot = state.bookRoot,
+            bookCoverFile = state.bookCoverFile,
             initialChapterIndex = state.bookmark?.chapterIndex ?: 0,
             initialProgress = state.bookmark?.progress ?: 0.0,
             readerSettings = readerSettings,

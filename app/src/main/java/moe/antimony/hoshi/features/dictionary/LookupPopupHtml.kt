@@ -8,6 +8,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.features.audio.AudioSettings
 import moe.antimony.hoshi.features.anki.AnkiPopupSettings
 import java.util.Locale
@@ -60,6 +61,7 @@ internal object LookupPopupHtml {
         ankiSettings: AnkiPopupSettings = AnkiPopupSettings(),
         fontFaceCss: String = "",
         popupScale: Double = 1.0,
+        contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
     ): String {
         val normalizedSettings = settings.normalized()
         val collapsedDictionaries = dictionaryNamesJson(normalizedSettings.collapsedDictionaries)
@@ -73,6 +75,7 @@ internal object LookupPopupHtml {
         val popupTypographyCss = """
             <style>
                 ${fontFaceCss.trim()}
+                :root { --hoshi-content-font-family: ${contentLanguageProfile.webViewFontFamilyCss}; }
                 html { zoom: ${popupCssNumber(popupScale.coerceIn(0.8, 1.5))}; }
             </style>
         """.trimIndent()
@@ -85,7 +88,7 @@ internal object LookupPopupHtml {
             ?: """<script src="$PopupAssetBaseUrl/popup.js"></script>"""
         return """
             <!DOCTYPE html>
-            <html data-hoshi-color-scheme="$colorScheme" data-hoshi-eink-mode="$eInkMode">
+            <html lang="${contentLanguageProfile.htmlLang}" data-hoshi-color-scheme="$colorScheme" data-hoshi-eink-mode="$eInkMode">
             <head>
                 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
                 $popupCss
@@ -101,7 +104,6 @@ internal object LookupPopupHtml {
                     }
                 </style>
                 <script>
-                    window.nativePopupButtons = false;
                     window.HoshiAndroidPopup = window.HoshiAndroidPopup || (function() {
                         var nextMessageId = 1;
                         var pendingMessages = {};
@@ -113,7 +115,7 @@ internal object LookupPopupHtml {
                                     name: name,
                                     id: id || null,
                                     body: body === undefined ? null : body
-                                }, 'https://hoshi.local');
+                                }, 'https://appassets.androidplatform.net');
                             } catch (e) {
                                 console.warn('Hoshi reader popup bridge failed', e);
                             }
@@ -142,10 +144,8 @@ internal object LookupPopupHtml {
                             tapOutside: { postMessage: function() { window.HoshiAndroidPopup.postMessage('tapOutside'); } },
                             swipeDismiss: { postMessage: function() { window.HoshiAndroidPopup.postMessage('swipeDismiss'); } },
                             playWordAudio: { postMessage: function(content) { window.HoshiAndroidPopup.postMessage('playWordAudio', content); } },
-                            buttonFrames: { postMessage: function() {} },
-                            visualStateButtonFrames: { postMessage: function() {} },
                             shellReady: { postMessage: function() { window.HoshiAndroidPopup.postMessage('shellReady'); } },
-                            contentReady: { postMessage: function(frames) { window.HoshiAndroidPopup.postMessage('contentReady', frames); } },
+                            contentReady: { postMessage: function() { window.HoshiAndroidPopup.postMessage('contentReady'); } },
                             popupScrolled: { postMessage: function() { window.HoshiAndroidPopup.postMessage('popupScrolled'); } },
                             mineEntry: { postMessage: function(content) { return window.HoshiAndroidPopup.requestMessage('mineEntry', content); } },
                             duplicateCheck: { postMessage: function(expression) { return window.HoshiAndroidPopup.requestMessage('duplicateCheck', expression); } },
@@ -164,8 +164,8 @@ internal object LookupPopupHtml {
                     window.deduplicatePitchAccents = ${normalizedSettings.deduplicatePitchAccents};
                     window.compactPitchAccents = ${normalizedSettings.compactPitchAccents};
                     window.audioSources = ${audioSourcesJson(audioSettings)};
-                    window.audioRequestEndpoint = "https://hoshi.local/audio";
-                    window.dictionaryMediaRequestEndpoint = "https://hoshi.local/image";
+                    window.audioRequestEndpoint = "https://appassets.androidplatform.net/audio";
+                    window.dictionaryMediaRequestEndpoint = "https://appassets.androidplatform.net/image";
                     window.disablePopupImageViewportMaxHeight = true;
                     window.audioEnableAutoplay = ${audioSettings.enableAutoplay};
                     window.audioPlaybackMode = "${audioSettings.playbackMode.rawValue}";
@@ -213,7 +213,7 @@ internal object LookupPopupHtml {
                         function postReady() {
                             if (posted) return;
                             posted = true;
-                            webkit.messageHandlers.contentReady.postMessage(collectButtonFrames());
+                            webkit.messageHandlers.contentReady.postMessage();
                         }
                         function hasRenderableContent() {
                             if (!container || !window.entryCount) {
@@ -244,7 +244,7 @@ internal object LookupPopupHtml {
                             }
                         };
                         window.addEventListener('message', function(event) {
-                            if (event.origin !== 'https://hoshi.local') return;
+                            if (event.origin !== 'https://appassets.androidplatform.net') return;
                             var message = event.data || {};
                             if (message.type === 'reply') {
                                 window.HoshiAndroidPopup.resolveMessage(message.id, message.body);
@@ -353,28 +353,18 @@ internal object LookupPopupHtml {
                 }
                 return true;
             }
-            function syncAfterFontLoad() {
-                if (typeof scheduleButtonFrameSyncAtVisualState === 'function') {
-                    scheduleButtonFrameSyncAtVisualState();
-                } else if (typeof scheduleButtonFrameSync === 'function') {
-                    scheduleButtonFrameSync();
-                }
-            }
             window.hoshiPopupPrewarmFonts = function() {
                 if (!document.fonts) return;
-                var loads = [];
                 try {
                     document.fonts.forEach(function(face) {
                         if (!rememberFace(face) || face.status !== 'unloaded' || typeof face.load !== 'function') {
                             return;
                         }
                         try {
-                            loads.push(face.load().catch(function() {}));
+                            face.load().catch(function() {});
                         } catch (e) {}
                     });
                 } catch (e) {}
-                if (!loads.length) return;
-                Promise.all(loads).then(syncAfterFontLoad, syncAfterFontLoad);
             };
             window.hoshiPopupPrewarmFonts();
             setTimeout(window.hoshiPopupPrewarmFonts, 0);
@@ -689,5 +679,5 @@ internal object LookupPopupHtml {
         }
     """
 
-    private const val PopupAssetBaseUrl = "https://hoshi.local/popup"
+    private const val PopupAssetBaseUrl = "https://appassets.androidplatform.net/popup"
 }
