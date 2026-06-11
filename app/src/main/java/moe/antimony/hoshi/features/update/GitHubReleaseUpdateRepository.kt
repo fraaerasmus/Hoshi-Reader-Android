@@ -137,7 +137,7 @@ internal class GitHubReleaseUpdateRepository private constructor(
 ) : ReleaseUpdateRepository {
     @Inject
     constructor() : this(
-        latestReleaseUrl = LatestReleaseUrl,
+        latestReleaseUrl = moe.antimony.hoshi.BuildConfig.UPDATE_RELEASE_URL,
         apiMirrorPrefixes = DefaultApiMirrorPrefixes,
         downloadMirrorPrefixes = DefaultDownloadMirrorPrefixes,
         httpClient = UrlConnectionGitHubHttpClient,

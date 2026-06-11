@@ -84,6 +84,11 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "Hoshi Debug"
+            buildConfigField(
+                "String",
+                "UPDATE_RELEASE_URL",
+                "\"https://api.github.com/repos/fraaerasmus/Hoshi-Reader-Android/releases/latest\"",
+            )
             ndk {
                 abiFilters += listOf("arm64-v8a", "x86_64")
             }
@@ -92,6 +97,11 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             manifestPlaceholders["appLabel"] = "Hoshi Reader"
+            buildConfigField(
+                "String",
+                "UPDATE_RELEASE_URL",
+                "\"https://api.github.com/repos/HuangAntimony/Hoshi-Reader-Android/releases/latest\"",
+            )
             ndk {
                 abiFilters += listOf("arm64-v8a")
             }
