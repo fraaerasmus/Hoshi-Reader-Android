@@ -522,7 +522,12 @@ internal fun ReaderBottomSafeProgress(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(metrics.bottomSafeAreaDp.dp),
+            .height(
+                maxOf(
+                    metrics.bottomSafeAreaDp,
+                    if (sasayakiPlaybackControls.visible) sasayakiPlaybackControls.rowHeightDp else metrics.bottomSafeAreaDp,
+                ).dp,
+            ),
     ) {
         Box(
             modifier = Modifier
@@ -532,8 +537,14 @@ internal fun ReaderBottomSafeProgress(
         if (sasayakiPlaybackControls.visible) {
             Row(
                 modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .padding(start = sasayakiPlaybackControls.horizontalPaddingDp.dp)
+                    .align(if (sasayakiPlaybackControls.centered) Alignment.Center else Alignment.CenterStart)
+                    .padding(
+                        start = if (sasayakiPlaybackControls.centered) {
+                            0.dp
+                        } else {
+                            sasayakiPlaybackControls.horizontalPaddingDp.dp
+                        },
+                    )
                     .height(sasayakiPlaybackControls.rowHeightDp.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -576,10 +587,14 @@ internal fun ReaderBottomSafeProgress(
                         .align(Alignment.CenterEnd)
                         .fillMaxWidth()
                         .padding(
-                            start = (
-                                sasayakiPlaybackControls.buttonWidthDp * 3 +
-                                    sasayakiPlaybackControls.horizontalPaddingDp
-                                ).dp,
+                            start = if (sasayakiPlaybackControls.centered) {
+                                sasayakiPlaybackControls.horizontalPaddingDp.dp
+                            } else {
+                                (
+                                    sasayakiPlaybackControls.buttonWidthDp * 3 +
+                                        sasayakiPlaybackControls.horizontalPaddingDp
+                                    ).dp
+                            },
                             end = sasayakiPlaybackControls.horizontalPaddingDp.dp,
                         )
                 } else {

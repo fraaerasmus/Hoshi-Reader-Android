@@ -57,6 +57,8 @@ data class ReaderSettings(
     val showPercentage: Boolean = true,
     val alwaysShowProgress: Boolean = true,
     val showProgressTop: Boolean = true,
+    val sasayakiControlsCentered: Boolean = false,
+    val sasayakiControlsScalePercent: Int = 100,
     val showReaderBackButton: Boolean = true,
     val popupWidth: Int = 320,
     val popupHeight: Int = 250,
@@ -271,6 +273,8 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
         showPercentage = preferences.getBoolean("readerShowPercentage", true),
         alwaysShowProgress = preferences.getBoolean("readerAlwaysShowProgress", true),
         showProgressTop = preferences.getBoolean("readerShowProgressTop", true),
+        sasayakiControlsCentered = preferences.getBoolean("sasayakiControlsCentered", false),
+        sasayakiControlsScalePercent = preferences.getInt("sasayakiControlsScalePercent", 100).coerceIn(100, 200),
         showReaderBackButton = preferences.getBoolean("readerShowBackButton", true),
         popupWidth = preferences.getInt("popupWidth", 320),
         popupHeight = preferences.getInt("popupHeight", 250),
@@ -325,6 +329,8 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             .putBoolean("readerShowPercentage", settings.showPercentage)
             .putBoolean("readerAlwaysShowProgress", settings.alwaysShowProgress)
             .putBoolean("readerShowProgressTop", settings.showProgressTop)
+            .putBoolean("sasayakiControlsCentered", settings.sasayakiControlsCentered)
+            .putInt("sasayakiControlsScalePercent", settings.sasayakiControlsScalePercent)
             .putBoolean("readerShowBackButton", settings.showReaderBackButton)
             .putInt("popupWidth", settings.popupWidth)
             .putInt("popupHeight", settings.popupHeight)
@@ -422,6 +428,8 @@ class ReaderSettingsRepository(
             showPercentage = this[KEY_SHOW_PERCENTAGE] ?: true,
             alwaysShowProgress = this[KEY_ALWAYS_SHOW_PROGRESS] ?: true,
             showProgressTop = this[KEY_SHOW_PROGRESS_TOP] ?: true,
+            sasayakiControlsCentered = this[KEY_SASAYAKI_CONTROLS_CENTERED] ?: false,
+            sasayakiControlsScalePercent = (this[KEY_SASAYAKI_CONTROLS_SCALE_PERCENT] ?: 100).coerceIn(100, 200),
             showReaderBackButton = this[KEY_SHOW_READER_BACK_BUTTON] ?: true,
             popupWidth = this[KEY_POPUP_WIDTH] ?: 320,
             popupHeight = this[KEY_POPUP_HEIGHT] ?: 250,
@@ -475,6 +483,8 @@ class ReaderSettingsRepository(
         this[KEY_SHOW_PERCENTAGE] = settings.showPercentage
         this[KEY_ALWAYS_SHOW_PROGRESS] = settings.alwaysShowProgress
         this[KEY_SHOW_PROGRESS_TOP] = settings.showProgressTop
+        this[KEY_SASAYAKI_CONTROLS_CENTERED] = settings.sasayakiControlsCentered
+        this[KEY_SASAYAKI_CONTROLS_SCALE_PERCENT] = settings.sasayakiControlsScalePercent
         this[KEY_SHOW_READER_BACK_BUTTON] = settings.showReaderBackButton
         this[KEY_POPUP_WIDTH] = settings.popupWidth
         this[KEY_POPUP_HEIGHT] = settings.popupHeight
@@ -532,6 +542,8 @@ class ReaderSettingsRepository(
         private val KEY_SHOW_PERCENTAGE = booleanPreferencesKey("readerShowPercentage")
         private val KEY_ALWAYS_SHOW_PROGRESS = booleanPreferencesKey("readerAlwaysShowProgress")
         private val KEY_SHOW_PROGRESS_TOP = booleanPreferencesKey("readerShowProgressTop")
+        private val KEY_SASAYAKI_CONTROLS_CENTERED = booleanPreferencesKey("sasayakiControlsCentered")
+        private val KEY_SASAYAKI_CONTROLS_SCALE_PERCENT = intPreferencesKey("sasayakiControlsScalePercent")
         private val KEY_SHOW_READER_BACK_BUTTON = booleanPreferencesKey("readerShowBackButton")
         private val KEY_POPUP_WIDTH = intPreferencesKey("popupWidth")
         private val KEY_POPUP_HEIGHT = intPreferencesKey("popupHeight")

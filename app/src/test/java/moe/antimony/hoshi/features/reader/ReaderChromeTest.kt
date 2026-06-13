@@ -459,6 +459,7 @@ class ReaderChromeTest {
         assertEquals(
             ReaderSasayakiBottomPlaybackControls(
                 visible = true,
+                centered = false,
                 rowHeightDp = metrics.bottomSafeAreaDp,
                 buttonWidthDp = 40,
                 iconSizeDp = 14,
@@ -468,6 +469,8 @@ class ReaderChromeTest {
                 settings = SasayakiSettings(showReaderBottomPlaybackControls = true),
                 hasAudio = true,
                 metrics = metrics,
+                centered = false,
+                scalePercent = 100,
             ),
         )
         assertFalse(
@@ -475,6 +478,8 @@ class ReaderChromeTest {
                 settings = SasayakiSettings(showReaderBottomPlaybackControls = false),
                 hasAudio = true,
                 metrics = metrics,
+                centered = false,
+                scalePercent = 100,
             ).visible,
         )
         assertFalse(
@@ -482,13 +487,35 @@ class ReaderChromeTest {
                 settings = SasayakiSettings(showReaderBottomPlaybackControls = true),
                 hasAudio = false,
                 metrics = metrics,
+                centered = false,
+                scalePercent = 100,
             ).visible,
         )
         assertTrue(readerSasayakiBottomPlaybackControls(
             settings = SasayakiSettings(showReaderBottomPlaybackControls = true),
             hasAudio = true,
             metrics = metrics,
+            centered = false,
+            scalePercent = 100,
         ).rowHeightDp <= metrics.bottomSafeAreaDp)
+    }
+
+    @Test
+    fun sasayakiBottomPlaybackControlsScaleAndCenterWithSettings() {
+        val metrics = readerBottomChromeMetrics()
+
+        val scaled = readerSasayakiBottomPlaybackControls(
+            settings = SasayakiSettings(showReaderBottomPlaybackControls = true),
+            hasAudio = true,
+            metrics = metrics,
+            centered = true,
+            scalePercent = 200,
+        )
+
+        assertTrue(scaled.centered)
+        assertEquals(80, scaled.buttonWidthDp)
+        assertEquals(28, scaled.iconSizeDp)
+        assertEquals(metrics.bottomSafeAreaDp * 2, scaled.rowHeightDp)
     }
 
     @Test

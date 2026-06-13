@@ -315,6 +315,10 @@
     <string name="reader_appearance_progress_position">Progress Position</string>
     <string name="reader_appearance_progress_top">Top</string>
     <string name="reader_appearance_progress_bottom">Bottom</string>
+    <string name="reader_appearance_sasayaki_controls_position">Playback Controls Position</string>
+    <string name="reader_appearance_sasayaki_controls_position_left">Left</string>
+    <string name="reader_appearance_sasayaki_controls_position_center">Center</string>
+    <string name="reader_appearance_sasayaki_controls_size">Playback Controls Size</string>
     <string name="reader_appearance_show_statistics_toggle">Show Statistics Toggle</string>
     <string name="reader_appearance_show_reading_speed">Show Reading Speed</string>
     <string name="reader_appearance_show_reading_time">Show Reading Time</string>

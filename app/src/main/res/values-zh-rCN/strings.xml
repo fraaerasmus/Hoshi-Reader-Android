@@ -313,6 +313,10 @@
     <string name="reader_appearance_progress_position">进度位置</string>
     <string name="reader_appearance_progress_top">顶部</string>
     <string name="reader_appearance_progress_bottom">底部</string>
+    <string name="reader_appearance_sasayaki_controls_position">播放控件位置</string>
+    <string name="reader_appearance_sasayaki_controls_position_left">左侧</string>
+    <string name="reader_appearance_sasayaki_controls_position_center">居中</string>
+    <string name="reader_appearance_sasayaki_controls_size">播放控件大小</string>
     <string name="reader_appearance_show_statistics_toggle">显示统计开关</string>
     <string name="reader_appearance_show_reading_speed">显示阅读速度</string>
     <string name="reader_appearance_show_reading_time">显示阅读时间</string>

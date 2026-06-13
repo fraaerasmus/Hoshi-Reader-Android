@@ -467,6 +467,33 @@ private fun ReaderAppearanceContent(
                         )
                     }
                     AppearanceDivider(palette)
+                    val sasayakiLeftLabel = stringResource(R.string.reader_appearance_sasayaki_controls_position_left)
+                    val sasayakiCenterLabel = stringResource(R.string.reader_appearance_sasayaki_controls_position_center)
+                    SegmentedRow(
+                        label = stringResource(R.string.reader_appearance_sasayaki_controls_position),
+                        options = listOf(sasayakiLeftLabel, sasayakiCenterLabel),
+                        selected = if (settings.sasayakiControlsCentered) sasayakiCenterLabel else sasayakiLeftLabel,
+                        onSelected = { label ->
+                            onSettingsChange(settings.copy(sasayakiControlsCentered = label == sasayakiCenterLabel))
+                        },
+                        palette = palette,
+                    )
+                    AppearanceDivider(palette)
+                    SliderRow(
+                        label = stringResource(R.string.reader_appearance_sasayaki_controls_size),
+                        value = "${settings.sasayakiControlsScalePercent}%",
+                        sliderValue = settings.sasayakiControlsScalePercent.toFloat(),
+                        valueRange = 100f..200f,
+                        steps = 3,
+                        onValueChange = { value ->
+                            onSettingsChange(
+                                settings.copy(
+                                    sasayakiControlsScalePercent = (round(value / 25) * 25).toInt().coerceIn(100, 200),
+                                ),
+                            )
+                        },
+                    )
+                    AppearanceDivider(palette)
                     SwitchRow(
                         label = stringResource(R.string.reader_appearance_show_back_button),
                         checked = settings.showReaderBackButton,

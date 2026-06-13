@@ -1087,6 +1087,8 @@ fun ReaderWebView(
         settings = sasayakiSettings,
         hasAudio = sasayakiPlayer?.hasAudio == true,
         metrics = bottomChromeMetrics,
+        centered = effectiveSettings.sasayakiControlsCentered,
+        scalePercent = effectiveSettings.sasayakiControlsScalePercent,
     )
     val sasayakiBottomSkipButtonActions = readerSasayakiBottomSkipButtonActions(
         verticalWriting = effectiveSettings.verticalWriting,
