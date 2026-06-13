@@ -36,6 +36,10 @@ This project is a native Android recreation of [Hoshi Reader](https://github.com
 
 </div>
 
+## TODO
+
+- Add WebDAV sync feature.
+
 ## Features
 
 ### Bookshelf
