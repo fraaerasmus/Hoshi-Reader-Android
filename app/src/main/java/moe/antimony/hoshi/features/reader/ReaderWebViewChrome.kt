@@ -519,88 +519,81 @@ internal fun ReaderBottomSafeProgress(
     modifier: Modifier = Modifier,
 ) {
     val progress = readerBottomSafeProgressText(state, settings, focusMode)
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(
-                maxOf(
-                    metrics.bottomSafeAreaDp,
-                    if (sasayakiPlaybackControls.visible) sasayakiPlaybackControls.rowHeightDp else metrics.bottomSafeAreaDp,
-                ).dp,
-            ),
+    Column(
+        modifier = modifier.fillMaxWidth(),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(onClick = onTapSafeArea),
-        )
         if (sasayakiPlaybackControls.visible) {
-            Row(
+            Box(
                 modifier = Modifier
-                    .align(if (sasayakiPlaybackControls.centered) Alignment.Center else Alignment.CenterStart)
-                    .padding(
-                        start = if (sasayakiPlaybackControls.centered) {
-                            0.dp
-                        } else {
-                            sasayakiPlaybackControls.horizontalPaddingDp.dp
-                        },
-                    )
+                    .fillMaxWidth()
                     .height(sasayakiPlaybackControls.rowHeightDp.dp),
-                verticalAlignment = Alignment.CenterVertically,
             ) {
-                ReaderBottomSafePlaybackButton(
-                    controls = sasayakiPlaybackControls,
-                    colors = colors,
-                    icon = Icons.Rounded.FastRewind,
-                    contentDescription = stringResource(R.string.sasayaki_rewind),
-                    onClick = onSasayakiSkipBackward,
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(onClick = onTapSafeArea),
                 )
-                ReaderBottomSafePlaybackButton(
-                    controls = sasayakiPlaybackControls,
-                    colors = colors,
-                    icon = if (sasayakiPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = if (sasayakiPlaying) {
-                        stringResource(R.string.sasayaki_pause)
-                    } else {
-                        stringResource(R.string.sasayaki_play)
-                    },
-                    onClick = onSasayakiTogglePlayback,
-                )
-                ReaderBottomSafePlaybackButton(
-                    controls = sasayakiPlaybackControls,
-                    colors = colors,
-                    icon = Icons.Rounded.FastForward,
-                    contentDescription = stringResource(R.string.sasayaki_fast_forward),
-                    onClick = onSasayakiSkipForward,
-                )
-            }
-        }
-        if (progress.isNotBlank()) {
-            Text(
-                text = progress,
-                color = Color(colors.infoText),
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                textAlign = if (sasayakiPlaybackControls.visible) TextAlign.End else TextAlign.Center,
-                modifier = if (sasayakiPlaybackControls.visible) {
-                    Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxWidth()
+                Row(
+                    modifier = Modifier
+                        .align(if (sasayakiPlaybackControls.centered) Alignment.Center else Alignment.CenterStart)
                         .padding(
                             start = if (sasayakiPlaybackControls.centered) {
-                                sasayakiPlaybackControls.horizontalPaddingDp.dp
+                                0.dp
                             } else {
-                                (
-                                    sasayakiPlaybackControls.buttonWidthDp * 3 +
-                                        sasayakiPlaybackControls.horizontalPaddingDp
-                                    ).dp
+                                sasayakiPlaybackControls.horizontalPaddingDp.dp
                             },
-                            end = sasayakiPlaybackControls.horizontalPaddingDp.dp,
                         )
-                } else {
-                    Modifier.align(Alignment.Center)
-                },
+                        .height(sasayakiPlaybackControls.rowHeightDp.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    ReaderBottomSafePlaybackButton(
+                        controls = sasayakiPlaybackControls,
+                        colors = colors,
+                        icon = Icons.Rounded.FastRewind,
+                        contentDescription = stringResource(R.string.sasayaki_rewind),
+                        onClick = onSasayakiSkipBackward,
+                    )
+                    ReaderBottomSafePlaybackButton(
+                        controls = sasayakiPlaybackControls,
+                        colors = colors,
+                        icon = if (sasayakiPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = if (sasayakiPlaying) {
+                            stringResource(R.string.sasayaki_pause)
+                        } else {
+                            stringResource(R.string.sasayaki_play)
+                        },
+                        onClick = onSasayakiTogglePlayback,
+                    )
+                    ReaderBottomSafePlaybackButton(
+                        controls = sasayakiPlaybackControls,
+                        colors = colors,
+                        icon = Icons.Rounded.FastForward,
+                        contentDescription = stringResource(R.string.sasayaki_fast_forward),
+                        onClick = onSasayakiSkipForward,
+                    )
+                }
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(metrics.bottomSafeAreaDp.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(onClick = onTapSafeArea),
             )
+            if (progress.isNotBlank()) {
+                Text(
+                    text = progress,
+                    color = Color(colors.infoText),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center),
+                )
+            }
         }
     }
 }
