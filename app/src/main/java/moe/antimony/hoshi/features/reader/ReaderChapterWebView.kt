@@ -75,6 +75,8 @@ internal fun ChapterWebView(
     onContinuousScrollProgress: (progress: Double, restoreEpoch: Int) -> Unit,
     onInternalLink: (ReaderInternalLinkTarget) -> Unit,
     scanNonJapaneseText: Boolean,
+    scanMultiWordPhrases: Boolean,
+    scanLength: Int,
     contentLanguageProfile: ContentLanguageProfile,
     readerSettings: ReaderSettings,
     chapterHighlightsJson: String?,
@@ -147,6 +149,7 @@ internal fun ChapterWebView(
         chapterPosition.progress,
         chapterFragment,
         scanNonJapaneseText,
+        scanMultiWordPhrases,
         contentLanguageProfile,
         fontFaceUrl,
     ) {
@@ -154,6 +157,7 @@ internal fun ChapterWebView(
             initialProgress = chapterPosition.progress,
             initialFragment = chapterFragment,
             scanNonJapaneseText = scanNonJapaneseText,
+            scanMultiWordPhrases = scanMultiWordPhrases,
             contentLanguageProfile = contentLanguageProfile,
             fontFaceUrl = fontFaceUrl,
         )
@@ -173,6 +177,7 @@ internal fun ChapterWebView(
         fontFaceUrl,
         systemDark,
         scanNonJapaneseText,
+        scanMultiWordPhrases,
         contentLanguageProfile,
         webViewViewportCssSize,
         sasayakiTextColor,
@@ -189,6 +194,7 @@ internal fun ChapterWebView(
             fontFaceUrl = fontFaceUrl,
             systemDark = systemDark,
             scanNonJapaneseText = scanNonJapaneseText,
+            scanMultiWordPhrases = scanMultiWordPhrases,
             contentLanguageProfile = contentLanguageProfile,
             webViewViewportCssSize = webViewViewportCssSize,
             sasayakiTextColor = sasayakiTextColor,
@@ -274,7 +280,7 @@ internal fun ChapterWebView(
                     ReaderSelectionCommand.SelectText(
                         x = androidPixelsToCssPixels(x, density),
                         y = androidPixelsToCssPixels(y, density),
-                        maxLength = MAX_SELECTION_LENGTH,
+                        maxLength = scanLength,
                     ).source,
                 ) { result ->
                     val selectionResult = ReaderSelectionResult.fromWebViewResult(result)
@@ -432,6 +438,7 @@ internal data class ReaderWebViewSetupReloadKey(
     val initialProgress: Double,
     val initialFragment: String?,
     val scanNonJapaneseText: Boolean,
+    val scanMultiWordPhrases: Boolean,
     val contentLanguageProfile: ContentLanguageProfile,
     val fontFaceUrl: String?,
 )
@@ -741,6 +748,7 @@ private fun readerSetupScript(
     fontFaceUrl: String?,
     systemDark: Boolean,
     scanNonJapaneseText: Boolean,
+    scanMultiWordPhrases: Boolean,
     contentLanguageProfile: ContentLanguageProfile,
     webViewViewportCssSize: IntSize,
     sasayakiTextColor: Long,
@@ -787,6 +795,7 @@ private fun readerSetupScript(
           style.textContent = $css;
           document.head.appendChild(style);
           window.scanNonJapaneseText = $scanNonJapaneseText;
+          window.scanMultiWordPhrases = $scanMultiWordPhrases;
           $selectionScript
           window.hoshiSelection.configure({
             bridge: 'android-reader',
@@ -1147,7 +1156,6 @@ private val readerAppliedSasayakiCues = WeakHashMap<WebView, ReaderAppliedSasaya
 private val readerPendingProgressSaveCallbacks = WeakHashMap<WebView, Runnable>()
 private val readerPageTurnProgressRequestIds = WeakHashMap<WebView, Long>()
 private var readerPageTurnProgressRequestId = 0L
-private const val MAX_SELECTION_LENGTH = 16
 private const val CONTINUOUS_PROGRESS_THROTTLE_MS = 50L
 private const val CONTINUOUS_SCROLL_SAVE_IDLE_DELAY_MS = 250L
 

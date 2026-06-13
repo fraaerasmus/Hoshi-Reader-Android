@@ -225,6 +225,37 @@ test('shared selection exposes one highlight range per selected character', () =
     assert.equal(document.createdRanges.length, 3);
 });
 
+test('shared selection scans across spaces for multi-word entries when enabled', () => {
+    const text = 'coup de main de quelqu';
+    const { selection, textNode, window } = loadSelection(text);
+    window.getSelection = () => null;
+    window.scanMultiWordPhrases = true;
+    selection.getCharacterAtPoint = () => ({ node: textNode, offset: 0 });
+
+    // "coup de main" is exactly 12 characters, so maxLength caps the scan there.
+    assert.equal(selection.selectText(0, 0, 12), 'coup de main');
+});
+
+test('shared selection stops at the first space when multi-word scanning is disabled', () => {
+    const text = 'coup de main';
+    const { selection, textNode, window } = loadSelection(text);
+    window.getSelection = () => null;
+    window.scanMultiWordPhrases = false;
+    selection.getCharacterAtPoint = () => ({ node: textNode, offset: 0 });
+
+    assert.equal(selection.selectText(0, 0, 12), 'coup');
+});
+
+test('shared selection still stops at punctuation when multi-word scanning is enabled', () => {
+    const text = 'tant, que';
+    const { selection, textNode, window } = loadSelection(text);
+    window.getSelection = () => null;
+    window.scanMultiWordPhrases = true;
+    selection.getCharacterAtPoint = () => ({ node: textNode, offset: 0 });
+
+    assert.equal(selection.selectText(0, 0, 12), 'tant');
+});
+
 test('shared ruby geometry exposes merged inline rects for reader Sasayaki overlay', () => {
     const { window } = loadSelection('猫');
     const merged = window.hoshiRubyGeometry.mergeInlineRects([

@@ -193,6 +193,7 @@
     <string name="dictionary_language_yiddish">&#x610F;&#x7B2C;&#x7EEA;&#x8BED;</string>
     <string name="dictionary_settings_import" comment="Dictionary settings section label, intentionally matching the Import action noun.">导入</string>
     <string name="dictionary_scan_non_japanese">扫描非日语文本</string>
+    <string name="dictionary_scan_multi_word">扫描多词短语</string>
     <string name="dictionary_max_results">最大结果数</string>
     <string name="dictionary_scan_length">扫描长度</string>
     <string name="dictionary_collapse_dictionaries">折叠辞典</string>

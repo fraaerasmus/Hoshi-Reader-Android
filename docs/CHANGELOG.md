@@ -10,6 +10,7 @@ The format follows a Keep a Changelog style, and release sections use Semantic V
 - Add a dictionary lookup language setting with multilingual hoshidicts lookup support across reader popups, recursive lookups, Dictionary search, and Android Process Text.
 - Add Settings profiles so users can switch between multiple learning languages and keep each profile's lookup language and enabled dictionaries separate.
 - Add settings backup and restore as a JSON file from Advanced > Backup, including Google Drive and Anki credentials so a new install can take over; the file holds those credentials in plain text, so keep it private and delete it after importing.
+- Add multi-word phrase lookup so tapping a word in space-delimited languages (e.g. French "coup de main") matches dictionary entries that span spaces, with a "Scan Multi-Word Phrases" toggle in Dictionary settings; the reader tap scan now follows the configured scan length.
 ## [v1.1.5] - 2026-06-11
 
 ### Added

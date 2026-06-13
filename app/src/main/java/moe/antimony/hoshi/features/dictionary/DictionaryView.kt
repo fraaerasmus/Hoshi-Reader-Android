@@ -1101,6 +1101,10 @@ private fun DictionarySettingsView(
                         onSettingsChange { current -> current.copy(scanNonJapaneseText = it) }
                     }
                     GroupDivider()
+                    ToggleRow(stringResource(R.string.dictionary_scan_multi_word), settings.scanMultiWordPhrases) {
+                        onSettingsChange { current -> current.copy(scanMultiWordPhrases = it) }
+                    }
+                    GroupDivider()
                     StepperRow(
                         title = stringResource(R.string.dictionary_max_results),
                         value = settings.maxResults,

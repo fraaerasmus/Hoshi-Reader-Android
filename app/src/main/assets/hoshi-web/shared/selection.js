@@ -501,7 +501,11 @@ window.hoshiSelection = {
 
             while (offset < content.length && text.length < maxLength) {
                 const char = content[offset];
-                if (this.isScanBoundary(char)) {
+                // Plain spaces are collected so multi-word entries (e.g. "coup de main")
+                // reach the lookup engine, which keeps the longest matching substring.
+                // Gated by the scanMultiWordPhrases setting so it can be disabled.
+                const crossSpace = char === ' ' && window.scanMultiWordPhrases !== false;
+                if (!crossSpace && this.isScanBoundary(char)) {
                     break;
                 }
                 text += char;
