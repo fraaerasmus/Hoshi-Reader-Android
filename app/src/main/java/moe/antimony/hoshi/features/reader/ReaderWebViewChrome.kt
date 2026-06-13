@@ -590,8 +590,15 @@ internal fun ReaderBottomSafeProgress(
                     color = Color(colors.infoText),
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.align(Alignment.Center),
+                    textAlign = if (sasayakiPlaybackControls.visible) TextAlign.End else TextAlign.Center,
+                    modifier = if (sasayakiPlaybackControls.visible) {
+                        Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxWidth()
+                            .padding(horizontal = sasayakiPlaybackControls.horizontalPaddingDp.dp)
+                    } else {
+                        Modifier.align(Alignment.Center)
+                    },
                 )
             }
         }
