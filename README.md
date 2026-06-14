@@ -39,6 +39,7 @@ This project is a native Android recreation of [Hoshi Reader](https://github.com
 ## TODO
 
 - Add WebDAV sync feature.
+- Fix the unit test source set so CI's (currently informational, non-blocking) unit-test step compiles again: the `InMemoryAnkiSettingsRepository` test fake in `DictionaryAutoUpdateSchedulerTest.kt` and `DictionaryUpdateServiceTest.kt` is missing the `exportEntries()`/`importEntries()` methods added for the settings-backup feature.
 
 ## Features
 
