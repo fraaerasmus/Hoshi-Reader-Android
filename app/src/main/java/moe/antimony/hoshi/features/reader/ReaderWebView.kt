@@ -931,6 +931,7 @@ fun ReaderWebView(
     sasayakiPlayer?.autoScroll = sasayakiSettings.autoScroll
     sasayakiPlayer?.readerSkipButtonAction = sasayakiSettings.readerSkipButtonAction
     val currentReaderKeyHandler = rememberUpdatedState<(KeyEvent) -> Boolean> { event ->
+        val textEditorFocused = context.findActivity()?.currentFocus?.onCheckIsTextEditor() == true
         val action = readerHardwareKeyActionForKeyEvent(
             keyCode = event.keyCode,
             action = event.action,
@@ -938,9 +939,14 @@ fun ReaderWebView(
             settings = effectiveSettings,
             sasayakiEnabled = sasayakiSettings.enabled,
             hasSasayakiAudio = sasayakiPlayer?.hasAudio == true,
+            textEditorFocused = textEditorFocused,
         ) ?: return@rememberUpdatedState false
         when (action) {
             is ReaderHardwareKeyAction.ReaderNavigation -> navigateReaderPage(action.direction)
+            ReaderHardwareKeyAction.SasayakiTogglePlayback -> {
+                sasayakiPlayer?.togglePlayback()
+                true
+            }
             ReaderHardwareKeyAction.SasayakiSeekBackward -> {
                 sasayakiPlayer?.previousCue()
                 true

@@ -4,6 +4,7 @@ import android.view.KeyEvent
 
 internal sealed interface ReaderHardwareKeyAction {
     data class ReaderNavigation(val direction: ReaderNavigationDirection) : ReaderHardwareKeyAction
+    data object SasayakiTogglePlayback : ReaderHardwareKeyAction
     data object SasayakiSeekForward : ReaderHardwareKeyAction
     data object SasayakiSeekBackward : ReaderHardwareKeyAction
 }
@@ -30,6 +31,7 @@ internal fun readerHardwareKeyActionForKeyEvent(
     settings: ReaderSettings,
     sasayakiEnabled: Boolean,
     hasSasayakiAudio: Boolean,
+    textEditorFocused: Boolean = false,
 ): ReaderHardwareKeyAction? {
     if (action != KeyEvent.ACTION_DOWN || repeatCount != 0) return null
     return when (keyCode) {
@@ -43,6 +45,33 @@ internal fun readerHardwareKeyActionForKeyEvent(
             sasayakiEnabled = sasayakiEnabled,
             hasSasayakiAudio = hasSasayakiAudio,
         )
+        KeyEvent.KEYCODE_SPACE,
+        KeyEvent.KEYCODE_K,
+        KeyEvent.KEYCODE_DPAD_LEFT,
+        KeyEvent.KEYCODE_J,
+        KeyEvent.KEYCODE_DPAD_RIGHT,
+        KeyEvent.KEYCODE_L,
+        -> sasayakiKeyboardAction(
+            keyCode = keyCode,
+            sasayakiEnabled = sasayakiEnabled,
+            hasSasayakiAudio = hasSasayakiAudio,
+            textEditorFocused = textEditorFocused,
+        )
+        else -> null
+    }
+}
+
+private fun sasayakiKeyboardAction(
+    keyCode: Int,
+    sasayakiEnabled: Boolean,
+    hasSasayakiAudio: Boolean,
+    textEditorFocused: Boolean,
+): ReaderHardwareKeyAction? {
+    if (textEditorFocused || !sasayakiEnabled || !hasSasayakiAudio) return null
+    return when (keyCode) {
+        KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_K -> ReaderHardwareKeyAction.SasayakiTogglePlayback
+        KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_J -> ReaderHardwareKeyAction.SasayakiSeekBackward
+        KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_L -> ReaderHardwareKeyAction.SasayakiSeekForward
         else -> null
     }
 }

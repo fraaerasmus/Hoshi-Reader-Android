@@ -307,4 +307,103 @@ class ReaderHardwareKeyNavigationTest {
             ),
         )
     }
+
+    @Test
+    fun sasayakiKeyboardKeysControlPlaybackWhenAudioLoaded() {
+        val settings = ReaderSettings()
+        val expectations = mapOf(
+            KeyEvent.KEYCODE_SPACE to ReaderHardwareKeyAction.SasayakiTogglePlayback,
+            KeyEvent.KEYCODE_K to ReaderHardwareKeyAction.SasayakiTogglePlayback,
+            KeyEvent.KEYCODE_DPAD_LEFT to ReaderHardwareKeyAction.SasayakiSeekBackward,
+            KeyEvent.KEYCODE_J to ReaderHardwareKeyAction.SasayakiSeekBackward,
+            KeyEvent.KEYCODE_DPAD_RIGHT to ReaderHardwareKeyAction.SasayakiSeekForward,
+            KeyEvent.KEYCODE_L to ReaderHardwareKeyAction.SasayakiSeekForward,
+        )
+
+        expectations.forEach { (keyCode, expected) ->
+            assertEquals(
+                expected,
+                readerHardwareKeyActionForKeyEvent(
+                    keyCode = keyCode,
+                    action = KeyEvent.ACTION_DOWN,
+                    repeatCount = 0,
+                    settings = settings,
+                    sasayakiEnabled = true,
+                    hasSasayakiAudio = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun sasayakiKeyboardKeysAreIgnoredWithoutLoadedAudio() {
+        val settings = ReaderSettings()
+
+        sasayakiKeyboardKeyCodes().forEach { keyCode ->
+            assertNull(
+                readerHardwareKeyActionForKeyEvent(
+                    keyCode = keyCode,
+                    action = KeyEvent.ACTION_DOWN,
+                    repeatCount = 0,
+                    settings = settings,
+                    sasayakiEnabled = true,
+                    hasSasayakiAudio = false,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun sasayakiKeyboardKeysAreIgnoredWhileTextEditorFocused() {
+        val settings = ReaderSettings()
+
+        sasayakiKeyboardKeyCodes().forEach { keyCode ->
+            assertNull(
+                readerHardwareKeyActionForKeyEvent(
+                    keyCode = keyCode,
+                    action = KeyEvent.ACTION_DOWN,
+                    repeatCount = 0,
+                    settings = settings,
+                    sasayakiEnabled = true,
+                    hasSasayakiAudio = true,
+                    textEditorFocused = true,
+                ),
+            )
+        }
+    }
+
+    @Test
+    fun sasayakiKeyboardKeysIgnoreKeyUpAndRepeats() {
+        val settings = ReaderSettings()
+
+        assertNull(
+            readerHardwareKeyActionForKeyEvent(
+                keyCode = KeyEvent.KEYCODE_SPACE,
+                action = KeyEvent.ACTION_UP,
+                repeatCount = 0,
+                settings = settings,
+                sasayakiEnabled = true,
+                hasSasayakiAudio = true,
+            ),
+        )
+        assertNull(
+            readerHardwareKeyActionForKeyEvent(
+                keyCode = KeyEvent.KEYCODE_J,
+                action = KeyEvent.ACTION_DOWN,
+                repeatCount = 1,
+                settings = settings,
+                sasayakiEnabled = true,
+                hasSasayakiAudio = true,
+            ),
+        )
+    }
+
+    private fun sasayakiKeyboardKeyCodes() = listOf(
+        KeyEvent.KEYCODE_SPACE,
+        KeyEvent.KEYCODE_K,
+        KeyEvent.KEYCODE_DPAD_LEFT,
+        KeyEvent.KEYCODE_J,
+        KeyEvent.KEYCODE_DPAD_RIGHT,
+        KeyEvent.KEYCODE_L,
+    )
 }
