@@ -196,6 +196,7 @@
     <string name="dictionary_settings_import" comment="Dictionary settings section label, intentionally matching the Import action noun.">Import</string>
     <string name="dictionary_scan_non_japanese">Scan Non-Japanese Text</string>
     <string name="dictionary_scan_multi_word">Scan Multi-Word Phrases</string>
+    <string name="dictionary_scan_with_shift">Scan Word on Shift Hover</string>
     <string name="dictionary_max_results">Max Results</string>
     <string name="dictionary_scan_length">Scan Length</string>
     <string name="dictionary_collapse_dictionaries">Collapse Dictionaries</string>

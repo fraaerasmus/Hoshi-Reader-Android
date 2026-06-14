@@ -76,6 +76,7 @@ internal fun ChapterWebView(
     onInternalLink: (ReaderInternalLinkTarget) -> Unit,
     scanNonJapaneseText: Boolean,
     scanMultiWordPhrases: Boolean,
+    scanWithShiftKey: Boolean,
     scanLength: Int,
     contentLanguageProfile: ContentLanguageProfile,
     readerSettings: ReaderSettings,
@@ -150,6 +151,7 @@ internal fun ChapterWebView(
         chapterFragment,
         scanNonJapaneseText,
         scanMultiWordPhrases,
+        scanWithShiftKey,
         contentLanguageProfile,
         fontFaceUrl,
     ) {
@@ -158,6 +160,7 @@ internal fun ChapterWebView(
             initialFragment = chapterFragment,
             scanNonJapaneseText = scanNonJapaneseText,
             scanMultiWordPhrases = scanMultiWordPhrases,
+            scanWithShiftKey = scanWithShiftKey,
             contentLanguageProfile = contentLanguageProfile,
             fontFaceUrl = fontFaceUrl,
         )
@@ -178,6 +181,7 @@ internal fun ChapterWebView(
         systemDark,
         scanNonJapaneseText,
         scanMultiWordPhrases,
+        scanWithShiftKey,
         contentLanguageProfile,
         webViewViewportCssSize,
         sasayakiTextColor,
@@ -195,6 +199,7 @@ internal fun ChapterWebView(
             systemDark = systemDark,
             scanNonJapaneseText = scanNonJapaneseText,
             scanMultiWordPhrases = scanMultiWordPhrases,
+            scanWithShiftKey = scanWithShiftKey,
             contentLanguageProfile = contentLanguageProfile,
             webViewViewportCssSize = webViewViewportCssSize,
             sasayakiTextColor = sasayakiTextColor,
@@ -439,6 +444,7 @@ internal data class ReaderWebViewSetupReloadKey(
     val initialFragment: String?,
     val scanNonJapaneseText: Boolean,
     val scanMultiWordPhrases: Boolean,
+    val scanWithShiftKey: Boolean,
     val contentLanguageProfile: ContentLanguageProfile,
     val fontFaceUrl: String?,
 )
@@ -749,6 +755,7 @@ private fun readerSetupScript(
     systemDark: Boolean,
     scanNonJapaneseText: Boolean,
     scanMultiWordPhrases: Boolean,
+    scanWithShiftKey: Boolean,
     contentLanguageProfile: ContentLanguageProfile,
     webViewViewportCssSize: IntSize,
     sasayakiTextColor: Long,
@@ -796,6 +803,7 @@ private fun readerSetupScript(
           document.head.appendChild(style);
           window.scanNonJapaneseText = $scanNonJapaneseText;
           window.scanMultiWordPhrases = $scanMultiWordPhrases;
+          window.scanWithShiftKey = $scanWithShiftKey;
           $selectionScript
           window.hoshiSelection.configure({
             bridge: 'android-reader',
@@ -804,6 +812,9 @@ private fun readerSetupScript(
             rubyAwareRects: true,
             scaleRects: false
           });
+          if (window.scanWithShiftKey !== false) {
+            window.hoshiSelection.enableShiftScan();
+          }
           if (!document.getElementById('hoshi-reader-popup-host-script')) {
             var popupHostScript = document.createElement('script');
             popupHostScript.id = 'hoshi-reader-popup-host-script';

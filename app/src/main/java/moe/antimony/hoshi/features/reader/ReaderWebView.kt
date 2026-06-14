@@ -932,6 +932,18 @@ fun ReaderWebView(
     sasayakiPlayer?.readerSkipButtonAction = sasayakiSettings.readerSkipButtonAction
     val currentReaderKeyHandler = rememberUpdatedState<(KeyEvent) -> Boolean> { event ->
         val textEditorFocused = context.findActivity()?.currentFocus?.onCheckIsTextEditor() == true
+        if (event.keyCode == KeyEvent.KEYCODE_SHIFT_LEFT || event.keyCode == KeyEvent.KEYCODE_SHIFT_RIGHT) {
+            // Forward Shift state to the reader so it can scan the word under the
+            // pointer (Yomitan-style). Non-consuming so Shift keeps normal behavior.
+            if (event.repeatCount == 0 && dictionarySettings.scanWithShiftKey && !textEditorFocused) {
+                val active = event.action == KeyEvent.ACTION_DOWN
+                webView?.evaluateJavascript(
+                    "window.hoshiSelection && window.hoshiSelection.setScanModifier($active, ${dictionarySettings.scanLength})",
+                    null,
+                )
+            }
+            return@rememberUpdatedState false
+        }
         val action = readerHardwareKeyActionForKeyEvent(
             keyCode = event.keyCode,
             action = event.action,
@@ -1250,6 +1262,7 @@ fun ReaderWebView(
                         },
                         scanNonJapaneseText = dictionarySettings.scanNonJapaneseText,
                         scanMultiWordPhrases = dictionarySettings.scanMultiWordPhrases,
+                        scanWithShiftKey = dictionarySettings.scanWithShiftKey,
                         scanLength = dictionarySettings.scanLength,
                         contentLanguageProfile = popupContentLanguageProfile,
                         readerSettings = effectiveSettings,

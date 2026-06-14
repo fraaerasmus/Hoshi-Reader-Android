@@ -191,6 +191,7 @@ window.hoshiRubyGeometry = window.hoshiRubyGeometry || {
 
 window.hoshiSelection = {
     selection: null,
+    shiftScan: { active: false, length: 16, pointer: null, rafPending: false, installed: false },
     options: {
         bridge: 'webkit',
         linkTapResult: null,
@@ -734,6 +735,56 @@ window.hoshiSelection = {
         window.getSelection()?.removeAllRanges();
         CSS.highlights?.get('hoshi-selection')?.clear();
         this.selection = null;
+    },
+
+    // Yomitan-style scan-on-hover: hold Shift and the word under the pointer is
+    // looked up without a tap. Native forwards Shift state via setScanModifier so
+    // it works regardless of WebView focus; the mousemove listener tracks the
+    // pointer (and re-syncs Shift from the event) so moving while held re-scans.
+    setScanModifier(active, length) {
+        this.shiftScan.active = !!active;
+        if (typeof length === 'number' && length > 0) {
+            this.shiftScan.length = length;
+        }
+        if (this.shiftScan.active) {
+            this.scheduleShiftScan();
+        }
+    },
+
+    enableShiftScan() {
+        if (this.shiftScan.installed) return;
+        this.shiftScan.installed = true;
+        const self = this;
+        document.addEventListener('mousemove', (e) => {
+            self.shiftScan.pointer = { x: e.clientX, y: e.clientY };
+            self.shiftScan.active = e.shiftKey;
+            if (e.shiftKey) self.scheduleShiftScan();
+        }, { passive: true });
+    },
+
+    scheduleShiftScan() {
+        if (this.shiftScan.rafPending) return;
+        this.shiftScan.rafPending = true;
+        const self = this;
+        requestAnimationFrame(() => {
+            self.shiftScan.rafPending = false;
+            self.runShiftScan();
+        });
+    },
+
+    runShiftScan() {
+        const state = this.shiftScan;
+        if (window.scanWithShiftKey === false || !state.active || !state.pointer) return;
+        const hit = this.getCharacterAtPoint(state.pointer.x, state.pointer.y);
+        if (!hit) return;
+        // Skip when the pointer is still over the already-selected word: avoids the
+        // same-word toggle-clear in selectText and redundant lookups.
+        if (this.selection &&
+            hit.node === this.selection.startNode &&
+            hit.offset === this.selection.startOffset) {
+            return;
+        }
+        this.selectText(state.pointer.x, state.pointer.y, state.length);
     }
 };
 
