@@ -944,6 +944,14 @@ fun ReaderWebView(
             }
             return@rememberUpdatedState false
         }
+        if (event.keyCode == KeyEvent.KEYCODE_ESCAPE &&
+            event.action == KeyEvent.ACTION_DOWN &&
+            event.repeatCount == 0 &&
+            lookupPopups.isNotEmpty()
+        ) {
+            closeLookupPopupsAndSelection()
+            return@rememberUpdatedState true
+        }
         val action = readerHardwareKeyActionForKeyEvent(
             keyCode = event.keyCode,
             action = event.action,

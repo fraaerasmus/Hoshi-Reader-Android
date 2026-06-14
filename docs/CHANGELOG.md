@@ -13,6 +13,7 @@ The format follows a Keep a Changelog style, and release sections use Semantic V
 - Add multi-word phrase lookup so tapping a word in space-delimited languages (e.g. French "coup de main") matches dictionary entries that span spaces, with a "Scan Multi-Word Phrases" toggle in Dictionary settings; the reader tap scan now follows the configured scan length.
 - Add reader Appearance controls to position the Sasayaki playback buttons (rewind/play/forward) on their own row on the left or centered, and to scale their size from 100% to 200%.
 - Add hardware keyboard shortcuts for Sasayaki playback while audio is loaded: Space or K to play/pause, Left arrow or J to rewind, and Right arrow or L to skip forward; the keys stay out of the way while you are typing in a search field.
+- Add an Esc keyboard shortcut to dismiss the dictionary lookup popup.
 - Add Yomitan-style Shift-hover dictionary lookup: with a mouse or trackpad, hold Shift and the word under the pointer is scanned instantly without tapping, re-scanning as you move. Toggle it with "Scan Word on Shift Hover" in Dictionary settings (on by default).
 
 ## [v1.1.5] - 2026-06-11
