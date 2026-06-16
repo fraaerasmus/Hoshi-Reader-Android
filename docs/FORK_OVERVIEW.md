@@ -92,86 +92,34 @@ a strong bias toward adopting upstream:
 
 ### 2026-06-16 — Merge upstream v1.2.0
 
-Merged 38 upstream commits (release `v1.2.0`) into `hoshi-custom`. The headline
-upstream change was a new **multilingual dictionary-profiles** system, which
-overlapped two fork features and forced the central decision below.
+Merged 38 upstream commits (`v1.2.0`). Upstream introduced a multilingual
+dictionary-**profiles** system and a redesigned JA+EN-only dictionary engine
+(new JNI API: `createLookupObject(languageId)`, `LookupResult.traceCandidates`,
+`PitchEntry.transcriptions`), overlapping the fork's multilingual lookup and
+Learning profiles.
 
-**What upstream v1.2.0 added (and how we reconciled it):**
+Key decisions:
 
-- **Multilingual profiles.** A `profiles/` system where each profile owns a
-  dictionary language plus per-profile dictionary/Anki/reader settings, with
-  global, per-book, and automatic-by-book-language activation. This *supersedes*
-  the fork's older "Learning profiles" feature, which we **dropped**.
-- **A redesigned dictionary engine/bridge** (`HuangAntimony/hoshidicts`,
-  English+Japanese only) with a new JNI API (`createLookupObject(languageId)`,
-  `LookupResult.traceCandidates`, `PitchEntry.transcriptions`).
-- Sasayaki color controls, reader progress-display refactor, English reader
-  counts, orientation lock, recommended English dictionaries, and a
-  selection-layer rewrite (language policies + per-language JS) — all taken from
-  upstream and re-threaded as needed.
+- **Kept the kaihouguide 18-language engine** over upstream's JA+EN engine (the
+  two JNI APIs are incompatible; can't run both). Trade-off: the dictionary
+  subsystem stays permanently diverged, and we forgo upstream's IPA
+  transcriptions and multi-source traces.
+- **Native seam in `HoshiDicts.kt`:** keep the kaihouguide JNI constructors; add
+  `TraceSource`/`TraceCandidate` types + **computed** `LookupResult.traceCandidates`
+  (one algorithm candidate from `deinflected`/`process`/`preprocessorSteps`) and
+  `PitchEntry.transcriptions` (empty). Upstream's dictionary UI then compiles
+  unchanged against our engine.
+- **Language is now profile-driven:** removed `DictionaryLanguage` /
+  `DictionarySettings.lookupLanguage`; lookup language flows from the profile's
+  `dictionaryLanguageId` → `DictionaryLookupQueryService.rebuild(...)` →
+  `setLookupLanguage`. Extended `ContentLanguageProfile.Supported` to all 18
+  languages. Non-JA uses the English (space-aware) selection policy.
+- **Dropped Learning profiles** (superseded by upstream's `profiles/`); **kept**
+  JSON settings backup (minus its profiles store) and the reader UX additions,
+  re-threaded onto upstream's refactors.
+- **Dropped 2 upstream tests** for engine features we lack (multi-source traces,
+  IPA transcriptions).
 
-**Decisions and why:**
-
-1. **Keep the fork's 18-language lookup instead of adopting upstream's
-   Japanese/English-only engine.** Upstream built its own multilingual bridge
-   wrapping a JA+EN-only engine (`codex/english-language-pipeline`), with a JNI
-   API incompatible with the kaihouguide 18-language engine the fork uses.
-   kaihouguide has not adopted upstream's new API, so the two cannot coexist —
-   it is one engine or the other. We chose to **keep 18 languages**.
-   - *Cost accepted:* the dictionary lookup subsystem stays permanently diverged
-     from upstream (the highest-churn area), and we forgo upstream's English IPA
-     transcriptions and multi-source de-inflection traces.
-   - *Why it's worth it:* multilingual lookup is the fork's primary reason to
-     exist; dropping 16 languages would defeat its purpose.
-
-2. **Confine that divergence to a thin "native seam."** Upstream's app code reads
-   the native dictionary types directly (`TraceCandidate`, `TraceSource`,
-   `traceCandidates`, `pitch.transcriptions`). Rather than fork all of that app
-   code, we kept the kaihouguide JNI constructors in `HoshiDicts.kt` and added:
-   - standalone `TraceSource`/`TraceCandidate` types, and
-   - **computed adapter properties** — `LookupResult.traceCandidates` synthesizes
-     a single algorithm trace candidate from the engine's existing
-     `deinflected`/`process`/`preprocessorSteps`, and `PitchEntry.transcriptions`
-     returns empty (kaihouguide has no IPA).
-   This lets *all* of upstream's dictionary UI compile unchanged against our
-   engine. Trace display degrades gracefully to one candidate; IPA is absent.
-
-3. **Adopt upstream's profile architecture for language selection, and extend it
-   to 18 languages.** The fork's old `DictionaryLanguage` enum +
-   `DictionarySettings.lookupLanguage` mechanism was removed. Lookup language now
-   flows from the active profile's `dictionaryLanguageId` →
-   `DictionaryRepository` → `DictionaryLookupQueryService.rebuild(...)` →
-   `createLookupObject()` + `setLookupLanguage(session, languageId)`. We extended
-   `ContentLanguageProfile.Supported` from upstream's JA+EN to all 18 kaihouguide
-   languages (reusing the existing `dictionary_language_*` strings). Non-Japanese
-   languages use the space-aware (English-style) selection policy and a generic
-   font stack.
-   - *Why:* this re-threads the fork's multilingual value onto upstream's code
-     instead of maintaining a parallel mechanism, reducing divergence to just the
-     `Supported` list and the native seam.
-
-4. **Drop the fork's "Learning profiles" feature.** Upstream's profiles system
-   fully supersedes it (and does more). Removed the feature, its DI/navigation
-   wiring, strings, tests, and its entry in the JSON settings backup.
-
-5. **Keep the JSON settings backup**, re-threaded onto upstream's
-   profile-aware settings repositories. Upstream still has no settings/credentials
-   backup, so this remains uniquely valuable. (Its now-removed `profiles` store
-   was dropped since upstream's backup handles profile data.)
-
-6. **Keep the reader UX additions** (Sasayaki footer/shortcuts, Shift-hover,
-   Esc-dismiss, multi-word scan) by unioning them onto upstream's reader and
-   selection-layer rewrites.
-
-7. **Drop two upstream tests** that exercise engine features the kaihouguide
-   build does not provide (multi-source trace-candidate sorting/filtering and IPA
-   pitch transcriptions). They cannot be expressed against our single-candidate /
-   no-transcription adapter, so keeping them would assert behavior we
-   deliberately don't implement.
-
-**Verification performed (no local compile available):** no leftover conflict
-markers; no dangling references to removed symbols (`DictionaryLanguage`,
-`lookupLanguage`, `LearningProfiles`); the lookup-language chain traced
-end-to-end; both string locales valid with no duplicate keys; `Supported` holds
-exactly 18 languages; all "always ours" CI/signing/update items intact. Final
-compile and runtime smoke-testing happen on CI and device.
+Two follow-up fixes after the first CI run: de-duplicated `Profiles` enum
+entries / `when` branches / an import that the merge added on both sides with no
+conflict marker (`5d93cfa`). Released as **Hoshi Custom v1.2.402**.
