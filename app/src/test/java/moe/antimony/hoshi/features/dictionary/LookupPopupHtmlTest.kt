@@ -6,6 +6,11 @@ import de.manhhao.hoshi.LookupResult
 import de.manhhao.hoshi.PitchEntry
 import de.manhhao.hoshi.TermResult
 import de.manhhao.hoshi.TransformGroup
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.features.anki.AnkiPopupSettings
 import moe.antimony.hoshi.features.audio.AudioSettings
 import moe.antimony.hoshi.features.audio.AudioSource
@@ -25,8 +30,14 @@ class LookupPopupHtmlTest {
         )
 
         assertTrue(html.contains("""<link rel="stylesheet" href="https://appassets.androidplatform.net/popup/popup.css">"""))
-        assertTrue(html.contains("""<script src="https://appassets.androidplatform.net/popup/selection.js"></script>"""))
-        assertTrue(html.contains("""<script src="https://appassets.androidplatform.net/popup/popup.js"></script>"""))
+        assertScriptOrder(
+            html,
+            "language-ja.js",
+            "selection-ja.js",
+            "selection.js",
+            """window.hoshiSelection?.configure?.({ language: "ja" });""",
+            "popup.js",
+        )
         assertTrue(html.contains("window.scanLength = 24;"))
         assertTrue(html.contains("html { zoom: 1.15; }"))
         assertTrue(html.contains("""data-hoshi-color-scheme="dark""""))
@@ -50,6 +61,25 @@ class LookupPopupHtmlTest {
         assertTrue(html.contains("<style>.entry-header {}</style>"))
         assertTrue(html.contains("<script>window.hoshiSelection = { selectText: function() {} };</script>"))
         assertTrue(html.contains("<script>window.renderPopup = function() {};</script>"))
+    }
+
+    @Test
+    fun iframePopupShellUsesEnglishSelectionPolicyForEnglishProfiles() {
+        val html = LookupPopupHtml.renderIframeDocument(
+            assets = null,
+            contentLanguageProfile = ContentLanguageProfile.English,
+        )
+
+        assertTrue(html.contains("""<html lang="en""""))
+        assertFalse(html.contains("""<script src="https://appassets.androidplatform.net/popup/selection-ja.js"></script>"""))
+        assertScriptOrder(
+            html,
+            "language-ja.js",
+            "selection-en.js",
+            "selection.js",
+            """window.hoshiSelection?.configure?.({ language: "en" });""",
+            "popup.js",
+        )
     }
 
     @Test
@@ -164,12 +194,15 @@ class LookupPopupHtmlTest {
     }
 
     @Test
-    fun deinflectionTraceIsCarriedInEntryJsonForIframePopup() {
+    fun deinflectionTraceRowsAreCarriedInEntryJsonForIframePopup() {
+        // The kaihouguide engine exposes a single algorithm deinflection trace (process),
+        // which HoshiDicts.LookupResult.traceCandidates adapts into one trace candidate.
         val entryJson = LookupPopupHtml.entryJsonString(
             lookupResult(
                 expression = "食べる",
                 reading = "たべる",
                 glossary = "to eat",
+                deinflected = "食べる",
                 process = arrayOf(
                     TransformGroup(
                         name = "polite",
@@ -179,24 +212,35 @@ class LookupPopupHtmlTest {
             ),
         )
         val html = LookupPopupHtml.renderIframeDocument()
+        val rows = Json.parseToJsonElement(entryJson).jsonObject.getValue("deinflectionTraceRows").jsonArray
 
-        assertTrue(entryJson.contains(""""name":"polite""""))
-        assertTrue(entryJson.contains(""""description":"Polite conjugation of verbs and adjectives.\nUsage: example text.""""))
+        assertTrue(rows.single().jsonArray.single().jsonObject.getValue("name").jsonPrimitive.content == "polite")
+        assertTrue(
+            rows.single().jsonArray.single().jsonObject.getValue("description").jsonPrimitive.content ==
+                "Polite conjugation of verbs and adjectives.\nUsage: example text.",
+        )
         assertTrue(html.contains("""<div class="overlay-close" onclick="closeOverlay()">×</div>"""))
     }
+
+    // NOTE: Upstream's multi-source trace-candidate sorting/filtering and IPA pitch
+    // transcriptions are engine features the kaihouguide hoshidicts build does not
+    // provide (its LookupResult exposes a single algorithm trace and no transcriptions),
+    // so the corresponding upstream tests were dropped during the fork merge.
 
     private fun lookupResult(
         expression: String,
         reading: String,
         glossary: String,
+        deinflected: String = expression,
         process: Array<TransformGroup> = emptyArray(),
+        preprocessorSteps: Int = 0,
         frequencies: Array<FrequencyEntry> = emptyArray(),
         pitches: Array<PitchEntry> = emptyArray(),
     ): LookupResult = LookupResult(
-        expression,
-        expression,
-        process,
-        TermResult(
+        matched = expression,
+        deinflected = deinflected,
+        process = process,
+        term = TermResult(
             expression = expression,
             reading = reading,
             rules = "",
@@ -211,6 +255,16 @@ class LookupPopupHtmlTest {
             frequencies = frequencies,
             pitches = pitches,
         ),
-        0,
+        preprocessorSteps = preprocessorSteps,
     )
+
+    private fun assertScriptOrder(html: String, vararg snippets: String) {
+        var previous = -1
+        snippets.forEach { snippet ->
+            val index = html.indexOf(snippet)
+            assertTrue("$snippet should be present", index >= 0)
+            assertTrue("$snippet should appear after previous script", index > previous)
+            previous = index
+        }
+    }
 }

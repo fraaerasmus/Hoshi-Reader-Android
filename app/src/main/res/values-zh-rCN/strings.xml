@@ -49,15 +49,7 @@
     <string name="main_tab_settings" comment="Main navigation tab label, intentionally matching settings page titles.">设置</string>
     <string name="settings_dictionaries" comment="Settings row label, intentionally matching the backup Dictionaries section.">辞典</string>
     <string name="settings_anki">Anki</string>
-    <string name="settings_profiles">Profiles</string>
-    <string name="profiles_title">Profiles</string>
-    <string name="profiles_add_profile">Add Profile</string>
-    <string name="profiles_edit_profile">Edit Profile</string>
-    <string name="profiles_name">Profile Name</string>
-    <string name="profiles_language">Learning Language</string>
-    <string name="profiles_active">Active</string>
-    <string name="profiles_new_name_format">Profile %1$d</string>
-    <string name="profiles_delete_title_format">Delete \"%1$s\"?</string>
+    <string name="settings_profiles" comment="Settings row label, intentionally matching the Profiles screen title.">Profile</string>
     <string name="settings_appearance">外观</string>
     <string name="settings_behavior">行为</string>
     <string name="settings_advanced">高级</string>
@@ -90,7 +82,7 @@
     <string name="bookshelf_synced_to_ttu_format">已将 %1$s 同步到 ッツ\n%2$d 个字符</string>
     <string name="bookshelf_synced_from_ttu_format">已从 ッツ 同步 %1$s\n%2$d 个字符</string>
     <string name="bookshelf_already_synced_format">%1$s 已同步</string>
-    <string name="bookshelf_delete_book_title_format" comment="Delete confirmation, intentionally matching the imported-font delete confirmation format.">删除“%1$s”？</string>
+    <string name="bookshelf_delete_book_title_format" comment="Delete confirmation, intentionally matching imported-font and profile delete confirmation formats.">删除“%1$s”？</string>
     <string name="bookshelf_delete_remote_book">从 Google Drive 删除</string>
     <string name="bookshelf_delete_remote_book_title_format">从 Google Drive 删除“%1$s”？</string>
     <string name="bookshelf_delete_remote_book_confirmation">这会将远端 Google Drive 文件夹移入回收站。本地书籍不会被删除。</string>
@@ -163,6 +155,7 @@
     <string name="dictionary_update_confirmation_format">将检查并安装以下辞典的更新：\n%1$s</string>
     <string name="dictionary_download_title">下载辞典</string>
     <string name="dictionary_download_prompt">选择要下载并导入的辞典：</string>
+    <string name="dictionary_download_no_recommended">当前 Profile 语言暂无推荐辞典。</string>
     <string name="dictionary_download_item_format">%1$s（%2$s）</string>
     <string name="dictionary_type_term">词条</string>
     <string name="dictionary_type_frequency">词频</string>
@@ -172,7 +165,6 @@
     <string name="dictionary_delete_action">删除辞典</string>
     <string name="dictionary_reorder_action">重新排序辞典</string>
     <string name="dictionary_settings_lookup">查词</string>
-    <string name="dictionary_lookup_language">&#x67E5;&#x8BCD;&#x8BED;&#x8A00;</string>
     <string name="dictionary_language_arabic">&#x963F;&#x62C9;&#x4F2F;&#x8BED;</string>
     <string name="dictionary_language_german">&#x5FB7;&#x8BED;</string>
     <string name="dictionary_language_modern_greek">&#x73B0;&#x4EE3;&#x5E0C;&#x814A;&#x8BED;</string>
@@ -224,10 +216,28 @@
     <string name="dictionary_release_show_keyboard">松开显示键盘</string>
     <string name="dictionary_play_audio">播放音频</string>
     <string name="dictionary_add_to_anki">添加到 Anki</string>
+    <string name="profile_language_japanese">日语</string>
+    <string name="profile_language_english">英语</string>
+    <string name="profiles_title" comment="Profiles screen title, intentionally matching the Settings row label.">Profile</string>
+    <string name="profiles_active_global">当前启用 Profile</string>
+    <string name="profiles_loaded_reader">阅读器 Profile</string>
+    <string name="profiles_language">Profile 语言</string>
+    <string name="profiles_default_for_language_format">%1$s 默认 Profile</string>
+    <string name="profiles_current_profile">当前启用</string>
+    <string name="profiles_create">创建 Profile</string>
+    <string name="profiles_create_copy_settings_note">新 Profile 会基于当前启用 Profile 拷贝一份设置。</string>
+    <string name="profiles_new_profile_name">Profile 名称</string>
+    <string name="profiles_delete_title_format" comment="Profile delete confirmation, intentionally matching book and imported-font delete confirmation formats.">删除“%1$s”？</string>
+    <string name="profiles_default_cannot_delete">默认 Profile 不能删除。</string>
+    <string name="bookshelf_profile">Profile</string>
+    <string name="bookshelf_profile_automatic">自动</string>
+    <string name="bookshelf_profile_automatic_uses_format">将使用 %1$s</string>
     <string name="reader_behavior_volume_keys_turn_pages">音量键翻页</string>
     <string name="reader_behavior_volume_keys_seek_sasayaki">音量键跳转有声书</string>
     <string name="reader_behavior_reverse_volume_key_direction">反转音量键方向</string>
     <string name="reader_behavior_keep_screen_on">保持屏幕常亮</string>
+    <string name="reader_behavior_lock_current_orientation">锁定当前屏幕方向</string>
+    <string name="reader_behavior_open_last_read_book_on_launch">启动时打开最近阅读</string>
     <string name="reader_behavior_auto_check_updates">自动检查更新</string>
     <string name="reader_statistics_pause">暂停统计</string>
     <string name="reader_statistics_start">开始统计</string>
@@ -243,7 +253,9 @@
     <string name="reader_statistics" comment="Reader menu label, intentionally matching advanced statistics.">统计</string>
     <string name="reader_untitled_chapter">未命名</string>
     <string name="reader_jump_to_character">跳转到字符</string>
+    <string name="reader_jump_to_word">跳转到单词</string>
     <string name="reader_character">字符</string>
+    <string name="reader_word" comment="Jump input field label for English-profile approximate word jump.">单词</string>
     <string name="reader_jump">跳转</string>
     <string name="reader_no_highlights">没有标注</string>
     <string name="reader_delete_highlight">删除标注</string>
@@ -254,6 +266,7 @@
     <string name="reader_statistics_time_to_finish_book">读完本书还需：</string>
     <string name="reader_statistics_time_to_finish_chapter">读完本章还需：</string>
     <string name="reader_statistics_characters_read">已读字符：</string>
+    <string name="reader_statistics_words_read">已读单词：</string>
     <string name="reader_statistics_reading_speed">阅读速度：</string>
     <string name="reader_statistics_reading_time">阅读时间：</string>
     <string name="reader_statistics_autostart">自动开始</string>
@@ -308,6 +321,7 @@
     <string name="reader_appearance_paragraph_spacing">段落间距</string>
     <string name="reader_appearance_show_title">显示标题</string>
     <string name="reader_appearance_show_character_count">显示字符数</string>
+    <string name="reader_appearance_show_word_count">显示单词数</string>
     <string name="reader_appearance_show_percentage">显示百分比</string>
     <string name="reader_appearance_always_show_progress">始终显示进度</string>
     <string name="reader_appearance_show_back_button">显示返回按钮</string>
@@ -332,7 +346,7 @@
     <string name="reader_appearance_full_width">全宽</string>
     <string name="reader_appearance_swipe_to_dismiss">滑动关闭</string>
     <string name="reader_appearance_swipe_threshold">滑动阈值</string>
-    <string name="reader_appearance_delete_font_title_format" comment="Imported-font delete confirmation, intentionally matching book delete confirmation format.">删除“%1$s”？</string>
+    <string name="reader_appearance_delete_font_title_format" comment="Imported-font delete confirmation, intentionally matching book and profile delete confirmation formats.">删除“%1$s”？</string>
     <string name="action_enable">启用</string>
     <string name="sync_ttu_sync">ッツ 同步</string>
     <string name="sync_title">同步</string>
@@ -552,6 +566,8 @@
     <string name="sasayaki_reverse_vertical_skip_buttons">纵排时反转</string>
     <string name="sasayaki_reverse_vertical_skip_buttons_help">纵排阅读时，仅交换阅读器底部跳转按钮的实际操作。</string>
     <string name="sasayaki_playback">播放</string>
+    <string name="sasayaki_light_theme">浅色主题</string>
+    <string name="sasayaki_dark_theme">深色主题</string>
     <string name="sasayaki_auto_scroll">自动翻页</string>
     <string name="sasayaki_auto_pause_on_lookup">查词时自动暂停</string>
     <string name="sasayaki_importing_audio">正在导入音频...</string>

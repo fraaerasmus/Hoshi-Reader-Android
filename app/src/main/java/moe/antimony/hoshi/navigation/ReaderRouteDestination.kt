@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.reader.ReaderWebView
 import kotlinx.coroutines.launch
@@ -40,6 +41,7 @@ internal fun ReaderRouteDestination(
     modifier: Modifier = Modifier,
 ) {
     val appContainer = LocalHoshiUiDependencies.current
+    val profileState by appContainer.profileRepository.state.collectAsStateWithLifecycle()
     val syncSettings = appContainer.syncSettingsRepository.settings.collectAsLoadedSettings()
     val sasayakiSettings = appContainer.sasayakiSettingsRepository.settings.collectAsLoadedSettings()
     val autoSyncState = ReaderRouteAutoSyncState(
@@ -61,7 +63,7 @@ internal fun ReaderRouteDestination(
         stateHolder,
         reloadKey,
     ) {
-        value = stateHolder.load(bookId) { entry ->
+        val loaded = stateHolder.load(bookId) { entry ->
             val initialAutoSyncState = ReaderRouteAutoSyncState(
                 syncSettings = syncSettings ?: appContainer.syncSettingsRepository.settings.first(),
                 sasayakiSettings = sasayakiSettings ?: appContainer.sasayakiSettingsRepository.settings.first(),
@@ -79,6 +81,11 @@ internal fun ReaderRouteDestination(
                 }
             }
         }
+        loaded.publishProfileActivation(
+            activateForBook = { metadata -> appContainer.profileActivationService.activateForBook(metadata) },
+            clearLoadedProfile = appContainer.profileActivationService::clearLoadedProfile,
+        )
+        value = loaded
     }
 
     suspend fun exportBook(entry: BookEntry) {
@@ -168,6 +175,7 @@ internal fun ReaderRouteDestination(
             },
             onFlushAutoSyncExport = ::flushExport,
             onForegroundAutoSyncImport = { importOnForeground(state.entry) },
+            contentLanguageProfile = profileState.effectiveContentLanguageProfile,
             onClose = onClose,
             modifier = modifier.fillMaxSize(),
         )

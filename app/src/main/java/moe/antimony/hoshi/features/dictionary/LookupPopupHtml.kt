@@ -2,6 +2,8 @@ package moe.antimony.hoshi.features.dictionary
 
 import android.content.Context
 import de.manhhao.hoshi.LookupResult
+import de.manhhao.hoshi.TraceCandidate
+import de.manhhao.hoshi.TraceSource
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -16,6 +18,9 @@ import java.util.Locale
 internal data class LookupPopupAssets(
     val popupJs: String,
     val popupCss: String,
+    val languageJapaneseJs: String = "",
+    val selectionJapaneseJs: String = "",
+    val selectionEnglishJs: String = "",
     val selectionJs: String = "",
     val readerPopupHostJs: String = "",
 ) {
@@ -29,20 +34,28 @@ internal data class LookupPopupAssets(
             }
 
         private fun read(context: Context): LookupPopupAssets = LookupPopupAssets(
-            popupJs = context.assets.open("hoshi-web/popup/popup.js")
-                .bufferedReader()
-                .use { it.readText() },
-            popupCss = context.assets.open("hoshi-web/popup/popup.css")
-                .bufferedReader()
-                .use { it.readText() },
-            selectionJs = context.assets.open("hoshi-web/shared/selection.js")
-                .bufferedReader()
-                .use { it.readText() },
-            readerPopupHostJs = context.assets.open("hoshi-web/popup/reader-popup-host.js")
-                .bufferedReader()
-                .use { it.readText() },
+            popupJs = context.readAsset("hoshi-web/popup/popup.js"),
+            popupCss = context.readAsset("hoshi-web/popup/popup.css"),
+            languageJapaneseJs = context.readAsset("hoshi-web/shared/language-ja.js"),
+            selectionJapaneseJs = context.readAsset("hoshi-web/shared/selection-ja.js"),
+            selectionEnglishJs = context.readAsset("hoshi-web/shared/selection-en.js"),
+            selectionJs = context.readAsset("hoshi-web/shared/selection.js"),
+            readerPopupHostJs = context.readAsset("hoshi-web/popup/reader-popup-host.js"),
         )
+
+        private fun Context.readAsset(path: String): String =
+            assets.open(path)
+                .bufferedReader()
+                .use { it.readText() }
     }
+
+    fun selectionSupportJs(contentLanguageProfile: ContentLanguageProfile): String =
+        when (contentLanguageProfile.dictionaryLanguageId) {
+            ContentLanguageProfile.JapaneseLanguageId -> "$languageJapaneseJs\n$selectionJapaneseJs"
+            // Non-Japanese languages (English plus the other kaihouguide languages) are
+            // space-delimited, so use the word-boundary-aware English selection policy.
+            else -> "$languageJapaneseJs\n$selectionEnglishJs"
+        }
 }
 
 internal object LookupPopupHtml {
@@ -82,8 +95,21 @@ internal object LookupPopupHtml {
         val customCss = customCssStyle(normalizedSettings.customCSS)
         val fontPrewarmScript = """<script>${popupFontPrewarmScript()}</script>"""
         val eInkCss = if (eInkMode) """<style>$eInkPopupCss</style>""" else ""
+        val selectionSupportJs = assets
+            ?.selectionSupportJs(contentLanguageProfile)
+            ?.takeIf(String::isNotBlank)
+            ?.let { """<script>$it</script>""" }
+            ?: if (assets == null) {
+                selectionSupportAssetNames(contentLanguageProfile).joinToString("\n") { name ->
+                    """<script src="$PopupAssetBaseUrl/$name"></script>"""
+                }
+            } else {
+                ""
+            }
         val selectionJs = assets?.let { """<script>${it.selectionJs}</script>""" }
             ?: """<script src="$PopupAssetBaseUrl/selection.js"></script>"""
+        val selectionLanguageId = JsonPrimitive(contentLanguageProfile.dictionaryLanguageId)
+        val selectionConfigureJs = """<script>window.hoshiSelection?.configure?.({ language: $selectionLanguageId });</script>"""
         val popupJs = assets?.let { """<script>${it.popupJs}</script>""" }
             ?: """<script src="$PopupAssetBaseUrl/popup.js"></script>"""
         return """
@@ -196,7 +222,9 @@ internal object LookupPopupHtml {
                         window.hoshiPostPopupScrollState();
                     }, { passive: true });
                 </script>
+                $selectionSupportJs
                 $selectionJs
+                $selectionConfigureJs
                 $popupJs
             </head>
             <body>
@@ -441,12 +469,18 @@ internal object LookupPopupHtml {
         put("expression", term.expression)
         put("reading", term.reading)
         put("matched", matched)
-        putJsonArray("deinflectionTrace") {
-            process.reversedArray().forEach { transformGroup ->
+        putJsonArray("deinflectionTraceRows") {
+            traceCandidates.sortedForDisplay().forEach { candidate ->
                 add(
-                    buildJsonObject {
-                        put("name", transformGroup.name)
-                        put("description", transformGroup.description)
+                    buildJsonArray {
+                        candidate.trace.reversedArray().forEach { transformGroup ->
+                            add(
+                                buildJsonObject {
+                                    put("name", transformGroup.name)
+                                    put("description", transformGroup.description)
+                                },
+                            )
+                        }
                     },
                 )
             }
@@ -490,6 +524,9 @@ internal object LookupPopupHtml {
                         putJsonArray("pitchPositions") {
                             pitch.pitchPositions.distinct().forEach { add(JsonPrimitive(it)) }
                         }
+                        putJsonArray("transcriptions") {
+                            pitch.transcriptions.distinct().forEach { add(JsonPrimitive(it)) }
+                        }
                     },
                 )
             }
@@ -500,6 +537,22 @@ internal object LookupPopupHtml {
                 .forEach { add(JsonPrimitive(it)) }
         }
     }
+
+    private fun Array<TraceCandidate>.sortedForDisplay(): List<TraceCandidate> =
+        withIndex()
+            .filter { it.value.source != TraceSource.DICTIONARY }
+            .sortedWith(
+                compareBy<IndexedValue<TraceCandidate>> { it.value.source.displayRank() }
+                    .thenBy { it.index },
+            )
+            .map { it.value }
+
+    private fun TraceSource.displayRank(): Int =
+        when (this) {
+            TraceSource.ALGORITHM -> 0
+            TraceSource.BOTH -> 1
+            TraceSource.DICTIONARY -> 2
+        }
 
     private const val androidColorSchemeCss = """
         html[data-hoshi-color-scheme="light"],
@@ -682,3 +735,9 @@ internal object LookupPopupHtml {
 
     private const val PopupAssetBaseUrl = "https://appassets.androidplatform.net/popup"
 }
+
+private fun selectionSupportAssetNames(contentLanguageProfile: ContentLanguageProfile): List<String> =
+    when (contentLanguageProfile.dictionaryLanguageId) {
+        ContentLanguageProfile.JapaneseLanguageId -> listOf("language-ja.js", "selection-ja.js")
+        else -> listOf("language-ja.js", "selection-en.js")
+    }

@@ -27,7 +27,7 @@ internal interface DictionarySearchRepository {
     val dictionarySettings: Flow<DictionarySettings>
     val audioSettings: Flow<AudioSettings>
     suspend fun rebuildLookupQuery()
-    fun lookup(query: String, maxResults: Int, scanLength: Int, language: String): List<LookupResult>
+    fun lookup(query: String, maxResults: Int, scanLength: Int): List<LookupResult>
     fun dictionaryStyles(): Map<String, String>
 }
 
@@ -44,8 +44,8 @@ internal class AndroidDictionarySearchRepository @Inject constructor(
         dictionaryRepository.rebuildLookupQuery()
     }
 
-    override fun lookup(query: String, maxResults: Int, scanLength: Int, language: String): List<LookupResult> =
-        dictionaryRepository.lookup(query, maxResults, scanLength, language)
+    override fun lookup(query: String, maxResults: Int, scanLength: Int): List<LookupResult> =
+        dictionaryRepository.lookup(query, maxResults, scanLength)
 
     override fun dictionaryStyles(): Map<String, String> =
         dictionaryRepository.dictionaryStyles()
@@ -97,6 +97,9 @@ internal class DictionarySearchViewModel : ViewModel {
 
     val uiState: StateFlow<DictionarySearchUiState> = _uiState.asStateFlow()
 
+    private var observedEffectiveProfileId: String? = null
+    private var profileChangeVersion: Int = 0
+
     private fun collectInitialState() {
         scope.launch {
             withContext(ioDispatcher) {
@@ -128,9 +131,40 @@ internal class DictionarySearchViewModel : ViewModel {
         }
     }
 
+    fun onEffectiveProfileChanged(profileId: String) {
+        val previousProfileId = observedEffectiveProfileId
+        if (previousProfileId == profileId) return
+        observedEffectiveProfileId = profileId
+        if (previousProfileId == null) return
+
+        profileChangeVersion += 1
+        _uiState.update { current ->
+            current.copy(
+                lastQuery = "",
+                results = emptyList(),
+                hasSearched = false,
+                isSearching = false,
+                errorMessage = null,
+                dictionaryStyles = emptyMap(),
+                popups = emptyList(),
+                resultClearSelectionSignal = 0,
+                backCount = 0,
+                forwardCount = 0,
+                backSignal = 0,
+                forwardSignal = 0,
+            )
+        }
+        scope.launch {
+            withContext(ioDispatcher) {
+                runCatching { repository.rebuildLookupQuery() }
+            }
+        }
+    }
+
     fun runLookup() {
         val query = _uiState.value.query
         val dictionarySettings = _uiState.value.dictionarySettings.normalized()
+        val lookupProfileVersion = profileChangeVersion
         scope.launch {
             _uiState.update { it.copy(isSearching = true, errorMessage = null) }
             runCatching {
@@ -146,52 +180,49 @@ internal class DictionarySearchViewModel : ViewModel {
                         val styles = repository.dictionaryStyles()
                         DictionarySearchContent.runLookup(
                             query = query,
-                            lookup = {
-                                repository.lookup(
-                                    it,
-                                    dictionarySettings.maxResults,
-                                    dictionarySettings.scanLength,
-                                    dictionarySettings.lookupLanguage.code,
-                                )
-                            },
+                            lookup = { repository.lookup(it, dictionarySettings.maxResults, dictionarySettings.scanLength) },
                             dictionaryStyles = styles,
                         )
                     }
                 }
             }.onSuccess { state ->
-                _uiState.update {
-                    it.copy(
-                        lastQuery = state.lastQuery,
-                        results = state.results,
-                        hasSearched = true,
-                        isSearching = false,
-                        errorMessage = null,
-                        dictionaryStyles = state.dictionaryStyles,
-                        popups = emptyList(),
-                        resultClearSelectionSignal = 0,
-                        backCount = 0,
-                        forwardCount = 0,
-                        backSignal = 0,
-                        forwardSignal = 0,
-                    )
+                if (lookupProfileVersion == profileChangeVersion) {
+                    _uiState.update {
+                        it.copy(
+                            lastQuery = state.lastQuery,
+                            results = state.results,
+                            hasSearched = true,
+                            isSearching = false,
+                            errorMessage = null,
+                            dictionaryStyles = state.dictionaryStyles,
+                            popups = emptyList(),
+                            resultClearSelectionSignal = 0,
+                            backCount = 0,
+                            forwardCount = 0,
+                            backSignal = 0,
+                            forwardSignal = 0,
+                        )
+                    }
                 }
             }.onFailure { error ->
-                _uiState.update {
-                    it.copy(
-                        lastQuery = query.trim(),
-                        results = emptyList(),
-                        hasSearched = true,
-                        isSearching = false,
-                        errorMessage = error.localizedMessage?.let(UiText::Literal)
-                            ?: UiText.Resource(R.string.dictionary_lookup_failed),
-                        dictionaryStyles = emptyMap(),
-                        popups = emptyList(),
-                        resultClearSelectionSignal = 0,
-                        backCount = 0,
-                        forwardCount = 0,
-                        backSignal = 0,
-                        forwardSignal = 0,
-                    )
+                if (lookupProfileVersion == profileChangeVersion) {
+                    _uiState.update {
+                        it.copy(
+                            lastQuery = query.trim(),
+                            results = emptyList(),
+                            hasSearched = true,
+                            isSearching = false,
+                            errorMessage = error.localizedMessage?.let(UiText::Literal)
+                                ?: UiText.Resource(R.string.dictionary_lookup_failed),
+                            dictionaryStyles = emptyMap(),
+                            popups = emptyList(),
+                            resultClearSelectionSignal = 0,
+                            backCount = 0,
+                            forwardCount = 0,
+                            backSignal = 0,
+                            forwardSignal = 0,
+                        )
+                    }
                 }
             }
         }
@@ -199,7 +230,7 @@ internal class DictionarySearchViewModel : ViewModel {
 
     fun lookupRedirect(query: String): List<LookupResult> {
         val settings = _uiState.value.dictionarySettings.normalized()
-        return repository.lookup(query, settings.maxResults, settings.scanLength, settings.lookupLanguage.code)
+        return repository.lookup(query, settings.maxResults, settings.scanLength)
     }
 
     fun entryForPopup(popupId: String, index: Int): LookupResult? {
@@ -216,7 +247,7 @@ internal class DictionarySearchViewModel : ViewModel {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return emptyList()
         val settings = _uiState.value.dictionarySettings.normalized()
-        val results = repository.lookup(trimmed, settings.maxResults, settings.scanLength, settings.lookupLanguage.code)
+        val results = repository.lookup(trimmed, settings.maxResults, settings.scanLength)
         if (results.isNotEmpty()) {
             _uiState.update {
                 it.copy(

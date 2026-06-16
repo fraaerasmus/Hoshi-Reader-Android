@@ -30,7 +30,7 @@ interface AnkiBackend {
 }
 
 enum class AnkiFetchFailure(
-    @StringRes val userMessageRes: Int,
+    @param:StringRes val userMessageRes: Int,
     val userMessage: String,
 ) {
     ApiUnavailable(
@@ -88,7 +88,9 @@ class AnkiDroidBackendAdapter @Inject constructor(
     override fun isAvailable(): Boolean = api.isAvailable()
 
     override fun fetchDecks(): List<AnkiDeck> =
-        api.deckList().map { (id, name) -> AnkiDeck(id, name) }
+        api.deckList()
+            .map { (id, name) -> AnkiDeck(id, name) }
+            .sortedAnkiDecks()
 
     override fun fetchNoteTypes(): List<AnkiNoteType> {
         val unreadableModels = mutableListOf<String>()
@@ -168,3 +170,10 @@ class AnkiDroidBackendAdapter @Inject constructor(
 
     override fun sync(): Boolean = api.sync()
 }
+
+internal fun List<AnkiDeck>.sortedAnkiDecks(): List<AnkiDeck> =
+    sortedWith(
+        compareBy<AnkiDeck, String>(String.CASE_INSENSITIVE_ORDER) { it.name }
+            .thenBy { it.name }
+            .thenBy { it.id },
+    )

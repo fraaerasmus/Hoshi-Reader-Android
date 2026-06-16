@@ -114,6 +114,31 @@ class AnkiBackendAdapterTest {
     }
 
     @Test
+    fun adapterSortsDecksByName() {
+        val api = FakeAnkiContentApi(
+            decks = mapOf(
+                4L to "Mining::Light Novel",
+                1L to "Zulu",
+                3L to "Mining",
+                2L to "Default",
+                5L to "Mining::Grammar",
+            ),
+        )
+        val backend = AnkiDroidBackendAdapter(api)
+
+        assertEquals(
+            listOf(
+                AnkiDeck(2L, "Default"),
+                AnkiDeck(3L, "Mining"),
+                AnkiDeck(5L, "Mining::Grammar"),
+                AnkiDeck(4L, "Mining::Light Novel"),
+                AnkiDeck(1L, "Zulu"),
+            ),
+            backend.fetchDecks(),
+        )
+    }
+
+    @Test
     fun adapterReportsUnavailableAnkiDroidApi() {
         val backend = AnkiDroidBackendAdapter(
             FakeAnkiContentApi(

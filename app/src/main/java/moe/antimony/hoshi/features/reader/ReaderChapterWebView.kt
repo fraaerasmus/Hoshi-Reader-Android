@@ -51,6 +51,7 @@ import moe.antimony.hoshi.R
 import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.HighlightColor
+import moe.antimony.hoshi.features.dictionary.DictionarySettings
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import moe.antimony.hoshi.webview.applyHoshiWebViewSecurityDefaults
 
@@ -77,7 +78,7 @@ internal fun ChapterWebView(
     scanNonJapaneseText: Boolean,
     scanMultiWordPhrases: Boolean,
     scanWithShiftKey: Boolean,
-    scanLength: Int,
+    selectionScanLength: Int,
     contentLanguageProfile: ContentLanguageProfile,
     readerSettings: ReaderSettings,
     chapterHighlightsJson: String?,
@@ -210,17 +211,16 @@ internal fun ChapterWebView(
             assets = readerWebAssets,
         )
     }
-    val currentOnFragmentRestored = rememberUpdatedState<(WebView, String) -> Boolean> { restoredWebView, restoreToken ->
-        if (restoreToken != loadKey) return@rememberUpdatedState false
-        if (chapterFragment != null) {
-            restoredWebView.evaluateJavascript(ReaderPaginationScripts.progressInvocation()) { progressResult ->
-                ReaderPaginationScripts.doubleResult(progressResult)?.let(currentOnSaveBookmark.value)
-                currentOnRestoreCompleted.value()
-            }
-        } else {
-            currentOnRestoreCompleted.value()
-        }
-        true
+    val currentOnRestoreAccepted = rememberUpdatedState<(WebView, String) -> (() -> Unit)?> { restoredWebView, restoreToken ->
+        if (restoreToken != loadKey) return@rememberUpdatedState null
+        readerRestoreCompletionAfterVisibleAction(
+            chapterFragment = chapterFragment,
+            evaluateProgress = { callback ->
+                restoredWebView.evaluateJavascript(ReaderPaginationScripts.progressInvocation(), callback)
+            },
+            onSaveProgress = currentOnSaveBookmark.value,
+            onRestoreCompleted = currentOnRestoreCompleted.value,
+        )
     }
     LaunchedEffect(readerWebView, loadKey, chapterSasayakiCuesJson, isWebViewRestoring) {
         val webView = readerWebView ?: return@LaunchedEffect
@@ -251,7 +251,7 @@ internal fun ChapterWebView(
                 )
                 addJavascriptInterface(
                     ReaderRestoreBridge(this) { restoredWebView, restoreToken ->
-                        currentOnFragmentRestored.value(restoredWebView, restoreToken)
+                        currentOnRestoreAccepted.value(restoredWebView, restoreToken)
                     },
                     "HoshiReaderRestore",
                 )
@@ -271,7 +271,6 @@ internal fun ChapterWebView(
                     view.evaluateReaderSetupScript(
                         source = readerSetupScript,
                         loadKey = loadKey,
-                        sasayakiCuesJson = chapterSasayakiCuesJson,
                     )
                 }
                 readerWebView = this
@@ -285,7 +284,7 @@ internal fun ChapterWebView(
                     ReaderSelectionCommand.SelectText(
                         x = androidPixelsToCssPixels(x, density),
                         y = androidPixelsToCssPixels(y, density),
-                        maxLength = scanLength,
+                        maxLength = selectionScanLength,
                     ).source,
                 ) { result ->
                     val selectionResult = ReaderSelectionResult.fromWebViewResult(result)
@@ -427,7 +426,6 @@ internal fun ChapterWebView(
                     view.evaluateReaderSetupScript(
                         source = readerSetupScript,
                         loadKey = loadKey,
-                        sasayakiCuesJson = chapterSasayakiCuesJson,
                     )
                 }
                 webView.loadUrl(baseUrl)
@@ -438,6 +436,22 @@ internal fun ChapterWebView(
 
 internal fun readerWebViewReadyToLoad(webViewViewportSize: IntSize): Boolean =
     webViewViewportSize != IntSize.Zero
+
+internal fun readerRestoreCompletionAfterVisibleAction(
+    chapterFragment: String?,
+    evaluateProgress: (((String?) -> Unit) -> Unit),
+    onSaveProgress: (Double) -> Unit,
+    onRestoreCompleted: () -> Unit,
+): () -> Unit = {
+    if (chapterFragment != null) {
+        evaluateProgress { progressResult ->
+            ReaderPaginationScripts.doubleResult(progressResult)?.let(onSaveProgress)
+            onRestoreCompleted()
+        }
+    } else {
+        onRestoreCompleted()
+    }
+}
 
 internal data class ReaderWebViewSetupReloadKey(
     val initialProgress: Double,
@@ -512,6 +526,9 @@ internal fun readerShouldReserveSasayakiTopToggle(bookRoot: File?, settings: Sas
         settings.showReaderToggle &&
         bookRoot?.resolve(ReaderSasayakiMatchFileName)?.isFile == true &&
         bookRoot.resolve(ReaderSasayakiPlaybackFileName).isFile
+
+internal fun readerSelectionMaxLength(settings: DictionarySettings): Int =
+    settings.normalized().scanLength
 
 private class HoshiReaderWebView(context: Context) : WebView(context) {
     var onHighlightCreated: (HighlightColor, String, ReaderHighlightCreationResult) -> Unit = { _, _, _ -> }
@@ -767,6 +784,7 @@ private fun readerSetupScript(
 ): String {
     val eInkMode = readerJavaScriptStringLiteral(if (settings.eInkMode) "true" else "false")
     val contentLanguageTag = readerJavaScriptStringLiteral(contentLanguageProfile.htmlLang)
+    val selectionLanguageId = readerJavaScriptStringLiteral(contentLanguageProfile.dictionaryLanguageId)
     val viewportLayout = readerViewportCssLayout(
         settings = settings,
         viewportCssWidth = webViewViewportCssSize.width,
@@ -783,6 +801,7 @@ private fun readerSetupScript(
     ).let { css ->
         "${viewportLayout.cssVariables()}\n$css"
     }.let(::readerJavaScriptStringLiteral)
+    val selectionSupportScript = assets.selectionSupportJs(contentLanguageProfile)
     val selectionScript = assets.selectionJs
     val paginationScript = ReaderPaginationScripts.shellScriptWithRestoreToken(
         initialProgress = initialProgress,
@@ -804,9 +823,11 @@ private fun readerSetupScript(
           window.scanNonJapaneseText = $scanNonJapaneseText;
           window.scanMultiWordPhrases = $scanMultiWordPhrases;
           window.scanWithShiftKey = $scanWithShiftKey;
+          $selectionSupportScript
           $selectionScript
           window.hoshiSelection.configure({
             bridge: 'android-reader',
+            language: $selectionLanguageId,
             linkTapResult: 'link',
             imageTapResult: 'image',
             rubyAwareRects: true,
@@ -1089,14 +1110,13 @@ internal class ReaderContinuousScrollFocusTracker {
 
 private class ReaderRestoreBridge(
     private val webView: WebView,
-    private val onRestoreCompleted: (WebView, String) -> Boolean,
+    private val onRestoreAccepted: (WebView, String) -> (() -> Unit)?,
 ) {
     @JavascriptInterface
     fun postMessage(message: String) {
         webView.post {
-            if (onRestoreCompleted(webView, message)) {
-                webView.showAfterReaderRestore()
-            }
+            val afterVisible = onRestoreAccepted(webView, message) ?: return@post
+            webView.showAfterReaderRestore(afterVisible)
         }
     }
 }
@@ -1119,7 +1139,7 @@ private fun WebView.hideForReaderRestore() {
     alpha = 0f
 }
 
-private fun WebView.showAfterReaderRestore() {
+private fun WebView.showAfterReaderRestore(onVisible: () -> Unit) {
     animate().cancel()
     val generation = readerRestoreGenerations[this] ?: 0L
     postVisualStateCallback(
@@ -1130,6 +1150,7 @@ private fun WebView.showAfterReaderRestore() {
                     if (readerRestoreGenerations[this@showAfterReaderRestore] == generation) {
                         animate().cancel()
                         alpha = 1f
+                        onVisible()
                     }
                 }
             }
@@ -1140,13 +1161,8 @@ private fun WebView.showAfterReaderRestore() {
 private fun WebView.evaluateReaderSetupScript(
     source: String,
     loadKey: String,
-    sasayakiCuesJson: String?,
 ) {
-    if (sasayakiCuesJson != null) {
-        readerAppliedSasayakiCues[this] = ReaderAppliedSasayakiCues(loadKey, sasayakiCuesJson)
-    } else {
-        readerAppliedSasayakiCues.remove(this)
-    }
+    readerAppliedSasayakiCues.remove(this)
     evaluateJavascript(source, null)
 }
 

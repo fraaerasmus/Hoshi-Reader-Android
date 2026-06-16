@@ -35,7 +35,6 @@ class DictionarySearchViewModelTest {
             lookupResults = listOf(lookupResult("猫")),
             dictionaryStyles = mapOf("JMdict" to ".entry {}"),
             dictionarySettings = DictionarySettings(
-                lookupLanguage = DictionaryLanguage.French,
                 maxResults = 2,
                 scanLength = 7,
             ),
@@ -113,6 +112,40 @@ class DictionarySearchViewModelTest {
         assertEquals(0, state.forwardCount)
         assertEquals(0, state.backSignal)
         assertEquals(0, state.forwardSignal)
+        assertEquals(listOf("猫:16:16"), repository.lookupCalls)
+    }
+
+    @Test
+    fun effectiveProfileChangeClearsRenderedResultsAndStylesWithoutClearingQuery() {
+        val repository = FakeDictionarySearchRepository(
+            lookupResults = listOf(lookupResult("猫")),
+            dictionaryStyles = mapOf("JMdict" to ".entry {}"),
+        )
+        val viewModel = viewModel(repository)
+        viewModel.onEffectiveProfileChanged("japanese")
+        viewModel.updateQuery("猫")
+        viewModel.runLookup()
+        viewModel.setPopups(listOf(popup("old")))
+        viewModel.recordLookupRedirected(1)
+        viewModel.navigateBack()
+
+        viewModel.onEffectiveProfileChanged("english")
+
+        val state = viewModel.uiState.value
+        assertEquals("猫", state.query)
+        assertEquals("", state.lastQuery)
+        assertEquals(emptyList<LookupResult>(), state.results)
+        assertFalse(state.hasSearched)
+        assertFalse(state.isSearching)
+        assertNull(state.errorMessage)
+        assertEquals(emptyMap<String, String>(), state.dictionaryStyles)
+        assertEquals(emptyList<LookupPopupItem>(), state.popups)
+        assertEquals(0, state.resultClearSelectionSignal)
+        assertEquals(0, state.backCount)
+        assertEquals(0, state.forwardCount)
+        assertEquals(0, state.backSignal)
+        assertEquals(0, state.forwardSignal)
+        assertEquals(3, repository.rebuildCount)
         assertEquals(listOf("猫:16:16"), repository.lookupCalls)
     }
 
@@ -199,7 +232,6 @@ class DictionarySearchViewModelTest {
             lookupResults = listOf(lookupResult("食べる")),
             dictionaryStyles = mapOf("Dict" to ".term {}"),
             dictionarySettings = DictionarySettings(
-                lookupLanguage = DictionaryLanguage.German,
                 maxResults = 4,
                 scanLength = 12,
             ),
@@ -272,8 +304,6 @@ class DictionarySearchViewModelTest {
 
     private fun lookupResult(matched: String): LookupResult = LookupResult(
         matched = matched,
-        deinflected = matched,
-        process = emptyArray(),
         term = TermResult(
             expression = matched,
             reading = matched,
@@ -289,6 +319,8 @@ class DictionarySearchViewModelTest {
             frequencies = emptyArray<FrequencyEntry>(),
             pitches = emptyArray<PitchEntry>(),
         ),
+        deinflected = "",
+        process = emptyArray(),
         preprocessorSteps = 0,
     )
 }

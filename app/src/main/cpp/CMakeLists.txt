@@ -14,6 +14,10 @@ add_subdirectory(
     EXCLUDE_FROM_ALL
 )
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(hoshidicts PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wno-c23-extensions>")
+endif()
+
 add_library(hoshidicts_jni SHARED
     "${HOSHIDICTS_BRIDGE_ROOT}/app/src/main/cpp/hoshidicts_jni.cpp"
 )

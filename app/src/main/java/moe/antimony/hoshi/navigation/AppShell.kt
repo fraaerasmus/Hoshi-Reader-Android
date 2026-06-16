@@ -31,6 +31,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import moe.antimony.hoshi.LocalHoshiUiDependencies
+import moe.antimony.hoshi.epub.BookSortOption
 import moe.antimony.hoshi.features.anki.AnkiView
 import moe.antimony.hoshi.features.bookshelf.BookshelfView
 import moe.antimony.hoshi.features.bookshelf.HoshiMainShell
@@ -41,11 +42,11 @@ import moe.antimony.hoshi.features.bookshelf.SettingsTab
 import moe.antimony.hoshi.features.diagnostics.DiagnosticsView
 import moe.antimony.hoshi.features.dictionary.DictionarySearchView
 import moe.antimony.hoshi.features.dictionary.DictionaryView
-import moe.antimony.hoshi.features.profiles.LearningProfilesView
 import moe.antimony.hoshi.features.reader.ReaderAppearanceScreen
 import moe.antimony.hoshi.features.reader.ReaderBehaviorScreen
 import moe.antimony.hoshi.features.reader.ReaderFontManager
 import moe.antimony.hoshi.features.reader.ReaderSettings
+import moe.antimony.hoshi.features.profiles.ProfilesView
 import moe.antimony.hoshi.features.sasayaki.SasayakiMatchView
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import moe.antimony.hoshi.features.settings.AdvancedSettingsView
@@ -132,26 +133,51 @@ fun AppShell(
         selectedTab = tab
     }
 
+    fun clearLoadedReaderProfile() {
+        appContainer.profileActivationService.clearLoadedProfile()
+    }
+
     LaunchedEffect(dictionarySettingsRepository) {
         dictionarySettingsRepository.settings.collect { settings ->
             launchRouteStateHolder.defaultRouteAfterSettingsLoad(
-                settings = settings,
+                readerSettings = currentReaderSettings,
+                dictionarySettings = settings,
                 hasPendingImport = currentPendingImportUri != null,
                 isBooksTabSelected = selectedTab == MainTab.Books,
                 backStack = booksBackStack,
-            )?.let(::selectTopLevelRoute)
+                recentBookIdProvider = {
+                    runCatching {
+                        bookRepository.loadBookEntries(BookSortOption.Recent)
+                            .firstOrNull()
+                            ?.metadata
+                            ?.id
+                    }.getOrNull()
+                },
+            )?.let { route ->
+                when (route) {
+                    is AppRoute.ReaderRoute -> {
+                        selectedTab = MainTab.Books
+                        booksBackStack.openReaderRoute(route.bookId)
+                    }
+                    else -> selectTopLevelRoute(route)
+                }
+            }
         }
     }
 
     fun popRoute() {
-        selectedBackStack().popAppRoute()
+        if (selectedTab == MainTab.Books) {
+            booksBackStack.popAppRoute(onReaderRouteRemoved = ::clearLoadedReaderProfile)
+        } else {
+            selectedBackStack().popAppRoute()
+        }
     }
 
     fun closeReaderRoute() {
         if (readerBookmarkRefreshState.consumeDirty()) {
             bookshelfRefreshKey += 1
         }
-        booksBackStack.popAppRoute()
+        booksBackStack.popAppRoute(onReaderRouteRemoved = ::clearLoadedReaderProfile)
     }
 
     fun openSettingsDetail(section: SettingsDetailSection) {
@@ -167,7 +193,10 @@ fun AppShell(
     fun openSasayakiMatch(request: SasayakiMatchRequest) {
         sasayakiMatchRequestStore.put(request)
         selectedTab = MainTab.Books
-        booksBackStack.openSasayakiMatchRoute(request.bookId)
+        booksBackStack.openSasayakiMatchRoute(
+            bookId = request.bookId,
+            onReaderRouteRemoved = ::clearLoadedReaderProfile,
+        )
     }
 
     LaunchedEffect(pendingImportUri) {
@@ -175,6 +204,7 @@ fun AppShell(
         pendingImportRouteCoordinator.routePendingImport(
             hasPendingImport = hasPendingImport,
             backStack = booksBackStack,
+            onReaderRouteRemoved = ::clearLoadedReaderProfile,
         )
         if (hasPendingImport) {
             selectedTab = MainTab.Books
@@ -268,7 +298,9 @@ fun AppShell(
                         )
                     } else {
                         MissingRouteRedirect {
-                            booksBackStack.routeExternalBookImport()
+                            booksBackStack.routeExternalBookImport(
+                                onReaderRouteRemoved = ::clearLoadedReaderProfile,
+                            )
                             selectedTab = MainTab.Books
                         }
                     }
@@ -401,15 +433,15 @@ private fun SettingsDetailDestination(
     onSelectedTabChange: (MainTab) -> Unit,
 ) {
     when (route.section) {
-        SettingsDetailSection.Profiles -> LearningProfilesView(
-            onClose = onClose,
-            modifier = Modifier.fillMaxSize(),
-        )
         SettingsDetailSection.Dictionaries -> DictionaryView(
             onClose = onClose,
             modifier = Modifier.fillMaxSize(),
         )
         SettingsDetailSection.Anki -> AnkiView(
+            onClose = onClose,
+            modifier = Modifier.fillMaxSize(),
+        )
+        SettingsDetailSection.Profiles -> ProfilesView(
             onClose = onClose,
             modifier = Modifier.fillMaxSize(),
         )
@@ -475,6 +507,7 @@ private fun SettingsDestination.toSection(): SettingsDetailSection = when (this)
     SettingsDestination.Profiles -> SettingsDetailSection.Profiles
     SettingsDestination.Dictionaries -> SettingsDetailSection.Dictionaries
     SettingsDestination.Anki -> SettingsDetailSection.Anki
+    SettingsDestination.Profiles -> SettingsDetailSection.Profiles
     SettingsDestination.Appearance -> SettingsDetailSection.Appearance
     SettingsDestination.Behavior -> SettingsDetailSection.Behavior
     SettingsDestination.Advanced -> SettingsDetailSection.Advanced

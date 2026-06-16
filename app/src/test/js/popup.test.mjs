@@ -4,6 +4,9 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const popupSourceUrl = new URL('../../main/assets/hoshi-web/popup/popup.js', import.meta.url);
+const japaneseLanguageUrl = new URL('../../main/assets/hoshi-web/shared/language-ja.js', import.meta.url);
+const japaneseSelectionUrl = new URL('../../main/assets/hoshi-web/shared/selection-ja.js', import.meta.url);
+const sharedSelectionUrl = new URL('../../main/assets/hoshi-web/shared/selection.js', import.meta.url);
 
 class FakeContainer {
     constructor() {
@@ -31,6 +34,7 @@ class FakeElement {
         this.matches = new Set(matches);
         this.nodeType = 1;
         this.parentElement = null;
+        this.textContent = '';
         this.style = {
             properties: new Map(),
             setProperty(name, value) {
@@ -59,6 +63,10 @@ class FakeElement {
         return child;
     }
 
+    append(...children) {
+        children.forEach((child) => this.appendChild(child));
+    }
+
     addEventListener(type, listener) {
         const listeners = this.listeners?.get(type) ?? [];
         listeners.push(listener);
@@ -74,7 +82,7 @@ class FakeElement {
     remove() {}
 }
 
-function popupContext() {
+function popupContext({ loadJapaneseLanguageAsset = false, loadSelectionAssets = false } = {}) {
     const documentElement = new FakeElement();
     const body = new FakeContainer();
     body.appendChild = function(element) {
@@ -101,6 +109,7 @@ function popupContext() {
     };
     const selectTextCalls = [];
     const tapOutsideMessages = [];
+    const mineEntryMessages = [];
     const window = {
         scrollX: 0,
         scrollY: 0,
@@ -127,10 +136,23 @@ function popupContext() {
                         tapOutsideMessages.push(message);
                     },
                 },
+                mineEntry: {
+                    postMessage(message) {
+                        mineEntryMessages.push(message);
+                        return true;
+                    },
+                },
             },
         },
         window,
     };
+    if (loadJapaneseLanguageAsset) {
+        vm.runInNewContext(fs.readFileSync(japaneseLanguageUrl, 'utf8'), context);
+    }
+    if (loadSelectionAssets) {
+        vm.runInNewContext(fs.readFileSync(japaneseSelectionUrl, 'utf8'), context);
+        vm.runInNewContext(fs.readFileSync(sharedSelectionUrl, 'utf8'), context);
+    }
     vm.runInNewContext(fs.readFileSync(popupSourceUrl, 'utf8'), context);
     return {
         context,
@@ -138,6 +160,7 @@ function popupContext() {
         document,
         selectTextCalls,
         tapOutsideMessages,
+        mineEntryMessages,
     };
 }
 
@@ -164,6 +187,15 @@ function clickEvent(target, x, y) {
             this.defaultPrevented = true;
         },
     };
+}
+
+function descendants(element) {
+    const out = [];
+    for (const child of element.children ?? []) {
+        out.push(child);
+        out.push(...descendants(child));
+    }
+    return out;
 }
 
 test('popup touch tap selects text even when WebView suppresses the follow-up click', () => {
@@ -257,4 +289,133 @@ test('popup action controls remain DOM buttons even if a legacy native button fl
     assert.equal(audioSlot.children[0].className, 'button-slot-icon');
     assert.equal(mineSlot.tagName, 'BUTTON');
     assert.equal(mineSlot.disabled, true);
+});
+
+test('popup language detection works with split selection policy assets', () => {
+    const { context } = popupContext({
+        loadJapaneseLanguageAsset: true,
+        loadSelectionAssets: true,
+    });
+
+    assert.doesNotThrow(() => context.getLanguageFromText('plain English glossary', 'en'));
+    assert.equal(context.getLanguageFromText('plain English glossary', 'en'), 'en');
+    assert.equal(context.getLanguageFromText('猫 glossary', 'en'), 'ja');
+});
+
+test('popup language detection does not depend on the selection object', () => {
+    const { context } = popupContext({ loadJapaneseLanguageAsset: true });
+    delete context.window.hoshiSelection;
+
+    assert.equal(context.getLanguageFromText('猫 glossary', 'en'), 'ja');
+});
+
+test('popup renders each deinflection trace candidate as its own tag row', () => {
+    const { context } = popupContext();
+
+    const tags = context.createTags({
+        expression: '食べる',
+        reading: 'たべる',
+        deinflectionTraceRows: [
+            [
+                { name: 'polite', description: 'Polite form' },
+                { name: 'past', description: 'Past tense' },
+            ],
+            [
+                { name: 'redirect', description: 'Dictionary redirect' },
+            ],
+        ],
+        frequencies: [],
+        pitches: [],
+    });
+
+    assert.ok(tags);
+    const rows = tags.children.filter((node) => String(node.className).split(' ').includes('tag-row'));
+    assert.equal(rows.length, 2);
+    assert.deepEqual(rows[0].children.map((node) => node.textContent), ['polite', 'past']);
+    assert.deepEqual(rows[1].children.map((node) => node.textContent), ['redirect']);
+});
+
+test('popup transcription entries do not render as Japanese pitch accents', () => {
+    const { context } = popupContext();
+
+    const tags = context.createTags({
+        expression: 'read',
+        reading: 'read',
+        deinflectionTraceRows: [],
+        frequencies: [],
+        pitches: [
+            {
+                dictionary: 'English',
+                pitchPositions: [],
+                transcriptions: ['/riːd/', '/rɛd/'],
+            },
+        ],
+    });
+    const nodes = descendants(tags);
+
+    assert.ok(tags);
+    assert.equal(nodes.some((node) => String(node.className).split(' ').includes('transcription-list')), true);
+    assert.equal(nodes.some((node) => String(node.className).split(' ').includes('pitch-group')), false);
+    assert.equal(nodes.some((node) => node.textContent === '/riːd/'), true);
+});
+
+test('popup preserves IPA dictionary transcription delimiters', () => {
+    const { context } = popupContext();
+
+    const tags = context.createTags({
+        expression: 'read',
+        reading: 'read',
+        deinflectionTraceRows: [],
+        frequencies: [],
+        pitches: [
+            {
+                dictionary: 'seth-oald-ipa',
+                pitchPositions: [],
+                transcriptions: ['/riːd/'],
+            },
+        ],
+    });
+    const nodes = descendants(tags);
+
+    assert.equal(nodes.some((node) => node.textContent === '/riːd/'), true);
+    assert.equal(nodes.some((node) => node.textContent === '//riːd//'), false);
+});
+
+test('popup builds Yomitan-compatible phonetic transcriptions Anki HTML', () => {
+    const { context } = popupContext();
+
+    const html = context.constructPhoneticTranscriptionsHtml([
+        {
+            dictionary: 'seth-oald-ipa',
+            pitchPositions: [],
+            transcriptions: ['/riːd/', '/rɛd/'],
+        },
+    ]);
+
+    assert.equal(
+        html,
+        '<ul><li class="pronunciation" data-pronunciation-type="phonetic-transcription">/riːd/</li><li class="pronunciation" data-pronunciation-type="phonetic-transcription">/rɛd/</li></ul>',
+    );
+});
+
+test('mineEntry posts phonetic transcriptions for Anki handlebar rendering', async () => {
+    const { context, mineEntryMessages } = popupContext();
+    context.window.lookupEntries = [{ glossaries: [] }];
+
+    await context.mineEntry(
+        'read',
+        'read',
+        [],
+        [{ dictionary: 'seth-oald-ipa', pitchPositions: [], transcriptions: ['/riːd/'] }],
+        [],
+        'read',
+        0,
+        'read',
+    );
+
+    assert.equal(mineEntryMessages.length, 1);
+    assert.equal(
+        mineEntryMessages[0].phoneticTranscriptions,
+        '<ul><li class="pronunciation" data-pronunciation-type="phonetic-transcription">/riːd/</li></ul>',
+    );
 });

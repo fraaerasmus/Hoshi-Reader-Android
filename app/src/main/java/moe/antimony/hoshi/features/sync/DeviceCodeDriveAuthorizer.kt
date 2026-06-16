@@ -26,7 +26,7 @@ import moe.antimony.hoshi.di.IoDispatcher
 
 @Singleton
 class DeviceCodeDriveAuthorizer @Inject constructor(
-    @param:ApplicationContext context: Context,
+    @ApplicationContext context: Context,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : DriveAuthorizer {
     private val preferences = context.applicationContext.getSharedPreferences(PreferencesName, Context.MODE_PRIVATE)

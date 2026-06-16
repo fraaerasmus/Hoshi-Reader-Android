@@ -126,6 +126,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.BookShelf
@@ -139,6 +140,7 @@ import moe.antimony.hoshi.importing.DirectoryImportContent
 import moe.antimony.hoshi.importing.ImportFileType
 import moe.antimony.hoshi.importing.MultipleFileImportContent
 import moe.antimony.hoshi.importing.SafImportDirectoryScanner
+import moe.antimony.hoshi.profiles.ProfileState
 import moe.antimony.hoshi.importing.importDisplayName
 import moe.antimony.hoshi.ui.HoshiBlockingProgressOverlay
 import moe.antimony.hoshi.ui.UiText
@@ -182,6 +184,7 @@ fun BookshelfView(
     )
     val booksViewModel: BookshelfViewModel = hiltViewModel()
     val uiState by booksViewModel.uiState.collectAsStateWithLifecycle()
+    val profileState by appContainer.profileRepository.state.collectAsStateWithLifecycle()
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var contextMenuTarget by remember { mutableStateOf<BookContextMenuTarget?>(null) }
     var remoteContextMenuTarget by remember { mutableStateOf<RemoteBookContextMenuTarget?>(null) }
@@ -334,6 +337,8 @@ fun BookshelfView(
             renameTextState.replaceTextAndSelectStart(it.displayTitle)
         },
         onMoveBook = booksViewModel::moveBook,
+        profileState = profileState,
+        onSetBookProfile = booksViewModel::setBookProfile,
         sasayakiEnabled = uiState.sasayakiEnabled,
         onMatchSasayaki = { entry ->
             onOpenSasayakiMatch(SasayakiMatchRequest(entry.metadata.id, entry))
@@ -849,6 +854,8 @@ private fun BooksTab(
     onMarkReadCandidate: (BookEntry) -> Unit,
     onRenameCandidate: (BookEntry) -> Unit,
     onMoveBook: (BookEntry, String?) -> Unit,
+    profileState: ProfileState,
+    onSetBookProfile: (BookEntry, String?) -> Unit,
     sasayakiEnabled: Boolean,
     onMatchSasayaki: (BookEntry) -> Unit,
     syncSettings: SyncSettings,
@@ -1025,6 +1032,8 @@ private fun BooksTab(
                                             onRenameCandidate = onRenameCandidate,
                                             onDeleteCandidate = onDeleteCandidate,
                                             onExportCandidate = onExportCandidate,
+                                            profileState = profileState,
+                                            onSetBookProfile = onSetBookProfile,
                                             syncSettings = syncSettings,
                                             onSyncBook = onSyncBook,
                                         )
@@ -1646,21 +1655,25 @@ private fun BookContextMenu(
     onRenameCandidate: (BookEntry) -> Unit,
     onDeleteCandidate: (BookEntry) -> Unit,
     onExportCandidate: (BookEntry) -> Unit,
+    profileState: ProfileState,
+    onSetBookProfile: (BookEntry, String?) -> Unit,
     syncSettings: SyncSettings,
     onSyncBook: (BookEntry, SyncDirection?) -> Unit,
 ) {
     var moveMenuExpanded by remember { mutableStateOf(false) }
     var syncMenuExpanded by remember { mutableStateOf(false) }
+    var profileMenuExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(expanded, hideMove) {
         if (!expanded || hideMove) {
             moveMenuExpanded = false
         }
         if (!expanded) {
             syncMenuExpanded = false
+            profileMenuExpanded = false
         }
     }
     DropdownMenu(
-        expanded = expanded && !moveMenuExpanded && !syncMenuExpanded,
+        expanded = expanded && !moveMenuExpanded && !syncMenuExpanded && !profileMenuExpanded,
         onDismissRequest = onDismiss,
     ) {
         if (syncSettings.enabled) {
@@ -1699,6 +1712,17 @@ private fun BookContextMenu(
             )
             HorizontalDivider()
         }
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.bookshelf_profile)) },
+            trailingIcon = {
+                Icon(
+                    imageVector = Icons.Rounded.ChevronRight,
+                    contentDescription = null,
+                )
+            },
+            onClick = { profileMenuExpanded = true },
+        )
+        HorizontalDivider()
         if (sasayakiEnabled) {
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.bookshelf_match_sasayaki)) },
@@ -1744,6 +1768,13 @@ private fun BookContextMenu(
         expanded = expanded && moveMenuExpanded,
         onDismiss = onDismiss,
         onMoveBook = onMoveBook,
+    )
+    ProfileDestinationMenu(
+        entry = entry,
+        profileState = profileState,
+        expanded = expanded && profileMenuExpanded,
+        onDismiss = onDismiss,
+        onSetBookProfile = onSetBookProfile,
     )
     SyncDirectionMenu(
         entry = entry,
@@ -1839,6 +1870,76 @@ private fun MoveDestinationMenu(
         }
     }
 }
+
+@Composable
+private fun ProfileDestinationMenu(
+    entry: BookEntry,
+    profileState: ProfileState,
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onSetBookProfile: (BookEntry, String?) -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+    ) {
+        SortMenuHeader(text = stringResource(R.string.bookshelf_profile))
+        HorizontalDivider()
+        val automaticProfile = profileState.automaticBookProfile(entry.metadata.bookLanguage)
+        val selectedProfileId = selectedBookProfileId(entry.metadata.profileId, profileState)
+        DropdownMenuItem(
+            text = {
+                Column {
+                    Text(stringResource(R.string.bookshelf_profile_automatic))
+                    Text(
+                        text = stringResource(R.string.bookshelf_profile_automatic_uses_format, automaticProfile.name),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            },
+            leadingIcon = {
+                if (selectedProfileId == null) {
+                    Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+                }
+            },
+            onClick = {
+                onSetBookProfile(entry, null)
+                onDismiss()
+            },
+        )
+        profileState.profiles.forEach { profile ->
+            val language = ContentLanguageProfile.fromDictionaryLanguageId(profile.dictionaryLanguageId)
+                ?: ContentLanguageProfile.Default
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text(profile.name)
+                        Text(
+                            text = stringResource(language.displayNameRes),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
+                leadingIcon = {
+                    if (selectedProfileId == profile.id) {
+                        Icon(Icons.Rounded.CheckCircle, contentDescription = null)
+                    }
+                },
+                onClick = {
+                    onSetBookProfile(entry, profile.id)
+                    onDismiss()
+                },
+            )
+        }
+    }
+}
+
+internal fun selectedBookProfileId(
+    bookProfileId: String?,
+    profileState: ProfileState,
+): String? = bookProfileId?.takeIf { profileState.profileById(it) != null }
 
 @Composable
 internal fun ShelfManagementDialog(
@@ -2232,6 +2333,7 @@ private fun SettingsGlyph(destination: SettingsDestination, color: Color, modifi
         SettingsDestination.Profiles -> Icons.Rounded.Person
         SettingsDestination.Dictionaries -> Icons.AutoMirrored.Rounded.MenuBook
         SettingsDestination.Anki -> Icons.Rounded.Inventory2
+        SettingsDestination.Profiles -> Icons.Rounded.Person
         SettingsDestination.Appearance -> Icons.Rounded.Palette
         SettingsDestination.Behavior -> Icons.Rounded.Keyboard
         SettingsDestination.Advanced -> Icons.Rounded.Settings

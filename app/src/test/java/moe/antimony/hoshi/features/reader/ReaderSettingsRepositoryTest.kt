@@ -14,10 +14,33 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import moe.antimony.hoshi.profiles.ProfileRepository
+import moe.antimony.hoshi.testing.CountingCoroutineDispatcher
 
 class ReaderSettingsRepositoryTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
+
+    @Test
+    fun profileAppearanceReadsAndWritesUseInjectedIoDispatcher() = runBlocking {
+        CountingCoroutineDispatcher().use { ioDispatcher ->
+            val profileRepository = ProfileRepository(
+                filesDir = tempFolder.newFolder("files"),
+                ioDispatcher = ioDispatcher,
+            )
+            repository(
+                profileRepository = profileRepository,
+                ioDispatcher = ioDispatcher,
+            ).use { repository ->
+                val beforeProfileAccess = ioDispatcher.dispatchCount
+
+                repository.update { it.copy(fontSize = 28) }
+                assertEquals(28, repository.settings.first().fontSize)
+
+                assertTrue(ioDispatcher.dispatchCount >= beforeProfileAccess + 2)
+            }
+        }
+    }
 
     @Test
     fun emitsDefaultSettingsWhenThereIsNoLegacyStore() = runBlocking {
@@ -69,6 +92,8 @@ class ReaderSettingsRepositoryTest {
             assertFalse(settings.volumeKeysSeekSasayaki)
             assertFalse(settings.reverseVolumeKeyDirection)
             assertFalse(settings.keepScreenOnWhileReading)
+            assertFalse(settings.lockCurrentOrientation)
+            assertFalse(settings.openLastReadBookOnLaunch)
         }
     }
 
@@ -92,6 +117,8 @@ class ReaderSettingsRepositoryTest {
                 volumeKeysTurnPages = true,
                 volumeKeysSeekSasayaki = true,
                 keepScreenOnWhileReading = true,
+                lockCurrentOrientation = true,
+                openLastReadBookOnLaunch = true,
             ),
         )
 
@@ -114,6 +141,8 @@ class ReaderSettingsRepositoryTest {
             assertTrue(migrated.volumeKeysTurnPages)
             assertTrue(migrated.volumeKeysSeekSasayaki)
             assertTrue(migrated.keepScreenOnWhileReading)
+            assertTrue(migrated.lockCurrentOrientation)
+            assertTrue(migrated.openLastReadBookOnLaunch)
 
             repository.update { it.copy(fontSize = 31) }
             assertEquals(31, repository.settings.first().fontSize)
@@ -170,6 +199,8 @@ class ReaderSettingsRepositoryTest {
                     volumeKeysSeekSasayaki = true,
                     reverseVolumeKeyDirection = true,
                     keepScreenOnWhileReading = true,
+                    lockCurrentOrientation = true,
+                    openLastReadBookOnLaunch = true,
                 )
             }
 
@@ -219,6 +250,8 @@ class ReaderSettingsRepositoryTest {
             assertTrue(saved.volumeKeysSeekSasayaki)
             assertTrue(saved.reverseVolumeKeyDirection)
             assertTrue(saved.keepScreenOnWhileReading)
+            assertTrue(saved.lockCurrentOrientation)
+            assertTrue(saved.openLastReadBookOnLaunch)
         }
     }
 
@@ -243,8 +276,57 @@ class ReaderSettingsRepositoryTest {
         }
     }
 
+    @Test
+    fun profileModeScopesAppearanceFieldsButKeepsBehaviorFieldsGlobal() = runBlocking {
+        val profileRepository = ProfileRepository(tempFolder.newFolder("files"))
+        repository(profileRepository = profileRepository).use { repository ->
+            repository.update {
+                it.copy(
+                    theme = ReaderTheme.Dark,
+                    fontSize = 30,
+                    popupWidth = 440,
+                    volumeKeysTurnPages = true,
+                    lockCurrentOrientation = true,
+                    openLastReadBookOnLaunch = true,
+                )
+            }
+
+            val english = profileRepository.createProfile("English", "en")
+            profileRepository.activateGlobal(english.id)
+            val inherited = repository.settings.first()
+            assertEquals(ReaderTheme.Dark, inherited.theme)
+            assertEquals(30, inherited.fontSize)
+            assertEquals(440, inherited.popupWidth)
+            assertTrue(inherited.volumeKeysTurnPages)
+            assertTrue(inherited.lockCurrentOrientation)
+            assertTrue(inherited.openLastReadBookOnLaunch)
+
+            repository.update {
+                it.copy(
+                    theme = ReaderTheme.Light,
+                    fontSize = 18,
+                    popupWidth = 280,
+                    volumeKeysTurnPages = false,
+                    lockCurrentOrientation = false,
+                    openLastReadBookOnLaunch = false,
+                )
+            }
+
+            profileRepository.activateGlobal(profileRepository.state.value.defaultProfileId)
+            val japanese = repository.settings.first()
+            assertEquals(ReaderTheme.Dark, japanese.theme)
+            assertEquals(30, japanese.fontSize)
+            assertEquals(440, japanese.popupWidth)
+            assertFalse(japanese.volumeKeysTurnPages)
+            assertFalse(japanese.lockCurrentOrientation)
+            assertFalse(japanese.openLastReadBookOnLaunch)
+        }
+    }
+
     private fun repository(
         legacySource: ReaderSettingsLegacySource? = null,
+        profileRepository: ProfileRepository? = null,
+        ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO,
     ): RepositoryHandle {
         val scope = CoroutineScope(Dispatchers.IO + Job())
         val dataStore = PreferenceDataStoreFactory.create(
@@ -255,6 +337,8 @@ class ReaderSettingsRepositoryTest {
             repository = ReaderSettingsRepository(
                 dataStore = dataStore,
                 legacySource = legacySource,
+                profileRepository = profileRepository,
+                ioDispatcher = ioDispatcher,
             ),
             scope = scope,
         )

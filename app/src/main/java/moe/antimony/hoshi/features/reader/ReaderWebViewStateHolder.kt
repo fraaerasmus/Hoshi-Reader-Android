@@ -268,12 +268,15 @@ internal class ReaderWebViewStateHolder(
         return jumpTo(previous)
     }
 
-    fun updateViewportSize(size: IntSize) {
-        if (size == webViewViewportSize) return
-        if (webViewViewportSize != IntSize.Zero) {
+    fun updateViewportSize(size: IntSize): Boolean {
+        if (size == webViewViewportSize) return false
+        val resizedExistingViewport = webViewViewportSize != IntSize.Zero
+        if (resizedExistingViewport) {
+            setLookupPopups(emptyList())
             prepareReloadAtDisplayedPosition()
         }
         webViewViewportSize = size
+        return resizedExistingViewport
     }
 
     private fun recordJumpOrigin() {

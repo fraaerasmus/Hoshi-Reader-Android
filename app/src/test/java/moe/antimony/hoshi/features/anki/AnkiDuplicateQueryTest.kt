@@ -41,6 +41,24 @@ class AnkiDuplicateQueryTest {
     }
 
     @Test
+    fun deckRootScopeUsesTopLevelDeckWhenSelectedDeckIsNested() {
+        val deckIds = ankiDuplicateScopeDeckIds(
+            decksById = mapOf(
+                1L to "Default",
+                2L to "Mining",
+                3L to "Mining::Light Novel",
+                4L to "Mining::Grammar",
+                5L to "Mining::Light Novel::Volume 1",
+                6L to "Other::Mining",
+            ),
+            selectedDeck = AnkiDeck(3L, "Mining::Light Novel"),
+            duplicateScope = AnkiDuplicateScope.DeckRoot,
+        )
+
+        assertEquals(setOf(2L, 3L, 4L, 5L), deckIds)
+    }
+
+    @Test
     fun deckScopeIncludesOnlySelectedDeck() {
         val deckIds = ankiDuplicateScopeDeckIds(
             decksById = mapOf(

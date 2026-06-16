@@ -70,13 +70,13 @@ internal fun createLookupPopupItem(
     selection: ReaderSelectionData,
     options: LookupPopupOptions,
     dictionaryStyles: Map<String, String>? = null,
-    lookup: (String, Int, Int, String) -> List<de.manhhao.hoshi.LookupResult> = { _, _, _, _ -> emptyList() },
+    lookup: (String, Int, Int) -> List<de.manhhao.hoshi.LookupResult> = { _, _, _ -> emptyList() },
 ): Pair<LookupPopupItem, Int>? {
     val settings = options.dictionarySettings.normalized()
     val styles = dictionaryStyles.orEmpty()
     val contentLanguageProfile = options.contentLanguageProfile
     val results = runCatching {
-        lookup(selection.text, settings.maxResults, settings.scanLength, settings.lookupLanguage.code)
+        lookup(selection.text, settings.maxResults, settings.scanLength)
     }.getOrDefault(emptyList())
     val first = results.firstOrNull() ?: return null
     return LookupPopupItem(

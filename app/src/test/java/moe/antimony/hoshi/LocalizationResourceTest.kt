@@ -115,7 +115,14 @@ class LocalizationResourceTest {
         assertEquals("标注", zhResources.strings.getValue("reader_highlight_action").value)
         assertEquals("复制", zhResources.strings.getValue("action_copy").value)
         assertEquals("分享", zhResources.strings.getValue("action_share").value)
+        assertEquals("将使用 %1\$s", zhResources.strings.getValue("bookshelf_profile_automatic_uses_format").value)
         assertEquals("段落间距", zhResources.strings.getValue("reader_appearance_paragraph_spacing").value)
+        assertEquals("Profile", zhResources.strings.getValue("settings_profiles").value)
+        assertEquals("Profile", zhResources.strings.getValue("profiles_title").value)
+        assertEquals(
+            "新 Profile 会基于当前启用 Profile 拷贝一份设置。",
+            zhResources.strings.getValue("profiles_create_copy_settings_note").value,
+        )
     }
 
     @Test

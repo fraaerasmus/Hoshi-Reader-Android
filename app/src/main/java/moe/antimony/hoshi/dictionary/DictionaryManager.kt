@@ -4,6 +4,7 @@ object DictionaryManager {
     fun collectDictionaries(
         storedDicts: List<DictionaryInfo>,
         configDicts: List<DictionaryConfig.DictionaryEntry>,
+        unconfiguredDictionariesEnabled: Boolean = true,
     ): List<DictionaryInfo> {
         val result = mutableListOf<DictionaryInfo>()
         configDicts.sortedBy { it.order }.forEach { config ->
@@ -18,7 +19,7 @@ object DictionaryManager {
         storedDicts.forEach { stored ->
             if (stored.path.name !in collectedFileNames) {
                 result += stored.copy(
-                    isEnabled = true,
+                    isEnabled = unconfiguredDictionariesEnabled,
                     order = result.size,
                 )
             }

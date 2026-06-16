@@ -46,6 +46,7 @@ val hostLibName = when {
 
 android {
     namespace = "moe.antimony.hoshi"
+    ndkVersion = "29.0.14206865"
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -56,8 +57,8 @@ android {
         applicationId = "moe.antimony.hoshi"
         minSdk = 28
         targetSdk = 36
-        versionCode = 10105
-        versionName = "1.1.5"
+        versionCode = 10200
+        versionName = "1.2.0"
         releaseVersionCode?.let { versionCode = it }
         releaseVersionName?.let { versionName = it }
 

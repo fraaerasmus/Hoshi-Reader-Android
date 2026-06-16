@@ -164,6 +164,7 @@ enum class SettingsDestination {
     Profiles,
     Dictionaries,
     Anki,
+    Profiles,
     Appearance,
     Behavior,
     Advanced,

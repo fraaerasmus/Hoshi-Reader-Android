@@ -63,7 +63,7 @@ class AnkiConnectBackend(
         wrapFetch {
             requestArray("deckNames").strings().map { name ->
                 AnkiDeck(id = ankiConnectStableId("deck", name), name = name)
-            }
+            }.sortedAnkiDecks()
         }
 
     override fun fetchNoteTypes(): List<AnkiNoteType> =

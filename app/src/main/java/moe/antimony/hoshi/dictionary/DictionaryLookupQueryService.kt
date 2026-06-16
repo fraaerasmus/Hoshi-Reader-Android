@@ -8,7 +8,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.concurrent.read
 import kotlin.concurrent.write
-import kotlin.jvm.Volatile
+import moe.antimony.hoshi.content.ContentLanguageProfile
 
 @Singleton
 internal class DictionaryLookupQueryService @Inject constructor(
@@ -16,19 +16,18 @@ internal class DictionaryLookupQueryService @Inject constructor(
 ) {
     private val rebuildLock = Any()
     private val queryLock = ReentrantReadWriteLock()
-    private val lookupLock = Any()
     private var currentSession: Long? = null
-
-    // Last lookup language; applied to each lookup and re-applied to a freshly rebuilt session.
-    @Volatile
-    private var currentLanguage: String = DEFAULT_LANGUAGE
 
     fun rebuild(
         termDictionaries: List<File>,
         frequencyDictionaries: List<File>,
         pitchDictionaries: List<File>,
+        dictionaryLanguageId: String = ContentLanguageProfile.Default.dictionaryLanguageId,
     ) {
         synchronized(rebuildLock) {
+            // kaihouguide bridge: create a session, build the query, then bind the
+            // profile's lookup language (the engine supports all 18 languages via
+            // setLookupLanguage rather than baking it into createLookupObject).
             val nextSession = nativeBridge.createLookupObject()
             var committed = false
             try {
@@ -38,7 +37,7 @@ internal class DictionaryLookupQueryService @Inject constructor(
                     freqPaths = frequencyDictionaries.toAbsolutePathArray(),
                     pitchPaths = pitchDictionaries.toAbsolutePathArray(),
                 )
-                nativeBridge.setLookupLanguage(nextSession, currentLanguage)
+                nativeBridge.setLookupLanguage(nextSession, dictionaryLanguageId)
                 val previousSession = queryLock.write {
                     val previous = currentSession
                     currentSession = nextSession
@@ -58,15 +57,11 @@ internal class DictionaryLookupQueryService @Inject constructor(
         text: String,
         maxResults: Int = 16,
         scanLength: Int = 16,
-        language: String = currentLanguage,
     ): List<LookupResult> =
         queryLock.read {
-            val session = currentSession ?: return@read emptyList()
-            synchronized(lookupLock) {
-                currentLanguage = language
-                nativeBridge.setLookupLanguage(session, language)
+            currentSession?.let { session ->
                 nativeBridge.lookup(session, text, maxResults, scanLength)
-            }
+            } ?: emptyList()
         }
 
     fun getStyles(): List<DictionaryStyle> =
@@ -83,8 +78,4 @@ internal class DictionaryLookupQueryService @Inject constructor(
 
     private fun List<File>.toAbsolutePathArray(): Array<String> =
         map { it.absolutePath }.toTypedArray()
-
-    private companion object {
-        const val DEFAULT_LANGUAGE = "ja"
-    }
 }

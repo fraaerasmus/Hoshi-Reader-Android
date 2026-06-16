@@ -1,12 +1,19 @@
 package moe.antimony.hoshi.features.reader
 
 import moe.antimony.hoshi.epub.HighlightColor
+import moe.antimony.hoshi.features.dictionary.DictionarySettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReaderSelectionCommandTest {
+    @Test
+    fun readerSelectionMaxLengthUsesDictionaryScanLength() {
+        assertEquals(64, readerSelectionMaxLength(DictionarySettings(scanLength = 64)))
+        assertEquals(1, readerSelectionMaxLength(DictionarySettings(scanLength = 0)))
+    }
+
     @Test
     fun selectTextCommandBuildsIosSelectionInvocation() {
         val command = ReaderSelectionCommand.SelectText(

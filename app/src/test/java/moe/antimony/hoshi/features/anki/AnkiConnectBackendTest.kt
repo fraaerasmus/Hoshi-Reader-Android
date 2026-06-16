@@ -53,6 +53,25 @@ class AnkiConnectBackendTest {
     }
 
     @Test
+    fun sortsDecksFetchedFromAnkiConnect() {
+        val transport = FakeAnkiConnectTransport(
+            """{"result":["Mining::Light Novel","Zulu","Mining","Default","Mining::Grammar"],"error":null}""",
+        )
+        val backend = AnkiConnectBackend("https://anki.example.com", transport)
+
+        assertEquals(
+            listOf(
+                "Default",
+                "Mining",
+                "Mining::Grammar",
+                "Mining::Light Novel",
+                "Zulu",
+            ),
+            backend.fetchDecks().map { it.name },
+        )
+    }
+
+    @Test
     fun duplicateCheckSendsDeckRootAndAllModelsOptions() {
         val transport = FakeAnkiConnectTransport(
             """{"result":[{"canAdd":false,"error":"duplicate"}],"error":null}""",

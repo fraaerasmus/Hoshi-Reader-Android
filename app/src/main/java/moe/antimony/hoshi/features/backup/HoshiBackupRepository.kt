@@ -33,6 +33,7 @@ import moe.antimony.hoshi.features.sync.TtuBookDataConverter
 import moe.antimony.hoshi.features.sync.TtuProgress
 import moe.antimony.hoshi.features.sync.TtuSyncRules
 import moe.antimony.hoshi.features.sync.resolveTtuCharacterPosition
+import moe.antimony.hoshi.profiles.ProfileRepository
 
 @Singleton
 class HoshiBackupRepository @Inject constructor(
@@ -40,12 +41,14 @@ class HoshiBackupRepository @Inject constructor(
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
     private val bookRepository: BookRepository,
     private val ttuConverter: TtuBookDataConverter,
+    private val profileRepository: ProfileRepository,
 ) {
     constructor(filesDir: File) : this(
         filesDir = filesDir,
         ioDispatcher = Dispatchers.IO,
         bookRepository = BookRepository(filesDir),
         ttuConverter = createStandaloneTtuConverter(filesDir, Dispatchers.IO),
+        profileRepository = ProfileRepository(filesDir),
     )
 
     constructor(filesDir: File, ioDispatcher: CoroutineDispatcher) : this(
@@ -53,6 +56,7 @@ class HoshiBackupRepository @Inject constructor(
         ioDispatcher = ioDispatcher,
         bookRepository = BookRepository(filesDir),
         ttuConverter = createStandaloneTtuConverter(filesDir, ioDispatcher),
+        profileRepository = ProfileRepository(filesDir),
     )
 
     suspend fun exportBooks(contentResolver: ContentResolver, uri: Uri) {
@@ -209,21 +213,42 @@ class HoshiBackupRepository @Inject constructor(
     private suspend fun exportFolder(target: BackupTarget, output: OutputStream) {
         withContext(ioDispatcher) {
             ZipOutputStream(output.buffered()).use { zip ->
-                val root = filesDir.resolve(target.folderName)
-                if (!root.isDirectory) return@use
-                root.walkTopDown()
-                    .filter { it != root }
-                    .sortedBy { it.relativeTo(root).invariantSeparatorsPath }
-                    .forEach { file ->
-                        val relativePath = file.relativeTo(root).invariantSeparatorsPath
-                        val entryName = if (file.isDirectory) "$relativePath/" else relativePath
-                        zip.putNextEntry(file.toZipEntry(entryName))
-                        if (file.isFile) {
-                            file.inputStream().use { input -> input.copyTo(zip) }
-                        }
-                        zip.closeEntry()
-                    }
+                if (target == BackupTarget.Dictionaries) {
+                    exportDictionariesFolder(zip)
+                } else {
+                    exportBackupTargetFolder(zip, target)
+                }
             }
+        }
+    }
+
+    private fun exportBackupTargetFolder(zip: ZipOutputStream, target: BackupTarget) {
+        val root = filesDir.resolve(target.folderName)
+        if (!root.isDirectory) return
+        zip.writeFolderContents(root)
+    }
+
+    private suspend fun exportDictionariesFolder(zip: ZipOutputStream) {
+        val root = filesDir.resolve(BackupTarget.Dictionaries.folderName)
+        if (root.isDirectory) {
+            zip.writeFolderContents(root) { relativePath ->
+                relativePath != LegacyDictionaryConfigEntryName &&
+                    relativePath != ProfileRepository.DictionaryBackupProfilesDirectoryName &&
+                    !relativePath.startsWith("${ProfileRepository.DictionaryBackupProfilesDirectoryName}/")
+            }
+        }
+        profileRepository.defaultDictionaryConfigFileForBackup()?.let { config ->
+            zip.writeFile(LegacyDictionaryConfigEntryName, config)
+        }
+        val profilePayload = filesDir.resolve(".dictionary-profile-backup-${UUID.randomUUID()}")
+        try {
+            profileRepository.writeDictionaryBackupProfilePayload(profilePayload)
+            zip.writeFolderContents(
+                root = profilePayload,
+                entryPrefix = "${ProfileRepository.DictionaryBackupProfilesDirectoryName}/",
+            )
+        } finally {
+            profilePayload.deleteRecursively()
         }
     }
 
@@ -236,6 +261,10 @@ class HoshiBackupRepository @Inject constructor(
     }
 
     private suspend fun restoreFolder(target: BackupTarget, input: InputStream) {
+        if (target == BackupTarget.Dictionaries) {
+            restoreDictionariesFolder(input)
+            return
+        }
         withContext(ioDispatcher) {
             val destination = filesDir.resolve(target.folderName)
             val archiveFile = filesDir.resolve(".${target.folderName.lowercase()}-restore-${UUID.randomUUID()}.hoshi")
@@ -256,22 +285,75 @@ class HoshiBackupRepository @Inject constructor(
         }
     }
 
+    private suspend fun restoreDictionariesFolder(input: InputStream) {
+        withContext(ioDispatcher) {
+            val destination = filesDir.resolve(BackupTarget.Dictionaries.folderName)
+            val profilesDestination = profileRepository.profilesDirectory
+            val archiveFile = filesDir.resolve(".dictionaries-restore-${UUID.randomUUID()}.hoshi")
+            val tempDictionaries = filesDir.resolve(".dictionaries-restore-${UUID.randomUUID()}")
+            val tempProfiles = filesDir.resolve(".profiles-dictionary-restore-${UUID.randomUUID()}")
+            archiveFile.delete()
+            tempDictionaries.deleteRecursively()
+            tempProfiles.deleteRecursively()
+            check(tempDictionaries.mkdirs()) { "Unable to create restore directory." }
+            try {
+                archiveFile.outputStream().use { output -> input.copyTo(output) }
+                unzipInto(archiveFile, tempDictionaries)
+                profileRepository.prepareDictionaryBackupProfilesRestore(
+                    restoredDictionariesDir = tempDictionaries,
+                    destinationProfilesDir = tempProfiles,
+                )
+                replaceDestinationsWithRestoredFolders(
+                    listOf(
+                        RestoredFolder(tempDictionaries, destination, BackupTarget.Dictionaries.folderName.lowercase()),
+                        RestoredFolder(tempProfiles, profilesDestination, "profiles"),
+                    ),
+                )
+                profileRepository.reloadProfilesFromDisk()
+            } catch (error: Throwable) {
+                tempDictionaries.deleteRecursively()
+                tempProfiles.deleteRecursively()
+                throw error
+            } finally {
+                archiveFile.delete()
+            }
+        }
+    }
+
     private fun replaceDestinationWithRestoredFolder(
         target: BackupTarget,
         restoredFolder: File,
         destination: File,
     ) {
-        val replacementBackup = destination.takeIf(File::exists)?.let { existing ->
-            filesDir.resolve(".${target.folderName.lowercase()}-restore-backup-${UUID.randomUUID()}")
-                .also { backup -> moveReplacing(existing, backup) }
-        }
+        replaceDestinationsWithRestoredFolders(
+            listOf(RestoredFolder(restoredFolder, destination, target.folderName.lowercase())),
+        )
+    }
+
+    private fun replaceDestinationsWithRestoredFolders(restoredFolders: List<RestoredFolder>) {
+        val replacementBackups = mutableListOf<Pair<File, File>>()
+        var movingRestoredFolders = false
         try {
-            moveReplacing(restoredFolder, destination)
-            replacementBackup?.deleteRecursively()
+            restoredFolders.forEach { restored ->
+                restored.destination.takeIf(File::exists)?.let { existing ->
+                    val backup = filesDir.resolve(".${restored.backupName}-restore-backup-${UUID.randomUUID()}")
+                    moveReplacing(existing, backup)
+                    replacementBackups += restored.destination to backup
+                }
+            }
+            movingRestoredFolders = true
+            restoredFolders.forEach { restored ->
+                moveReplacing(restored.source, restored.destination)
+            }
+            replacementBackups.forEach { (_, backup) -> backup.deleteRecursively() }
         } catch (error: Throwable) {
-            destination.deleteRecursively()
-            if (replacementBackup?.exists() == true) {
-                moveReplacing(replacementBackup, destination)
+            if (movingRestoredFolders) {
+                restoredFolders.forEach { restored -> restored.destination.deleteRecursively() }
+            }
+            replacementBackups.asReversed().forEach { (destination, backup) ->
+                if (backup.exists()) {
+                    moveReplacing(backup, destination)
+                }
             }
             throw error
         }
@@ -345,6 +427,26 @@ class HoshiBackupRepository @Inject constructor(
         closeEntry()
     }
 
+    private fun ZipOutputStream.writeFolderContents(
+        root: File,
+        entryPrefix: String = "",
+        include: (String) -> Boolean = { true },
+    ) {
+        root.walkTopDown()
+            .filter { it != root }
+            .sortedBy { it.relativeTo(root).invariantSeparatorsPath }
+            .forEach { file ->
+                val relativePath = file.relativeTo(root).invariantSeparatorsPath
+                if (!include(relativePath)) return@forEach
+                val entryName = entryPrefix + if (file.isDirectory) "$relativePath/" else relativePath
+                putNextEntry(file.toZipEntry(entryName))
+                if (file.isFile) {
+                    file.inputStream().use { input -> input.copyTo(this) }
+                }
+                closeEntry()
+            }
+    }
+
     private fun ZipOutputStream.writeText(path: String, value: String) {
         val bytes = value.toByteArray()
         val entry = ZipEntry(path)
@@ -359,6 +461,16 @@ class HoshiBackupRepository @Inject constructor(
     private enum class BackupTarget(val folderName: String) {
         Books("Books"),
         Dictionaries("Dictionaries"),
+    }
+
+    private data class RestoredFolder(
+        val source: File,
+        val destination: File,
+        val backupName: String,
+    )
+
+    private companion object {
+        const val LegacyDictionaryConfigEntryName = "config.json"
     }
 }
 

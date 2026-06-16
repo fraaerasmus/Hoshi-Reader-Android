@@ -216,7 +216,7 @@ internal fun ankiDuplicateScopeDeckIds(
         AnkiDuplicateScope.Collection -> emptySet()
         AnkiDuplicateScope.Deck -> setOf(selectedDeck.id)
         AnkiDuplicateScope.DeckRoot -> {
-            val rootName = selectedDeck.name
+            val rootName = selectedDeck.name.substringBefore("::")
             decksById.mapNotNull { (id, name) ->
                 id.takeIf { name == rootName || name.startsWith("$rootName::") }
             }.toSet()

@@ -46,6 +46,7 @@ internal fun ReaderStatisticsSheet(
     currentCharacter: Int,
     currentChapterEndCharacter: Int,
     totalCharacters: Int,
+    progressDisplay: ReaderProgressDisplay = ReaderProgressDisplay.characters(),
     onToggleTracking: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -70,6 +71,7 @@ internal fun ReaderStatisticsSheet(
                 StatisticsSection(
                     title = stringResource(R.string.reader_statistics_session),
                     statistic = state.session,
+                    progressDisplay = progressDisplay,
                     isTracking = state.isTracking,
                     onToggleTracking = onToggleTracking,
                     extraRows = listOf(
@@ -77,22 +79,32 @@ internal fun ReaderStatisticsSheet(
                             secondsRemaining(
                                 remainingCharacters = totalCharacters - currentCharacter,
                                 speed = state.session.lastReadingSpeed,
+                                progressDisplay = progressDisplay,
                             ),
                         ),
                         stringResource(R.string.reader_statistics_time_to_finish_chapter) to formatDurationSeconds(
                             secondsRemaining(
                                 remainingCharacters = currentChapterEndCharacter - currentCharacter,
                                 speed = state.session.lastReadingSpeed,
+                                progressDisplay = progressDisplay,
                             ),
                         ),
                     ),
                 )
             }
             item {
-                StatisticsSection(title = stringResource(R.string.reader_statistics_today), statistic = state.today)
+                StatisticsSection(
+                    title = stringResource(R.string.reader_statistics_today),
+                    statistic = state.today,
+                    progressDisplay = progressDisplay,
+                )
             }
             item {
-                StatisticsSection(title = stringResource(R.string.reader_statistics_all_time), statistic = state.allTime)
+                StatisticsSection(
+                    title = stringResource(R.string.reader_statistics_all_time),
+                    statistic = state.allTime,
+                    progressDisplay = progressDisplay,
+                )
             }
         }
     }
@@ -102,6 +114,7 @@ internal fun ReaderStatisticsSheet(
 private fun StatisticsSection(
     title: String,
     statistic: ReadingStatistics,
+    progressDisplay: ReaderProgressDisplay,
     isTracking: Boolean? = null,
     onToggleTracking: () -> Unit = {},
     extraRows: List<Pair<String, String>> = emptyList(),
@@ -142,9 +155,18 @@ private fun StatisticsSection(
             tonalElevation = 0.dp,
         ) {
             Column {
-                StatisticRow(stringResource(R.string.reader_statistics_characters_read), statistic.charactersRead.toString())
+                StatisticRow(
+                    stringResource(
+                        if (progressDisplay.usesWords) {
+                            R.string.reader_statistics_words_read
+                        } else {
+                            R.string.reader_statistics_characters_read
+                        },
+                    ),
+                    progressDisplay.countText(statistic.charactersRead),
+                )
                 StatisticsDivider()
-                StatisticRow(stringResource(R.string.reader_statistics_reading_speed), "${statistic.lastReadingSpeed} / h")
+                StatisticRow(stringResource(R.string.reader_statistics_reading_speed), progressDisplay.speedText(statistic.lastReadingSpeed))
                 StatisticsDivider()
                 StatisticRow(stringResource(R.string.reader_statistics_reading_time), formatDurationSeconds(statistic.readingTime))
                 extraRows.forEach { (label, value) ->
@@ -191,7 +213,12 @@ internal fun formatDurationSeconds(seconds: Double): String {
     }
 }
 
-private fun secondsRemaining(remainingCharacters: Int, speed: Int): Double {
-    if (speed <= 0) return 0.0
-    return max(remainingCharacters, 0).toDouble() / (speed.toDouble() / 3600.0)
+private fun secondsRemaining(
+    remainingCharacters: Int,
+    speed: Int,
+    progressDisplay: ReaderProgressDisplay,
+): Double {
+    val displayedSpeed = progressDisplay.displayCount(speed)
+    if (displayedSpeed <= 0) return 0.0
+    return progressDisplay.displayCount(max(remainingCharacters, 0)).toDouble() / (displayedSpeed.toDouble() / 3600.0)
 }

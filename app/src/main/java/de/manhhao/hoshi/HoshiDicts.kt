@@ -32,10 +32,15 @@ class FrequencyEntry(
     val frequencies: Array<Frequency>,
 )
 
+// NOTE: constructed by the kaihouguide JNI engine; keep the constructor (dictName,
+// pitchPositions) exactly. `transcriptions` is a computed adapter so upstream's
+// app code compiles — the kaihouguide engine has no IPA transcriptions.
 class PitchEntry(
     val dictName: String,
     val pitchPositions: IntArray,
-)
+) {
+    val transcriptions: Array<String> get() = emptyArray()
+}
 
 class TermResult(
     val expression: String,
@@ -51,20 +56,45 @@ class TransformGroup(
     val description: String,
 )
 
+enum class TraceSource {
+    ALGORITHM,
+    DICTIONARY,
+    BOTH,
+}
+
+class TraceCandidate(
+    val deinflected: String,
+    val preprocessorSteps: Int,
+    val source: TraceSource,
+    val trace: Array<TransformGroup>,
+)
+
+// NOTE: constructed by the kaihouguide JNI engine; keep the constructor (matched,
+// deinflected, process, term, preprocessorSteps) exactly. `traceCandidates` is a
+// computed adapter that synthesizes a single algorithm candidate from our fields so
+// upstream's trace-candidate UI compiles against the kaihouguide engine.
 class LookupResult(
     val matched: String,
     val deinflected: String,
     val process: Array<TransformGroup>,
     val term: TermResult,
     val preprocessorSteps: Int,
-)
+) {
+    val traceCandidates: Array<TraceCandidate>
+        get() = arrayOf(
+            TraceCandidate(
+                deinflected = deinflected,
+                preprocessorSteps = preprocessorSteps,
+                source = TraceSource.ALGORITHM,
+                trace = process,
+            ),
+        )
+}
 
 object HoshiDicts {
     init {
         System.loadLibrary("hoshidicts_jni")
     }
-
-    val lookupObject: Long = createLookupObject()
 
     external fun importDictionary(zipPath: String, outputDir: String, lowRam: Boolean = false): ImportResult
     external fun createLookupObject(): Long

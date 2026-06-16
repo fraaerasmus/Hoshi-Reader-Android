@@ -32,8 +32,6 @@ class DictionarySearchContentTest {
                 listOf(
                     LookupResult(
                         matched = "猫",
-                        deinflected = "猫",
-                        process = emptyArray(),
                         term = TermResult(
                             expression = "猫",
                             reading = "ねこ",
@@ -49,6 +47,8 @@ class DictionarySearchContentTest {
                             frequencies = emptyArray<FrequencyEntry>(),
                             pitches = emptyArray<PitchEntry>(),
                         ),
+                        deinflected = "",
+                        process = emptyArray(),
                         preprocessorSteps = 0,
                     ),
                 )

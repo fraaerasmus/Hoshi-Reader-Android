@@ -36,7 +36,6 @@ class DictionarySettingsRepositoryTest {
                 dictionaryUpdateInterval = DictionaryUpdateInterval.Monthly,
                 lastDictionaryUpdateEpochMillis = 1_800_000_000_000L,
                 dictionaryTabDefault = true,
-                lookupLanguage = DictionaryLanguage.French,
                 scanNonJapaneseText = false,
                 maxResults = 100,
                 scanLength = 0,
@@ -60,7 +59,6 @@ class DictionarySettingsRepositoryTest {
             assertEquals(DictionaryUpdateInterval.Monthly, migrated.dictionaryUpdateInterval)
             assertEquals(1_800_000_000_000L, migrated.lastDictionaryUpdateEpochMillis)
             assertTrue(migrated.dictionaryTabDefault)
-            assertEquals(DictionaryLanguage.French, migrated.lookupLanguage)
             assertFalse(migrated.scanNonJapaneseText)
             assertEquals(50, migrated.maxResults)
             assertEquals(1, migrated.scanLength)
@@ -90,7 +88,6 @@ class DictionarySettingsRepositoryTest {
                     dictionaryUpdateInterval = DictionaryUpdateInterval.Daily,
                     lastDictionaryUpdateEpochMillis = 1_900_000_000_000L,
                     dictionaryTabDefault = true,
-                    lookupLanguage = DictionaryLanguage.German,
                     scanNonJapaneseText = false,
                     maxResults = 0,
                     scanLength = 100,
@@ -113,7 +110,6 @@ class DictionarySettingsRepositoryTest {
             assertEquals(DictionaryUpdateInterval.Daily, saved.dictionaryUpdateInterval)
             assertEquals(1_900_000_000_000L, saved.lastDictionaryUpdateEpochMillis)
             assertTrue(saved.dictionaryTabDefault)
-            assertEquals(DictionaryLanguage.German, saved.lookupLanguage)
             assertFalse(saved.scanNonJapaneseText)
             assertEquals(1, saved.maxResults)
             assertEquals(64, saved.scanLength)

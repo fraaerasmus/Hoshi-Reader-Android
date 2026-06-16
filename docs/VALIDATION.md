@@ -121,6 +121,10 @@ Validate relevant bookshelf/import changes with:
   scrolling for long values.
 - Android-created `Books` and `Dictionaries` `.hoshi` archives restored by iOS
   when backup compatibility changes.
+- Android-created profile-aware `Dictionaries` `.hoshi` archives restored by
+  iOS/older Android as the default Japanese single-profile dictionary config,
+  and restored by current Android with all profile-scoped dictionary
+  config/settings intact.
 - Books context-menu EPUB export and Android-created TTU bookdata backup import
   by iOS/ッツ where possible.
 - iOS/ッツ TTU bookdata backups imported into Android, confirming reader open,

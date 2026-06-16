@@ -7,7 +7,7 @@ data class ImportFileType(
     val description: String,
     val extensions: List<String>,
     val mimeTypes: Array<String>,
-    @StringRes val unsupportedMessageRes: Int,
+    @param:StringRes val unsupportedMessageRes: Int,
 ) {
     fun matchesDisplayName(displayName: String): Boolean {
         val extension = displayName
@@ -96,5 +96,5 @@ data class ImportFileType(
 
 class UnsupportedImportFileTypeException(
     message: String,
-    @StringRes val messageRes: Int,
+    @param:StringRes val messageRes: Int,
 ) : IllegalArgumentException(message)

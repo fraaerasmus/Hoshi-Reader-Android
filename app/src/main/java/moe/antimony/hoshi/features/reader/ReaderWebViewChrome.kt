@@ -68,6 +68,7 @@ import moe.antimony.hoshi.R
 internal fun ReaderTopInfo(
     state: ReaderChromeState,
     settings: ReaderSettings,
+    progressDisplay: ReaderProgressDisplay,
     colors: ReaderChromeColors,
     onStatisticsToggle: (() -> Unit)?,
     statisticsTracking: Boolean,
@@ -79,7 +80,7 @@ internal fun ReaderTopInfo(
     metrics: ReaderBottomChromeMetrics,
     modifier: Modifier = Modifier,
 ) {
-    val progress = state.progressText(settings)
+    val progress = state.progressText(settings, progressDisplay)
     val showProgressInTopInfo = readerShowsProgressInTopBubble(settings)
     val showBackJump = visibility.showBackJump && state.backTargetCharacter != null && onJumpBack != null
     val showForwardJump = visibility.showForwardJump && state.forwardTargetCharacter != null && onJumpForward != null
@@ -206,6 +207,7 @@ internal fun ReaderTopInfo(
                 if (showBackJump) {
                     ReaderJumpHistoryButton(
                         character = requireNotNull(state.backTargetCharacter),
+                        progressDisplay = progressDisplay,
                         icon = readerJumpBackIcon(),
                         iconFirst = true,
                         contentDescription = stringResource(R.string.reader_jump_back),
@@ -231,6 +233,7 @@ internal fun ReaderTopInfo(
                 if (showForwardJump) {
                     ReaderJumpHistoryButton(
                         character = requireNotNull(state.forwardTargetCharacter),
+                        progressDisplay = progressDisplay,
                         icon = readerJumpForwardIcon(),
                         iconFirst = false,
                         contentDescription = stringResource(R.string.reader_jump_forward),
@@ -268,6 +271,7 @@ internal fun ReaderTopInfo(
 @Composable
 private fun ReaderJumpHistoryButton(
     character: Int,
+    progressDisplay: ReaderProgressDisplay,
     icon: ImageVector,
     iconFirst: Boolean,
     contentDescription: String,
@@ -292,7 +296,7 @@ private fun ReaderJumpHistoryButton(
             )
         }
         Text(
-            text = readerJumpTargetText(character),
+            text = readerJumpTargetText(character, progressDisplay),
             color = Color(colors.infoText),
             style = MaterialTheme.typography.labelSmall,
         )
@@ -370,6 +374,7 @@ internal fun BoxScope.ReaderBottomChrome(
     state: ReaderChromeState,
     settings: ReaderSettings,
     layout: ReaderChromeLayout,
+    progressDisplay: ReaderProgressDisplay,
     colors: ReaderChromeColors,
     onClose: () -> Unit,
     onMenu: () -> Unit,
@@ -456,7 +461,7 @@ internal fun BoxScope.ReaderBottomChrome(
                     ) {
                         if (layout.showStatisticsInBottomBar) {
                             Text(
-                                text = state.statisticsText(settings),
+                                text = state.statisticsText(settings, progressDisplay),
                                 color = Color(colors.infoText),
                                 style = MaterialTheme.typography.labelMedium,
                                 maxLines = 1,
@@ -464,7 +469,7 @@ internal fun BoxScope.ReaderBottomChrome(
                         }
                         if (layout.showProgressInBottomBar) {
                             Text(
-                                text = state.progressText(settings),
+                                text = state.progressText(settings, progressDisplay),
                                 color = Color(colors.infoText),
                                 style = MaterialTheme.typography.labelMedium,
                                 maxLines = 1,
@@ -507,6 +512,7 @@ internal fun BoxScope.ReaderBottomChrome(
 internal fun ReaderBottomSafeProgress(
     state: ReaderChromeState,
     settings: ReaderSettings,
+    progressDisplay: ReaderProgressDisplay,
     colors: ReaderChromeColors,
     metrics: ReaderBottomChromeMetrics,
     focusMode: Boolean,
@@ -518,7 +524,12 @@ internal fun ReaderBottomSafeProgress(
     onSasayakiSkipForward: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val progress = readerBottomSafeProgressText(state, settings, focusMode)
+    val progress = readerBottomSafeProgressText(
+        state = state,
+        settings = settings,
+        focusMode = focusMode,
+        progressDisplay = progressDisplay,
+    )
     Column(
         modifier = modifier.fillMaxWidth(),
     ) {

@@ -17,7 +17,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import moe.antimony.hoshi.features.dictionary.DictionaryLanguage
 import moe.antimony.hoshi.features.dictionary.DictionarySettingsRepository
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -62,18 +61,20 @@ class SettingsBackupTest {
     }
 
     @Test
-    fun dictionarySettingsRoundTripPreservesLookupLanguage() = runBlocking {
+    fun dictionarySettingsRoundTripPreservesValues() = runBlocking {
         val scope = CoroutineScope(Dispatchers.IO + Job())
         try {
             val source = DictionarySettingsRepository(dataStore(scope, "dictionary-source.preferences_pb"))
-            source.update { it.copy(lookupLanguage = DictionaryLanguage.French) }
+            source.update { it.copy(maxResults = 42, customCSS = ".term { color: red; }") }
 
             val exported = source.exportEntries()
 
             val target = DictionarySettingsRepository(dataStore(scope, "dictionary-target.preferences_pb"))
             target.importEntries(exported)
 
-            assertEquals(DictionaryLanguage.French, target.settings.first().lookupLanguage)
+            val restored = target.settings.first()
+            assertEquals(42, restored.maxResults)
+            assertEquals(".term { color: red; }", restored.customCSS)
         } finally {
             scope.cancel()
         }

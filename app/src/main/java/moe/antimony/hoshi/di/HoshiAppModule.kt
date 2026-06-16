@@ -23,8 +23,6 @@ import moe.antimony.hoshi.features.bookshelf.BookshelfSettingsRepository
 import moe.antimony.hoshi.features.bookshelf.bookshelfSettingsRepository
 import moe.antimony.hoshi.features.dictionary.DictionarySettingsRepository
 import moe.antimony.hoshi.features.dictionary.dictionarySettingsRepository
-import moe.antimony.hoshi.features.profiles.LearningProfilesRepository
-import moe.antimony.hoshi.features.profiles.learningProfilesRepository
 import moe.antimony.hoshi.features.reader.ReaderSettingsRepository
 import moe.antimony.hoshi.features.reader.readerSettingsRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsRepository
@@ -36,6 +34,7 @@ import moe.antimony.hoshi.features.update.UpdateDownloadStore
 import moe.antimony.hoshi.features.update.UpdateSettingsRepository
 import moe.antimony.hoshi.features.update.updateDownloadStore
 import moe.antimony.hoshi.features.update.updateSettingsRepository
+import moe.antimony.hoshi.profiles.ProfileRepository
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -81,18 +80,21 @@ internal object HoshiAppModule {
 
     @Provides
     @Singleton
-    fun provideReaderSettingsRepository(@ApplicationContext context: Context): ReaderSettingsRepository =
-        context.readerSettingsRepository()
+    fun provideReaderSettingsRepository(
+        @ApplicationContext context: Context,
+        profileRepository: ProfileRepository,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    ): ReaderSettingsRepository =
+        context.readerSettingsRepository(profileRepository, ioDispatcher)
 
     @Provides
     @Singleton
-    fun provideDictionarySettingsRepository(@ApplicationContext context: Context): DictionarySettingsRepository =
-        context.dictionarySettingsRepository()
-
-    @Provides
-    @Singleton
-    fun provideLearningProfilesRepository(@ApplicationContext context: Context): LearningProfilesRepository =
-        context.learningProfilesRepository()
+    fun provideDictionarySettingsRepository(
+        @ApplicationContext context: Context,
+        profileRepository: ProfileRepository,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    ): DictionarySettingsRepository =
+        context.dictionarySettingsRepository(profileRepository, ioDispatcher)
 
     @Provides
     @Singleton
@@ -101,8 +103,12 @@ internal object HoshiAppModule {
 
     @Provides
     @Singleton
-    fun provideAnkiSettingsRepository(@ApplicationContext context: Context): AnkiSettingsRepository =
-        context.ankiSettingsRepository()
+    fun provideAnkiSettingsRepository(
+        @ApplicationContext context: Context,
+        profileRepository: ProfileRepository,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    ): AnkiSettingsRepository =
+        context.ankiSettingsRepository(profileRepository, ioDispatcher)
 
     @Provides
     @Singleton

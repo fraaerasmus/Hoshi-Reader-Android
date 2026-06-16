@@ -13,8 +13,11 @@ import moe.antimony.hoshi.features.sync.DriveAuthStatus
 import moe.antimony.hoshi.features.sync.DriveFile
 import moe.antimony.hoshi.features.sync.DriveSyncFiles
 import moe.antimony.hoshi.features.sync.SyncSettings
+import moe.antimony.hoshi.profiles.HoshiProfile
+import moe.antimony.hoshi.profiles.ProfileState
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -381,6 +384,24 @@ class MainShellUiTest {
         assertEquals("99.8%", bookshelfProgressText(progress = 0.998))
         assertEquals("100.0%", bookshelfProgressText(progress = 0.999))
         assertEquals("100.0%", bookshelfProgressText(progress = 1.0))
+    }
+
+    @Test
+    fun unknownBookProfileSelectionFallsBackToAutomatic() {
+        val state = ProfileState(
+            profiles = listOf(
+                HoshiProfile(id = "default-ja", name = "Japanese", dictionaryLanguageId = "ja", isDefault = true),
+                HoshiProfile(id = "english", name = "English", dictionaryLanguageId = "en"),
+            ),
+            defaultProfileId = "default-ja",
+            globalActiveProfileId = "default-ja",
+            loadedProfileId = null,
+            primaryProfileIdsByLanguage = emptyMap(),
+        )
+
+        assertNull(selectedBookProfileId("deleted-profile", state))
+        assertNull(selectedBookProfileId(null, state))
+        assertEquals("english", selectedBookProfileId("english", state))
     }
 
     private fun bookEntry(

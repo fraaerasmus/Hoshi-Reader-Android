@@ -58,8 +58,9 @@ function isStringPartiallyJapanese(str) {
     if (!str) {
         return false;
     }
+    const isCodePointJapanese = window.hoshiLanguageUtilities?.ja?.isCodePointJapanese;
     for (const c of str) {
-        if (window.hoshiSelection?.isCodePointJapanese(c.codePointAt(0))) {
+        if (isCodePointJapanese?.(c.codePointAt(0))) {
             return true;
         }
     }
@@ -325,6 +326,15 @@ function applyTableStyles(html) {
     .replace(/<table(?=[>\s])/g, `<table style="${tableStyle}"`)
     .replace(/<th(?=[>\s])/g, `<th style="${thStyle}"`)
     .replace(/<td(?=[>\s])/g, `<td style="${cellStyle}"`);
+}
+
+function escapeHtml(value) {
+    return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function applyImageStyles(node, imageContainer, aspectRatioSizer, imageBackground, image, filename, appearance, useEmUnits) {
@@ -616,6 +626,25 @@ function constructPitchCategories(pitches, reading, rules) {
     return categories.join(',');
 }
 
+function constructPhoneticTranscriptionsHtml(pitches) {
+    if (!pitches?.length) {
+        return '';
+    }
+
+    const items = [];
+    pitches.forEach(pitchGroup => {
+        pitchGroup.transcriptions?.forEach(transcription => {
+            if (!transcription) return;
+            items.push(`<li class="pronunciation" data-pronunciation-type="phonetic-transcription">${escapeHtml(transcription)}</li>`);
+        });
+    });
+
+    if (!items.length) {
+        return '';
+    }
+    return `<ul>${items.join('')}</ul>`;
+}
+
 // https://github.com/yomidevs/yomitan/blob/d810b2f0842536d24ab82b6cd75d00841710e57b/ext/js/display/structured-content-generator.js#L64
 function createDefinitionImage(data, dictionary, exporting = false) {
     const {
@@ -874,6 +903,7 @@ async function mineEntry(expression, reading, frequencies, pitches, rules, match
     const glossaryFirst = Object.values(singleGlossaries)[0] || '';
     const pitchPositions = constructPitchPositionHtml(pitches);
     const pitchCategories = constructPitchCategories(pitches, reading, rules);
+    const phoneticTranscriptions = constructPhoneticTranscriptionsHtml(pitches);
 
     if (!audioUrls[idx] && window.audioSources?.length && window.needsAudio) {
         audioUrls[idx] = await fetchAudioUrl(expression, reading || expression);
@@ -893,6 +923,7 @@ async function mineEntry(expression, reading, frequencies, pitches, rules, match
         singleGlossaries: JSON.stringify(singleGlossaries),
         pitchPositions,
         pitchCategories,
+        phoneticTranscriptions,
         popupSelectionText,
         audio,
         selectedDictionary: selectedDictionaries[idx]?.name || '',
@@ -1156,7 +1187,7 @@ function createPitchGroup(pitchData, reading) {
     container.appendChild(el('span', { className: 'pitch-dict-label', textContent: pitchData.dictionary }));
 
     const list = el('ul', { className: 'pitch-entries' });
-    pitchData.pitchPositions.forEach((pitch) => {
+    pitchData.pitchPositions?.forEach((pitch) => {
         const li = el('li');
         li.appendChild(createPitchHtml(reading, pitch));
         li.appendChild(document.createTextNode(` [${pitch}]`));
@@ -1167,13 +1198,33 @@ function createPitchGroup(pitchData, reading) {
     return container;
 }
 
-function createTags(entry) {
-    const { deinflectionTrace, frequencies, pitches, reading, expression } = entry;
-    const hasDeinflection = deinflectionTrace?.length;
-    const hasFrequencies = frequencies?.length;
-    const hasPitches = pitches?.length;
+function createTranscriptionGroup(transcriptionData) {
+    const container = el('div', { className: 'transcription-group', 'data-details': transcriptionData.dictionary });
+    container.appendChild(el('span', { className: 'pitch-dict-label', textContent: transcriptionData.dictionary }));
 
-    if (!hasDeinflection && !hasFrequencies && !hasPitches && !window.showExpressionTags) {
+    const list = el('ul', { className: 'pitch-entries transcription-entries' });
+    transcriptionData.transcriptions?.forEach((transcription) => {
+        if (!transcription) return;
+        const li = el('li');
+        li.appendChild(el('span', { className: 'transcription-text', textContent: transcription }));
+        list.appendChild(li);
+    });
+    container.appendChild(list);
+
+    return container;
+}
+
+function createTags(entry) {
+    const { deinflectionTraceRows, frequencies, pitches, reading, expression } = entry;
+    const traceRows = (deinflectionTraceRows || []).filter(row => row?.length);
+    const hasDeinflection = traceRows.length;
+    const hasFrequencies = frequencies?.length;
+    const pitchGroups = (pitches || []).filter(pitch => pitch?.pitchPositions?.length);
+    const transcriptionGroups = (pitches || []).filter(pitch => pitch?.transcriptions?.length);
+    const hasPitches = pitchGroups.length;
+    const hasTranscriptions = transcriptionGroups.length;
+
+    if (!hasDeinflection && !hasFrequencies && !hasPitches && !hasTranscriptions && !window.showExpressionTags) {
         return null;
     }
 
@@ -1189,9 +1240,11 @@ function createTags(entry) {
     }
 
     if (hasDeinflection) {
-        const deinflectionDiv = el('div', { className: 'tag-row' });
-        deinflectionTrace.forEach(tag => deinflectionDiv.appendChild(createDeinflectionTag(tag)));
-        container.appendChild(deinflectionDiv);
+        traceRows.forEach(row => {
+            const deinflectionDiv = el('div', { className: 'tag-row' });
+            row.forEach(tag => deinflectionDiv.appendChild(createDeinflectionTag(tag)));
+            container.appendChild(deinflectionDiv);
+        });
     }
 
     if (hasFrequencies) {
@@ -1223,7 +1276,7 @@ function createTags(entry) {
         const pitchContainer = el('div', { className: 'pitch-list' });
         if (window.deduplicatePitchAccents) {
             const seen = new Set();
-            pitches.forEach(pitch => {
+            pitchGroups.forEach(pitch => {
                 const unique = pitch.pitchPositions.filter(pos => !seen.has(pos));
                 if (unique.length > 0) {
                     unique.forEach(pos => seen.add(pos));
@@ -1231,9 +1284,15 @@ function createTags(entry) {
                 }
             });
         } else {
-            pitches.forEach(pitch => pitchContainer.appendChild(createPitchGroup(pitch, reading)));
+            pitchGroups.forEach(pitch => pitchContainer.appendChild(createPitchGroup(pitch, reading)));
         }
         container.appendChild(pitchContainer);
+    }
+
+    if (hasTranscriptions) {
+        const transcriptionContainer = el('div', { className: 'pitch-list transcription-list' });
+        transcriptionGroups.forEach(transcription => transcriptionContainer.appendChild(createTranscriptionGroup(transcription)));
+        container.appendChild(transcriptionContainer);
     }
 
     return container;

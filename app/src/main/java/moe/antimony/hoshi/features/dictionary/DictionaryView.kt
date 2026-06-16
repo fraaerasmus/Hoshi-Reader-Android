@@ -106,10 +106,10 @@ import java.text.DateFormat
 import java.util.Date
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.dictionary.DictionaryInfo
 import moe.antimony.hoshi.dictionary.DictionaryType
-import moe.antimony.hoshi.dictionary.RecommendedDictionaries
-import moe.antimony.hoshi.features.profiles.toProfileDictionarySelections
+import moe.antimony.hoshi.dictionary.recommendedDictionariesForLanguage
 import moe.antimony.hoshi.features.settings.SettingsDetailScaffold
 import moe.antimony.hoshi.features.reader.ReaderFontManager
 import moe.antimony.hoshi.importing.ImportFileType
@@ -122,6 +122,9 @@ import kotlin.math.roundToInt
 
 private val DictionarySwitchColor = Color(0xFF34C759)
 
+internal fun scanNonJapaneseTextSettingVisible(contentLanguageProfile: ContentLanguageProfile): Boolean =
+    contentLanguageProfile.dictionaryLanguageId == ContentLanguageProfile.JapaneseLanguageId
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DictionaryView(
@@ -132,10 +135,18 @@ fun DictionaryView(
     val appContainer = LocalHoshiUiDependencies.current
     val dictionaryViewModel: DictionaryViewModel = hiltViewModel()
     val uiState by dictionaryViewModel.uiState.collectAsStateWithLifecycle()
+    val profileState by appContainer.profileRepository.state.collectAsStateWithLifecycle()
     var destination by remember { mutableStateOf<DictionaryDestination?>(null) }
     var showUpdateConfirmation by remember { mutableStateOf(false) }
     var showDownloadConfirmation by remember { mutableStateOf(false) }
     var intervalMenuExpanded by remember { mutableStateOf(false) }
+    val recommendedDictionaries = remember(profileState.effectiveContentLanguageProfile.dictionaryLanguageId) {
+        recommendedDictionariesForLanguage(profileState.effectiveContentLanguageProfile.dictionaryLanguageId)
+    }
+
+    LaunchedEffect(profileState.effectiveProfile.id) {
+        dictionaryViewModel.reload()
+    }
 
     val importer = rememberLauncherForActivityResult(MultipleFileImportContent()) { uris: List<Uri> ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -314,13 +325,10 @@ fun DictionaryView(
             DictionarySettingsView(
                 settings = uiState.settings,
                 termDictionaries = uiState.dictionaries[DictionaryType.Term].orEmpty(),
+                showScanNonJapaneseText = scanNonJapaneseTextSettingVisible(
+                    profileState.effectiveContentLanguageProfile,
+                ),
                 onSettingsChange = dictionaryViewModel::updateSettings,
-                onLookupLanguageChange = { language ->
-                    dictionaryViewModel.updateSettings { current -> current.copy(lookupLanguage = language) }
-                    coroutineScope.launch {
-                        appContainer.learningProfilesRepository.updateActiveLookupLanguage(language)
-                    }
-                },
                 onClose = { destination = null },
                 modifier = modifier,
             )
@@ -617,16 +625,7 @@ fun DictionaryView(
                         }
                         DictionaryRow(
                             dictionary = dictionary,
-                            onEnabledChange = { enabled ->
-                                dictionaryViewModel.setDictionaryEnabled(dictionary, enabled) {
-                                    val selections = withContext(Dispatchers.IO) {
-                                        appContainer.dictionaryRepository
-                                            .currentConfig()
-                                            .toProfileDictionarySelections()
-                                    }
-                                    appContainer.learningProfilesRepository.updateActiveDictionarySelections(selections)
-                                }
-                            },
+                            onEnabledChange = { dictionaryViewModel.setDictionaryEnabled(dictionary, it) },
                             onDelete = {
                                 revealedFileName = null
                                 dictionaryViewModel.deleteDictionary(dictionary)
@@ -737,24 +736,32 @@ fun DictionaryView(
                 Column {
                     Text(stringResource(R.string.dictionary_download_prompt))
                     Spacer(modifier = Modifier.height(8.dp))
-                    RecommendedDictionaries.forEach { dictionary ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    showDownloadConfirmation = false
-                                    dictionaryViewModel.importRecommendedDictionaries(listOf(dictionary))
-                                }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                stringResource(
-                                    R.string.dictionary_download_item_format,
-                                    dictionary.name,
-                                    stringResource(dictionary.type.displayNameRes),
-                                ),
-                            )
+                    if (recommendedDictionaries.isEmpty()) {
+                        Text(
+                            text = stringResource(R.string.dictionary_download_no_recommended),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else {
+                        recommendedDictionaries.forEach { dictionary ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        showDownloadConfirmation = false
+                                        dictionaryViewModel.importRecommendedDictionaries(listOf(dictionary))
+                                    }
+                                    .padding(vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    stringResource(
+                                        R.string.dictionary_download_item_format,
+                                        dictionary.name,
+                                        stringResource(dictionary.type.displayNameRes),
+                                    ),
+                                )
+                            }
                         }
                     }
                 }
@@ -1015,13 +1022,12 @@ private fun GroupDivider() {
 private fun DictionarySettingsView(
     settings: DictionarySettings,
     termDictionaries: List<DictionaryInfo>,
+    showScanNonJapaneseText: Boolean,
     onSettingsChange: ((DictionarySettings) -> DictionarySettings) -> Unit,
-    onLookupLanguageChange: (DictionaryLanguage) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var showCollapsedDictionaries by remember { mutableStateOf(false) }
-    var languageMenuExpanded by remember { mutableStateOf(false) }
     if (showCollapsedDictionaries) {
         CollapsedDictionariesView(
             dictionaries = termDictionaries,
@@ -1068,39 +1074,15 @@ private fun DictionarySettingsView(
             item {
                 SectionLabel(stringResource(R.string.dictionary_settings_lookup))
                 SettingsGroup {
-                    Box {
-                        ListItem(
-                            modifier = Modifier.clickable { languageMenuExpanded = true },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                            headlineContent = { Text(stringResource(R.string.dictionary_lookup_language)) },
-                            supportingContent = { Text(stringResource(settings.lookupLanguage.labelRes)) },
-                            trailingContent = {
-                                Icon(
-                                    imageVector = Icons.Rounded.ChevronRight,
-                                    contentDescription = null,
-                                )
-                            },
-                        )
-                        DropdownMenu(
-                            expanded = languageMenuExpanded,
-                            onDismissRequest = { languageMenuExpanded = false },
+                    if (showScanNonJapaneseText) {
+                        ToggleRow(
+                            stringResource(R.string.dictionary_scan_non_japanese),
+                            settings.scanNonJapaneseText,
                         ) {
-                            DictionaryLanguage.entries.forEach { language ->
-                                DropdownMenuItem(
-                                    text = { Text(stringResource(language.labelRes)) },
-                                    onClick = {
-                                        languageMenuExpanded = false
-                                        onLookupLanguageChange(language)
-                                    },
-                                )
-                            }
+                            onSettingsChange { current -> current.copy(scanNonJapaneseText = it) }
                         }
+                        GroupDivider()
                     }
-                    GroupDivider()
-                    ToggleRow(stringResource(R.string.dictionary_scan_non_japanese), settings.scanNonJapaneseText) {
-                        onSettingsChange { current -> current.copy(scanNonJapaneseText = it) }
-                    }
-                    GroupDivider()
                     ToggleRow(stringResource(R.string.dictionary_scan_multi_word), settings.scanMultiWordPhrases) {
                         onSettingsChange { current -> current.copy(scanMultiWordPhrases = it) }
                     }

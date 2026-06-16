@@ -50,18 +50,17 @@ import moe.antimony.hoshi.ui.hoshiOutlinedTextFieldColors
 import moe.antimony.hoshi.ui.hoshiSingleLineTextFieldLineLimits
 import moe.antimony.hoshi.ui.rememberSyncedTextFieldState
 import moe.antimony.hoshi.ui.theme.LocalHoshiEInkMode
-import java.text.NumberFormat
 import java.util.Locale
 
 @Composable
 internal fun ReaderChapterSheet(
     book: EpubBook,
     currentPosition: ReaderChapterPosition,
+    progressDisplay: ReaderProgressDisplay = ReaderProgressDisplay.characters(),
     onJump: (ReaderChapterPosition, String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val rows = remember(book, currentPosition.index) { book.chapterRows(currentPosition.index) }
-    val numberFormat = remember { NumberFormat.getIntegerInstance(Locale.US) }
     val sheetStyle = readerSheetStyle()
     val chrome = readerChapterSheetChrome()
     val coverBitmap = remember(book) {
@@ -89,7 +88,7 @@ internal fun ReaderChapterSheet(
                         book = book,
                         coverBitmap = coverBitmap,
                         currentPosition = currentPosition,
-                        numberFormat = numberFormat,
+                        progressDisplay = progressDisplay,
                         onJumpToCharacter = { showJumpDialog = true },
                         modifier = Modifier.padding(bottom = 12.dp),
                     )
@@ -97,7 +96,7 @@ internal fun ReaderChapterSheet(
                 rows.forEach { row ->
                     ReaderChapterListRow(
                         row = row,
-                        numberFormat = numberFormat,
+                        progressDisplay = progressDisplay,
                         onClick = {
                             onJump(
                                 ReaderChapterPosition(index = row.spineIndex, progress = 0.0),
@@ -114,6 +113,7 @@ internal fun ReaderChapterSheet(
     if (showJumpDialog) {
         JumpToCharacterDialog(
             totalCharacters = book.bookInfo.characterCount,
+            progressDisplay = progressDisplay,
             onDismiss = { showJumpDialog = false },
             onConfirm = { count ->
                 showJumpDialog = false
@@ -128,7 +128,7 @@ private fun ReaderChapterBookHeader(
     book: EpubBook,
     coverBitmap: ImageBitmap?,
     currentPosition: ReaderChapterPosition,
-    numberFormat: NumberFormat,
+    progressDisplay: ReaderProgressDisplay,
     onJumpToCharacter: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -162,7 +162,7 @@ private fun ReaderChapterBookHeader(
                 maxLines = 1,
             )
             Text(
-                text = "${numberFormat.format(currentCharacter)} / ${numberFormat.format(totalCharacters)} (${String.format(Locale.US, "%.1f", percent)}%)",
+                text = "${progressDisplay.rangeText(currentCharacter, totalCharacters)} (${String.format(Locale.US, "%.1f", percent)}%)",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -206,7 +206,7 @@ private fun EpubBook.decodeCoverImageBitmap(): ImageBitmap? =
 @Composable
 private fun ReaderChapterListRow(
     row: ReaderChapterRow,
-    numberFormat: NumberFormat,
+    progressDisplay: ReaderProgressDisplay,
     onClick: () -> Unit,
 ) {
     val eInkMode = LocalHoshiEInkMode.current
@@ -252,7 +252,7 @@ private fun ReaderChapterListRow(
         )
         row.characterCount?.let { count ->
             Text(
-                text = numberFormat.format(count),
+                text = progressDisplay.countText(count),
                 color = rowMetaColor,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -263,6 +263,7 @@ private fun ReaderChapterListRow(
 @Composable
 private fun JumpToCharacterDialog(
     totalCharacters: Int,
+    progressDisplay: ReaderProgressDisplay,
     onDismiss: () -> Unit,
     onConfirm: (Int) -> Unit,
 ) {
@@ -276,11 +277,31 @@ private fun JumpToCharacterDialog(
     val parsed = input.filter(Char::isDigit).toIntOrNull()
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.reader_jump_to_character)) },
+        title = {
+            Text(
+                stringResource(
+                    if (progressDisplay.usesWords) {
+                        R.string.reader_jump_to_word
+                    } else {
+                        R.string.reader_jump_to_character
+                    },
+                ),
+            )
+        },
         text = {
             OutlinedTextField(
                 state = inputState,
-                label = { Text(stringResource(R.string.reader_character)) },
+                label = {
+                    Text(
+                        stringResource(
+                            if (progressDisplay.usesWords) {
+                                R.string.reader_word
+                            } else {
+                                R.string.reader_character
+                            },
+                        ),
+                    )
+                },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 lineLimits = hoshiSingleLineTextFieldLineLimits(),
                 scrollState = inputScrollState,
@@ -290,7 +311,14 @@ private fun JumpToCharacterDialog(
         confirmButton = {
             TextButton(
                 enabled = parsed != null,
-                onClick = { onConfirm((parsed ?: 0).coerceIn(0, totalCharacters)) },
+                onClick = {
+                    onConfirm(
+                        progressDisplay.rawTargetFromDisplayCount(
+                            displayCount = parsed ?: 0,
+                            totalCharacters = totalCharacters,
+                        ),
+                    )
+                },
             ) {
                 Text(stringResource(R.string.reader_jump))
             }

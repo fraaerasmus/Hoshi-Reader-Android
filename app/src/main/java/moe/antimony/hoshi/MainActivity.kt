@@ -2,6 +2,7 @@ package moe.antimony.hoshi
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -52,6 +53,10 @@ class MainActivity : ComponentActivity() {
             }
             val systemDark = isSystemInDarkTheme()
             val loadedReaderSettings = readerSettings
+            LaunchedEffect(loadedReaderSettings?.lockCurrentOrientation) {
+                val settings = loadedReaderSettings ?: return@LaunchedEffect
+                requestedOrientation = requestedOrientationForLockCurrentOrientation(settings.lockCurrentOrientation)
+            }
             val darkTheme = loadedReaderSettings?.usesDarkInterface(systemDark) ?: systemDark
             val useDarkSystemBarIcons = loadedReaderSettings?.usesDarkSystemBarIcons(systemDark) ?: !systemDark
             CompositionLocalProvider(LocalHoshiUiDependencies provides uiDependencies) {
@@ -98,3 +103,10 @@ class MainActivity : ComponentActivity() {
     private fun Intent?.importUri(): Uri? =
         this?.data?.takeIf { action == Intent.ACTION_VIEW }
 }
+
+internal fun requestedOrientationForLockCurrentOrientation(lockCurrentOrientation: Boolean): Int =
+    if (lockCurrentOrientation) {
+        ActivityInfo.SCREEN_ORIENTATION_LOCKED
+    } else {
+        ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    }

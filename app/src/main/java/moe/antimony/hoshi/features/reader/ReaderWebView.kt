@@ -93,6 +93,7 @@ fun ReaderWebView(
     onFlushAutoSyncExport: () -> Unit = {},
     onForegroundAutoSyncImport: () -> Unit = {},
     onTextSelected: (ReaderSelectionData) -> Int? = { null },
+    contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -189,7 +190,8 @@ fun ReaderWebView(
     val popupAssets = remember(context) { LookupPopupAssets.load(context) }
     val readerPopupBridgeHolder = remember { ReaderLookupPopupBridgeCallbackHolder() }
     val popupDarkMode = effectiveSettings.usesDarkInterface(systemDarkTheme)
-    val popupContentLanguageProfile = ContentLanguageProfile.Default
+    val popupContentLanguageProfile = contentLanguageProfile
+    val progressDisplay = readerProgressDisplay(contentLanguageProfile)
     val readerPopupIframeDocument = remember(
         dictionaryStyles,
         dictionarySettings,
@@ -702,7 +704,6 @@ fun ReaderWebView(
                     message.query,
                     popup.state.dictionarySettings.maxResults,
                     popup.state.dictionarySettings.scanLength,
-                    popup.state.dictionarySettings.lookupLanguage.code,
                 )
                 if (results.isNotEmpty()) {
                     setLookupPopups(
@@ -1159,6 +1160,7 @@ fun ReaderWebView(
     val chromeLayout = readerChromeLayout(
         chromeState,
         effectiveSettings,
+        progressDisplay = progressDisplay,
         showSasayakiToggle = reserveSasayakiTopToggle || showSasayakiTopToggle,
         showStatisticsToggle = effectiveSettings.enableStatistics && effectiveSettings.showStatisticsToggle,
         focusMode = focusMode,
@@ -1235,12 +1237,26 @@ fun ReaderWebView(
                 }
                 if (highlights != null) {
                     val loadChapter = currentLoadChapter()
+                    val currentSasayakiColors = readerSasayakiColors(
+                        settings = effectiveSettings,
+                        sasayakiSettings = sasayakiSettings,
+                        systemDark = systemDarkTheme,
+                    )
                     ChapterWebView(
                         book = book,
                         chapterPosition = readerPosition.loadPosition,
                         chapterFragment = readerPosition.loadFragment,
                         webViewViewportSize = stateHolder.webViewViewportSize,
-                        onReaderViewportSizeChanged = stateHolder::updateViewportSize,
+                        onReaderViewportSizeChanged = { size ->
+                            val shouldResumeLookupAudio = stateHolder.lookupPopups.isNotEmpty() &&
+                                stateHolder.sasayakiWasPausedByLookup
+                            if (stateHolder.updateViewportSize(size)) {
+                                rootSelectionHighlight = null
+                                if (shouldResumeLookupAudio) {
+                                    resumeSasayakiAfterLookupIfNeeded()
+                                }
+                            }
+                        },
                         onWebViewReady = { webView = it },
                         isWebViewRestoring = stateHolder.isWebViewRestoring,
                         webViewRestoreEpoch = stateHolder.webViewRestoreEpoch,
@@ -1271,7 +1287,7 @@ fun ReaderWebView(
                         scanNonJapaneseText = dictionarySettings.scanNonJapaneseText,
                         scanMultiWordPhrases = dictionarySettings.scanMultiWordPhrases,
                         scanWithShiftKey = dictionarySettings.scanWithShiftKey,
-                        scanLength = dictionarySettings.scanLength,
+                        selectionScanLength = readerSelectionMaxLength(dictionarySettings),
                         contentLanguageProfile = popupContentLanguageProfile,
                         readerSettings = effectiveSettings,
                         chapterHighlightsJson = ReaderHighlights.chapterHighlightsJson(
@@ -1283,8 +1299,8 @@ fun ReaderWebView(
                             matchData = sasayakiMatchData,
                             chapterIndex = readerPosition.loadPosition.index,
                         ),
-                        sasayakiTextColor = sasayakiSettings.textColor(effectiveSettings.usesDarkInterface(systemDarkTheme)),
-                        sasayakiBackgroundColor = sasayakiSettings.backgroundColor(effectiveSettings.usesDarkInterface(systemDarkTheme)),
+                        sasayakiTextColor = currentSasayakiColors.textColor,
+                        sasayakiBackgroundColor = currentSasayakiColors.backgroundColor,
                         onTextSelected = handleTextSelected,
                         onClearLookupPopup = ::closeLookupPopupsAndSelection,
                         onReaderTapOutside = ::handleReaderTapOutside,
@@ -1314,6 +1330,7 @@ fun ReaderWebView(
         ReaderTopInfo(
             state = chromeState,
             settings = effectiveSettings,
+            progressDisplay = progressDisplay,
             colors = readerChromeColors(effectiveSettings, systemDarkTheme),
             onStatisticsToggle = if (effectiveSettings.enableStatistics && effectiveSettings.showStatisticsToggle) {
                 ::toggleStatisticsTracking
@@ -1351,6 +1368,7 @@ fun ReaderWebView(
         ReaderBottomSafeProgress(
             state = chromeState,
             settings = effectiveSettings,
+            progressDisplay = progressDisplay,
             colors = readerChromeColors(effectiveSettings, systemDarkTheme),
             metrics = bottomChromeMetrics,
             focusMode = focusMode,
@@ -1366,6 +1384,7 @@ fun ReaderWebView(
             state = chromeState,
             settings = effectiveSettings,
             layout = chromeLayout,
+            progressDisplay = progressDisplay,
             colors = readerChromeColors(effectiveSettings, systemDarkTheme),
             onClose = ::closeReader,
             onMenu = stateHolder::toggleReaderMenu,
@@ -1390,6 +1409,7 @@ fun ReaderWebView(
         if (showAppearance) {
             ReaderAppearanceSheet(
                 settings = effectiveSettings,
+                progressDisplay = progressDisplay,
                 onSettingsChange = {
                     stateHolder.applySettings(it)
                     onReaderSettingsChange(it)
@@ -1404,6 +1424,7 @@ fun ReaderWebView(
             ReaderChapterSheet(
                 book = book,
                 currentPosition = readerPosition.displayedPosition,
+                progressDisplay = progressDisplay,
                 onJump = { target, fragment ->
                     closeLookupPopupsAndSelection()
                     jumpToPositionWithHistory(target, fragment)
@@ -1441,6 +1462,7 @@ fun ReaderWebView(
                 currentCharacter = currentDisplayedCharacter(),
                 currentChapterEndCharacter = currentChapterEndCharacter(),
                 totalCharacters = book.bookInfo.characterCount,
+                progressDisplay = progressDisplay,
                 onToggleTracking = ::toggleStatisticsTracking,
                 onDismiss = stateHolder::dismissStatistics,
             )

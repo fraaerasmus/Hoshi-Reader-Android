@@ -4,30 +4,35 @@ import java.io.File
 import javax.inject.Inject
 import kotlinx.serialization.json.Json
 import moe.antimony.hoshi.di.FilesDir
+import moe.antimony.hoshi.profiles.ProfileRepository
 
 internal class DictionaryStorageDataSource(
     filesDir: File,
-    private val json: Json,
+    private val json: Json = defaultJson(),
+    private val profileRepository: ProfileRepository? = null,
 ) {
     @Inject
-    constructor(@FilesDir filesDir: File) : this(
+    constructor(@FilesDir filesDir: File, profileRepository: ProfileRepository) : this(
         filesDir = filesDir,
         json = defaultJson(),
+        profileRepository = profileRepository,
     )
 
     private val dictionariesDir = File(filesDir, "Dictionaries")
-    private val configFile = File(dictionariesDir, "config.json")
+    private val configFile: File
+        get() = configFile()
 
     fun loadDictionaries(type: DictionaryType): List<DictionaryInfo> {
-        val stored = storedDictionaries(type)
-        val entries = loadConfig().entriesForType(type)
-        return DictionaryManager.collectDictionaries(stored, entries)
+        return loadDictionaries(
+            type = type,
+            configFile = configFile,
+            unconfiguredDictionariesEnabled = true,
+        )
     }
 
-    fun currentConfig(): DictionaryConfig = DictionaryConfig(
-        termDictionaries = configEntries(DictionaryType.Term),
-        frequencyDictionaries = configEntries(DictionaryType.Frequency),
-        pitchDictionaries = configEntries(DictionaryType.Pitch),
+    fun currentConfig(): DictionaryConfig = currentConfig(
+        configFile = configFile,
+        unconfiguredDictionariesEnabled = true,
     )
 
     fun updatableDictionaries(): List<DictionaryUpdateCandidate> =
@@ -89,13 +94,55 @@ internal class DictionaryStorageDataSource(
             }
         }
 
+    fun saveConfigsWithUpdatedDictionaryReplacement(
+        type: DictionaryType,
+        oldFileName: String,
+        replacementFileName: String,
+        enabled: Boolean,
+        order: Int,
+    ) {
+        val profiles = profileRepository?.state?.value?.profiles
+        if (profiles == null) {
+            saveConfig(configWithImportedDictionaryReplacing(type, replacementFileName, enabled, order))
+            return
+        }
+
+        profiles.forEach { profile ->
+            val file = configFile(profile.id)
+            val current = loadConfig(file)
+            val updated = current.withUpdatedDictionaryReplacement(type, oldFileName, replacementFileName)
+            if (updated != current) {
+                saveConfig(updated, file)
+            }
+        }
+    }
+
     fun saveConfigFromStorage() {
-        saveConfig(currentConfig())
+        val profiles = profileRepository?.state?.value?.profiles
+        if (profiles == null) {
+            saveConfig(currentConfig())
+            return
+        }
+
+        val activeProfileId = profileRepository.currentEffectiveProfileId
+        profiles.forEach { profile ->
+            val file = configFile(profile.id)
+            val config = currentConfig(
+                configFile = file,
+                unconfiguredDictionariesEnabled = profile.id == activeProfileId,
+            )
+            saveConfig(config, file)
+        }
     }
 
     fun saveConfig(config: DictionaryConfig) {
+        saveConfig(config, configFile)
+    }
+
+    private fun saveConfig(config: DictionaryConfig, file: File) {
         dictionariesDir.mkdirs()
-        configFile.writeText(json.encodeToString(config))
+        file.parentFile?.mkdirs()
+        file.writeText(json.encodeToString(config))
     }
 
     fun deleteDictionary(type: DictionaryType, fileName: String) {
@@ -131,15 +178,69 @@ internal class DictionaryStorageDataSource(
             .orEmpty()
     }
 
-    private fun configEntries(type: DictionaryType): List<DictionaryConfig.DictionaryEntry> =
-        loadDictionaries(type).mapIndexed { index, dictionary ->
+    private fun currentConfig(
+        configFile: File,
+        unconfiguredDictionariesEnabled: Boolean,
+    ): DictionaryConfig = DictionaryConfig(
+        termDictionaries = configEntries(
+            type = DictionaryType.Term,
+            configFile = configFile,
+            unconfiguredDictionariesEnabled = unconfiguredDictionariesEnabled,
+        ),
+        frequencyDictionaries = configEntries(
+            type = DictionaryType.Frequency,
+            configFile = configFile,
+            unconfiguredDictionariesEnabled = unconfiguredDictionariesEnabled,
+        ),
+        pitchDictionaries = configEntries(
+            type = DictionaryType.Pitch,
+            configFile = configFile,
+            unconfiguredDictionariesEnabled = unconfiguredDictionariesEnabled,
+        ),
+    )
+
+    private fun configEntries(
+        type: DictionaryType,
+        configFile: File,
+        unconfiguredDictionariesEnabled: Boolean,
+    ): List<DictionaryConfig.DictionaryEntry> =
+        loadDictionaries(
+            type = type,
+            configFile = configFile,
+            unconfiguredDictionariesEnabled = unconfiguredDictionariesEnabled,
+        ).mapIndexed { index, dictionary ->
             DictionaryConfig.DictionaryEntry(dictionary.path.name, dictionary.isEnabled, index)
         }
 
-    private fun loadConfig(): DictionaryConfig =
+    private fun loadDictionaries(
+        type: DictionaryType,
+        configFile: File,
+        unconfiguredDictionariesEnabled: Boolean,
+    ): List<DictionaryInfo> {
+        val stored = storedDictionaries(type)
+        val entries = loadConfig(configFile).entriesForType(type)
+        return DictionaryManager.collectDictionaries(
+            storedDicts = stored,
+            configDicts = entries,
+            unconfiguredDictionariesEnabled = unconfiguredDictionariesEnabled,
+        )
+    }
+
+    private fun configFile(profileId: String? = null): File =
+        if (profileRepository != null) {
+            if (profileId == null) {
+                profileRepository.dictionaryConfigFile()
+            } else {
+                profileRepository.dictionaryConfigFile(profileId)
+            }
+        } else {
+            File(dictionariesDir, "config.json")
+        }
+
+    private fun loadConfig(file: File = configFile): DictionaryConfig =
         runCatching {
-            if (!configFile.exists()) return EmptyDictionaryConfig
-            json.decodeFromString<DictionaryConfig>(configFile.readText())
+            if (!file.exists()) return EmptyDictionaryConfig
+            json.decodeFromString<DictionaryConfig>(file.readText())
         }.getOrDefault(EmptyDictionaryConfig)
 
     private companion object {
@@ -170,4 +271,24 @@ private fun DictionaryConfig.copyForType(
     DictionaryType.Term -> copy(termDictionaries = transform(termDictionaries))
     DictionaryType.Frequency -> copy(frequencyDictionaries = transform(frequencyDictionaries))
     DictionaryType.Pitch -> copy(pitchDictionaries = transform(pitchDictionaries))
+}
+
+private fun DictionaryConfig.withUpdatedDictionaryReplacement(
+    type: DictionaryType,
+    oldFileName: String,
+    replacementFileName: String,
+): DictionaryConfig = copyForType(type) { entries ->
+    if (entries.none { it.fileName == oldFileName }) return@copyForType entries
+    var replaced = false
+    entries.mapNotNull { entry ->
+        when {
+            entry.fileName == oldFileName && !replaced -> {
+                replaced = true
+                entry.copy(fileName = replacementFileName)
+            }
+            entry.fileName == oldFileName -> null
+            entry.fileName == replacementFileName -> null
+            else -> entry
+        }
+    }
 }

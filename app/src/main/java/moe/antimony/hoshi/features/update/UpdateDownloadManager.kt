@@ -20,7 +20,7 @@ import java.security.MessageDigest
 
 @Singleton
 internal class AndroidUpdateDownloadManager @Inject constructor(
-    @param:ApplicationContext context: Context,
+    @ApplicationContext context: Context,
     private val store: UpdateDownloadStore,
 ) : UpdateDownloadController {
     private val appContext = context.applicationContext

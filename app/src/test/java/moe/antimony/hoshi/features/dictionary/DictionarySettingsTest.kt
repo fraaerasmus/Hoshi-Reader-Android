@@ -1,5 +1,6 @@
 package moe.antimony.hoshi.features.dictionary
 
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -11,7 +12,6 @@ class DictionarySettingsTest {
     fun defaultsMatchIosUserConfig() {
         val settings = DictionarySettings()
 
-        assertEquals(DictionaryLanguage.Japanese, settings.lookupLanguage)
         assertTrue(settings.autoUpdateDictionaries)
         assertEquals(DictionaryUpdateInterval.Weekly, settings.dictionaryUpdateInterval)
         assertEquals(null, settings.lastDictionaryUpdateEpochMillis)
@@ -45,5 +45,11 @@ class DictionarySettingsTest {
         assertEquals(30L * 24L * 60L * 60L * 1000L, DictionaryUpdateInterval.Monthly.intervalMillis)
         assertEquals(DictionaryUpdateInterval.Weekly, DictionaryUpdateInterval.fromRawValue("Weekly"))
         assertEquals(null, DictionaryUpdateInterval.fromRawValue("Yearly"))
+    }
+
+    @Test
+    fun scanNonJapaneseTextSettingIsOnlyVisibleForJapaneseProfiles() {
+        assertTrue(scanNonJapaneseTextSettingVisible(ContentLanguageProfile.Japanese))
+        assertFalse(scanNonJapaneseTextSettingVisible(ContentLanguageProfile.English))
     }
 }

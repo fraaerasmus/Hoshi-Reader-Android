@@ -3,6 +3,8 @@ package moe.antimony.hoshi.features.reader
 import androidx.compose.ui.unit.IntSize
 import kotlin.io.path.createTempDirectory
 import moe.antimony.hoshi.content.ContentLanguageProfile
+import moe.antimony.hoshi.features.dictionary.LookupPopupItem
+import moe.antimony.hoshi.features.dictionary.LookupPopupState
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -123,6 +125,45 @@ class ReaderWebViewStateHolderTest {
     }
 
     @Test
+    fun restoreCompletionActionKeepsReaderRestoringUntilWebViewIsVisible() {
+        var restoreCompletedCount = 0
+
+        val afterVisible = readerRestoreCompletionAfterVisibleAction(
+            chapterFragment = null,
+            evaluateProgress = { error("Progress should not be evaluated without a fragment") },
+            onSaveProgress = { error("Progress should not be saved without a fragment") },
+            onRestoreCompleted = { restoreCompletedCount += 1 },
+        )
+
+        assertEquals(0, restoreCompletedCount)
+
+        afterVisible()
+
+        assertEquals(1, restoreCompletedCount)
+    }
+
+    @Test
+    fun fragmentRestoreCompletionEvaluatesProgressOnlyAfterWebViewIsVisible() {
+        val events = mutableListOf<String>()
+
+        val afterVisible = readerRestoreCompletionAfterVisibleAction(
+            chapterFragment = "chapter-anchor",
+            evaluateProgress = { callback ->
+                events += "evaluate"
+                callback("\"0.42\"")
+            },
+            onSaveProgress = { progress -> events += "save $progress" },
+            onRestoreCompleted = { events += "restored" },
+        )
+
+        assertTrue(events.isEmpty())
+
+        afterVisible()
+
+        assertEquals(listOf("evaluate", "save 0.42", "restored"), events)
+    }
+
+    @Test
     fun readerNavigationInputIsIgnoredWhileWebViewIsRestoring() {
         val holder = stateHolder(initialIndex = 2)
 
@@ -173,6 +214,20 @@ class ReaderWebViewStateHolderTest {
 
         assertEquals(ReaderChapterPosition(index = 1, progress = 0.35), holder.readerPosition.loadPosition)
         assertEquals(IntSize(900, 1200), holder.webViewViewportSize)
+    }
+
+    @Test
+    fun viewportResizeAfterInitialMeasureDismissesLookupPopups() {
+        val holder = stateHolder(initialIndex = 1)
+        holder.updateViewportSize(IntSize(800, 1200))
+        holder.markWebViewRestored()
+        holder.markSasayakiPausedByLookup()
+        holder.setLookupPopups(listOf(lookupPopup()))
+
+        holder.updateViewportSize(IntSize(900, 1200))
+
+        assertTrue(holder.lookupPopups.isEmpty())
+        assertFalse(holder.sasayakiWasPausedByLookup)
     }
 
     @Test
@@ -650,6 +705,20 @@ class ReaderWebViewStateHolderTest {
             initialPosition = ReaderChapterPosition(
                 index = initialIndex,
                 progress = initialProgress,
+            ),
+        )
+
+    private fun lookupPopup(): LookupPopupItem =
+        LookupPopupItem(
+            state = LookupPopupState(
+                selection = ReaderSelectionData(
+                    text = "corner",
+                    sentence = "corner",
+                    rect = ReaderSelectionRect(x = 100.0, y = 100.0, width = 50.0, height = 24.0),
+                    normalizedOffset = 0,
+                ),
+                results = emptyList(),
+                isVertical = false,
             ),
         )
 }

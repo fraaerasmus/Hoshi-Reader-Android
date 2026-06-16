@@ -17,6 +17,71 @@ import java.io.File
 
 class ReaderChromeTest {
     @Test
+    fun wordDisplayUnitRoundsCharacterCountsUp() {
+        val display = ReaderProgressDisplay.word()
+
+        assertEquals(0, display.displayCount(0))
+        assertEquals(1, display.displayCount(1))
+        assertEquals(1, display.displayCount(5))
+        assertEquals(2, display.displayCount(6))
+        assertEquals(71, display.displayCount(355))
+        assertEquals(33_865, display.displayCount(169_325))
+    }
+
+    @Test
+    fun wordDisplayUnitConvertsJumpTargetsBackToCharacters() {
+        val display = ReaderProgressDisplay.word()
+
+        assertEquals(0, display.rawTargetFromDisplayCount(0, totalCharacters = 1_000))
+        assertEquals(500, display.rawTargetFromDisplayCount(100, totalCharacters = 1_000))
+        assertEquals(1_000, display.rawTargetFromDisplayCount(250, totalCharacters = 1_000))
+    }
+
+    @Test
+    fun formatsEnglishProfileProgressWithWordCountsAndRawPercentage() {
+        val text = ReaderChromeState(
+            title = "Moby-Dick",
+            currentCharacter = 355,
+            totalCharacters = 169_325,
+        ).progressText(ReaderSettings(), ReaderProgressDisplay.word())
+
+        assertEquals("71 / 33,865 0.21%", text)
+    }
+
+    @Test
+    fun formatsEnglishProfileStatisticsWithWordSpeed() {
+        val text = ReaderChromeState(
+            title = "Moby-Dick",
+            currentCharacter = 355,
+            totalCharacters = 169_325,
+            statistics = ReaderStatisticsChromeState(readingSpeed = 3_600, readingTimeSeconds = 65.0),
+        ).statisticsText(
+            ReaderSettings(
+                enableStatistics = true,
+                showReadingSpeed = true,
+                showReadingTime = true,
+            ),
+            ReaderProgressDisplay.word(),
+        )
+
+        assertEquals("720 / h 0:01", text)
+    }
+
+    @Test
+    fun formatsEnglishProfileCountsWithoutWordUnits() {
+        val display = ReaderProgressDisplay.word()
+
+        assertEquals("1", display.countText(1))
+        assertEquals("71", display.countText(355))
+        assertEquals("720 / h", display.speedText(3_600))
+    }
+
+    @Test
+    fun formatsEnglishProfileJumpTargetsAsWordCounts() {
+        assertEquals("71", readerJumpTargetText(355, ReaderProgressDisplay.word()))
+    }
+
+    @Test
     fun formatsProgressLikeIosReaderOverlay() {
         val text = ReaderChromeState(
             title = "屍人荘の殺人",

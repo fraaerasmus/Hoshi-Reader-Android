@@ -14,12 +14,15 @@ data class ReaderChromeState(
     val forwardTargetCharacter: Int? = null,
     val statistics: ReaderStatisticsChromeState? = null,
 ) {
-    fun progressText(settings: ReaderSettings): String {
+    fun progressText(
+        settings: ReaderSettings,
+        progressDisplay: ReaderProgressDisplay = ReaderProgressDisplay.characters(),
+    ): String {
         val parts = mutableListOf<String>()
         if (settings.showCharacters) {
-            parts += currentCharacter.toString()
+            parts += progressDisplay.countText(currentCharacter)
             if (totalCharacters > 0) {
-                parts[parts.lastIndex] = "$currentCharacter / $totalCharacters"
+                parts[parts.lastIndex] = progressDisplay.rangeText(currentCharacter, totalCharacters)
             }
         }
         if (settings.showPercentage) {
@@ -33,12 +36,15 @@ data class ReaderChromeState(
         return parts.joinToString(separator = " ")
     }
 
-    fun statisticsText(settings: ReaderSettings): String {
+    fun statisticsText(
+        settings: ReaderSettings,
+        progressDisplay: ReaderProgressDisplay = ReaderProgressDisplay.characters(),
+    ): String {
         val statistics = statistics ?: return ""
         if (!settings.enableStatistics) return ""
         val parts = mutableListOf<String>()
         if (settings.showReadingSpeed) {
-            parts += "${statistics.readingSpeed} / h"
+            parts += progressDisplay.speedText(statistics.readingSpeed)
         }
         if (settings.showReadingTime) {
             parts += statistics.readingTimeText()
@@ -167,12 +173,13 @@ data class ReaderBottomChromeMetrics(
 fun readerChromeLayout(
     state: ReaderChromeState,
     settings: ReaderSettings,
+    progressDisplay: ReaderProgressDisplay = ReaderProgressDisplay.characters(),
     showSasayakiToggle: Boolean = false,
     showStatisticsToggle: Boolean = false,
     focusMode: Boolean = false,
 ): ReaderChromeLayout {
-    val progress = state.progressText(settings)
-    val statistics = state.statisticsText(settings)
+    val progress = state.progressText(settings, progressDisplay)
+    val statistics = state.statisticsText(settings, progressDisplay)
     val showProgressInBottomBar = !settings.alwaysShowProgress && !settings.showProgressTop && progress.isNotBlank()
     val showStatisticsInBottomBar = statistics.isNotBlank()
     return ReaderChromeLayout(
@@ -191,7 +198,8 @@ fun readerBottomSafeProgressText(
     state: ReaderChromeState,
     settings: ReaderSettings,
     focusMode: Boolean = false,
-): String = if (settings.alwaysShowProgress) state.progressText(settings) else ""
+    progressDisplay: ReaderProgressDisplay = ReaderProgressDisplay.characters(),
+): String = if (settings.alwaysShowProgress) state.progressText(settings, progressDisplay) else ""
 
 @Suppress("UNUSED_PARAMETER")
 fun readerContentChromeInsets(
@@ -341,7 +349,10 @@ fun readerTopTitlePaddingDp(
     return ReaderTopTitlePaddingDp(startDp = sidePadding, endDp = sidePadding)
 }
 
-fun readerJumpTargetText(character: Int): String = character.toString()
+fun readerJumpTargetText(
+    character: Int,
+    progressDisplay: ReaderProgressDisplay = ReaderProgressDisplay.characters(),
+): String = progressDisplay.jumpTargetText(character)
 
 fun readerJumpBackIcon(): ImageVector = Icons.AutoMirrored.Rounded.Undo
 

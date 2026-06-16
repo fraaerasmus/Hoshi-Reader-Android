@@ -45,7 +45,6 @@ import moe.antimony.hoshi.features.anki.AnkiSettingsRepository
 import moe.antimony.hoshi.features.audio.AudioSettingsRepository
 import moe.antimony.hoshi.features.bookshelf.BookshelfSettingsRepository
 import moe.antimony.hoshi.features.dictionary.DictionarySettingsRepository
-import moe.antimony.hoshi.features.profiles.LearningProfilesRepository
 import moe.antimony.hoshi.features.reader.ReaderSettingsRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsRepository
 import moe.antimony.hoshi.features.sync.DeviceCodeDriveAuthorizer
@@ -69,7 +68,6 @@ class SettingsBackupRepository @Inject constructor(
     private val bookshelfSettingsRepository: BookshelfSettingsRepository,
     private val syncSettingsRepository: SyncSettingsRepository,
     private val updateSettingsRepository: UpdateSettingsRepository,
-    private val learningProfilesRepository: LearningProfilesRepository,
     private val driveAuthorizer: DeviceCodeDriveAuthorizer,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
@@ -102,7 +100,6 @@ class SettingsBackupRepository @Inject constructor(
         val bookshelf = bookshelfSettingsRepository.exportEntries()
         val sync = syncSettingsRepository.exportEntries()
         val update = updateSettingsRepository.exportEntries()
-        val profiles = learningProfilesRepository.exportEntries()
         val driveCredentials = driveAuthorizer.exportCredentials()
         return buildJsonObject {
             put(KEY_SCHEMA, SCHEMA)
@@ -120,7 +117,6 @@ class SettingsBackupRepository @Inject constructor(
                     put(STORE_BOOKSHELF, bookshelf)
                     put(STORE_SYNC, sync)
                     put(STORE_UPDATE, update)
-                    put(STORE_PROFILES, profiles)
                 },
             )
             put(
@@ -142,7 +138,6 @@ class SettingsBackupRepository @Inject constructor(
         stores.store(STORE_BOOKSHELF)?.let { bookshelfSettingsRepository.importEntries(it) }
         stores.store(STORE_SYNC)?.let { syncSettingsRepository.importEntries(it) }
         stores.store(STORE_UPDATE)?.let { updateSettingsRepository.importEntries(it) }
-        stores.store(STORE_PROFILES)?.let { learningProfilesRepository.importEntries(it) }
 
         envelope[KEY_CREDENTIALS]?.jsonObject?.store(CREDENTIAL_DRIVE)
             ?.let { driveAuthorizer.importCredentials(it) }
@@ -169,7 +164,6 @@ class SettingsBackupRepository @Inject constructor(
         const val STORE_BOOKSHELF = "bookshelf"
         const val STORE_SYNC = "sync"
         const val STORE_UPDATE = "update"
-        const val STORE_PROFILES = "profiles"
         const val CREDENTIAL_DRIVE = "drive"
 
         val JSON = Json {

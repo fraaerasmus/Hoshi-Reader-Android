@@ -164,8 +164,6 @@ class DictionarySearchInteractionsTest {
 
     private fun lookupResult(): LookupResult = LookupResult(
         matched = "食べる",
-        deinflected = "食べる",
-        process = emptyArray(),
         term = TermResult(
             expression = "食べる",
             reading = "たべる",
@@ -181,6 +179,8 @@ class DictionarySearchInteractionsTest {
             frequencies = emptyArray<FrequencyEntry>(),
             pitches = emptyArray<PitchEntry>(),
         ),
+        deinflected = "",
+        process = emptyArray(),
         preprocessorSteps = 0,
     )
 }
