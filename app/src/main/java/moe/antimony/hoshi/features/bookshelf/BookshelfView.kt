@@ -2330,7 +2330,6 @@ private fun BottomTabGlyph(tab: MainTab, modifier: Modifier = Modifier) {
 @Composable
 private fun SettingsGlyph(destination: SettingsDestination, color: Color, modifier: Modifier = Modifier) {
     val icon = when (destination) {
-        SettingsDestination.Profiles -> Icons.Rounded.Person
         SettingsDestination.Dictionaries -> Icons.AutoMirrored.Rounded.MenuBook
         SettingsDestination.Anki -> Icons.Rounded.Inventory2
         SettingsDestination.Profiles -> Icons.Rounded.Person

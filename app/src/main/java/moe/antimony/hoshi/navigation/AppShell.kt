@@ -504,7 +504,6 @@ private fun AppRoute.toMainTab(): MainTab = when (this) {
 }
 
 private fun SettingsDestination.toSection(): SettingsDetailSection = when (this) {
-    SettingsDestination.Profiles -> SettingsDetailSection.Profiles
     SettingsDestination.Dictionaries -> SettingsDetailSection.Dictionaries
     SettingsDestination.Anki -> SettingsDetailSection.Anki
     SettingsDestination.Profiles -> SettingsDetailSection.Profiles

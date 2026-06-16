@@ -161,7 +161,6 @@ internal const val GoogleDriveSectionCollapseKey = "__google_drive__"
 private const val CompletedProgressThreshold = 0.999
 
 enum class SettingsDestination {
-    Profiles,
     Dictionaries,
     Anki,
     Profiles,
