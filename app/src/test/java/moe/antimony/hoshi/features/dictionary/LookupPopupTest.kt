@@ -528,6 +528,26 @@ class LookupPopupTest {
         assertEquals(ContentLanguageProfile.Default, defaultPopup?.first?.state?.contentLanguageProfile)
     }
 
+    @Test
+    fun elisionSelectionHighlightsWholeTappedWord() {
+        val selection = ReaderSelectionData(
+            text = "l'homme",
+            sentence = "l'homme",
+            rect = ReaderSelectionRect(x = 0.0, y = 0.0, width = 1.0, height = 1.0),
+            normalizedOffset = null,
+        )
+        // Top result is the content word "homme" (sorted ahead of the bare article "l'").
+        val popup = createLookupPopupItem(
+            selection = selection,
+            options = LookupPopupOptions(isVertical = false),
+            dictionaryStyles = emptyMap(),
+            lookup = { _, _, _ -> listOf(lookupResult("homme", "homme", "man")) },
+        )
+
+        // "homme" sits past the stripped "l'" prefix, so the highlight spans the whole tapped word.
+        assertEquals(7, popup?.second)
+    }
+
     private fun lookupResult(
         expression: String,
         reading: String,

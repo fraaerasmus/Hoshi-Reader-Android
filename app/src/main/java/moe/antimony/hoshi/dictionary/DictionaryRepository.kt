@@ -238,7 +238,9 @@ internal class DictionaryRepository @Inject constructor(
         // results too (Yomitan searchOriginal); merged and de-duped by entry.
         val stripped = ElisionTextReplacement.stripElision(text, lookupQueryLanguageId) ?: return results
         val strippedResults = lookupQueryService.lookup(stripped, maxResults, scanLength)
+        // Longest match first so the content word (homme) outranks the bare article (l').
         return (results + strippedResults)
+            .sortedByDescending { it.matched.codePointCount(0, it.matched.length) }
             .distinctBy { "${it.term.expression} ${it.term.reading} ${it.matched}" }
     }
 

@@ -79,6 +79,14 @@ internal fun createLookupPopupItem(
         lookup(selection.text, settings.maxResults, settings.scanLength)
     }.getOrDefault(emptyList())
     val first = results.firstOrNull() ?: return null
+    // Highlight from the selection start through the end of the top match. For French elision
+    // (l'homme -> homme) the match sits past a stripped prefix, so this spans the whole tapped word.
+    val matchStart = selection.text.indexOf(first.matched)
+    val highlightCount = if (matchStart >= 0) {
+        selection.text.codePointCount(0, matchStart + first.matched.length)
+    } else {
+        first.matched.codePointCount(0, first.matched.length)
+    }
     return LookupPopupItem(
         state = LookupPopupState(
             selection = selection,
@@ -109,7 +117,7 @@ internal fun createLookupPopupItem(
                 sentenceOffset = selection.sentenceOffset,
             ),
         ),
-    ) to first.matched.codePointCount(0, first.matched.length)
+    ) to highlightCount
 }
 
 internal fun closeChildPopups(
