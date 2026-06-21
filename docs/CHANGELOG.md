@@ -19,6 +19,7 @@ Historical release notes before v1.1.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 ### Fixed
 
 - Look up the whole word when tapping or hovering the middle of a word in non-English space-delimited languages (e.g. the "i" in French "jamais" now finds "jamais", not "is"), matching the reader popup and English behavior. The reader previously scanned forward from the tapped character for those languages.
+- Space out inflected-form ("form of") dictionary entries so the lemma and its grammatical description no longer run together (e.g. French "détestait" now shows "détester third-person singular imperfect indicative"), with multiple senses on separate lines.
 
 ## [v1.2.2] - 2026-06-21
 

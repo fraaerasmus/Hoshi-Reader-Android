@@ -44,6 +44,12 @@ class FakeElement {
             },
         };
         this.tagName = tagName.toUpperCase();
+        const classNames = new Set();
+        this.classList = {
+            add: (...names) => names.forEach((n) => classNames.add(n)),
+            remove: (...names) => names.forEach((n) => classNames.delete(n)),
+            contains: (n) => classNames.has(n),
+        };
     }
 
     setAttribute(name, value) {
@@ -131,6 +137,9 @@ function popupContext({
         },
         createElement(tagName) {
             return new FakeElement([], tagName);
+        },
+        createTextNode(text) {
+            return { nodeType: 3, textContent: String(text), parentElement: null };
         },
         querySelectorAll() {
             return [];
@@ -465,5 +474,48 @@ test('mineEntry posts phonetic transcriptions for Anki handlebar rendering', asy
     assert.equal(
         mineEntryMessages[0].phoneticTranscriptions,
         '<ul><li class="pronunciation" data-pronunciation-type="phonetic-transcription">/riːd/</li></ul>',
+    );
+});
+
+test('popup renders a deinflection glossary with a space between lemma and rules', () => {
+    const { context } = popupContext();
+    const parent = new FakeElement();
+    context.renderStructuredContent(
+        parent,
+        ['détester', ['third-person singular imperfect indicative']],
+        null,
+        'wty-fr-en',
+        true,
+    );
+
+    const text = descendants(parent).map((node) => node.textContent ?? '').join('');
+    assert.equal(text, 'détester third-person singular imperfect indicative');
+});
+
+test('popup renders multiple deinflection senses as separate list items', () => {
+    const { context } = popupContext();
+    const parent = new FakeElement();
+    context.renderStructuredContent(
+        parent,
+        [
+            ['détester', ['first-person plural imperfect indicative']],
+            ['détester', ['first-person plural present subjunctive']],
+        ],
+        null,
+        'wty-fr-fr',
+        true,
+    );
+
+    const list = parent.children.find((child) => child.tagName === 'UL');
+    assert.ok(list, 'expected a <ul> of senses');
+    const items = list.children.filter((child) => child.tagName === 'LI');
+    assert.equal(items.length, 2);
+    assert.equal(
+        descendants(items[0]).map((node) => node.textContent ?? '').join(''),
+        'détester first-person plural imperfect indicative',
+    );
+    assert.equal(
+        descendants(items[1]).map((node) => node.textContent ?? '').join(''),
+        'détester first-person plural present subjunctive',
     );
 });

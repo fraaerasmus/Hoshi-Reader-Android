@@ -931,6 +931,21 @@ async function mineEntry(expression, reading, frequencies, pitches, rules, match
     });
 }
 
+// Yomitan deinflection glossary entry: [uninflectedTerm, inflectionRule[]] (a "form of" sense).
+function isDeinflection(node) {
+    return Array.isArray(node) && node.length === 2 && typeof node[0] === 'string' &&
+        Array.isArray(node[1]) && node[1].length > 0 && node[1].every(r => typeof r === 'string');
+}
+
+// Tapping the rendered text re-scans it via the popup tap handler, so no link is needed.
+function renderDeinflection(parent, pair) {
+    const term = document.createElement('span');
+    term.classList.add('gloss-deinflection-term');
+    term.textContent = pair[0];
+    parent.appendChild(term);
+    parent.appendChild(document.createTextNode(` ${pair[1].join(', ')}`));
+}
+
 function renderStructuredContent(parent, node, language = null, dictName = null, exporting = false) {
     if (typeof node === 'string') {
         node.split(/\r?\n/).forEach((line, i) => {
@@ -959,6 +974,22 @@ function renderStructuredContent(parent, node, language = null, dictName = null,
             node.forEach(child => {
                 const li = document.createElement('li');
                 li.appendChild(document.createTextNode(child));
+                ul.appendChild(li);
+            });
+            parent.appendChild(ul);
+            return;
+        }
+
+        if (isDeinflection(node)) {
+            renderDeinflection(parent, node);
+            return;
+        }
+        if (node.length > 0 && node.every(isDeinflection)) {
+            const ul = document.createElement('ul');
+            ul.classList.add('glossary-list');
+            node.forEach(pair => {
+                const li = document.createElement('li');
+                renderDeinflection(li, pair);
                 ul.appendChild(li);
             });
             parent.appendChild(ul);
