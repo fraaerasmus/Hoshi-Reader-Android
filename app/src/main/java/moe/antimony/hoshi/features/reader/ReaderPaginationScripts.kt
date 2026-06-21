@@ -1,7 +1,22 @@
 package moe.antimony.hoshi.features.reader
 
 import java.io.File
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import moe.antimony.hoshi.features.sasayaki.SasayakiCueRange
+
+@Serializable
+internal data class ReaderPageInfo(val page: Int, val pages: Int) {
+    companion object {
+        private val json = Json { ignoreUnknownKeys = true }
+
+        fun fromWebViewResult(result: String?): ReaderPageInfo? {
+            val trimmed = result?.trim().orEmpty()
+            if (trimmed.isBlank() || trimmed == "null" || trimmed == "undefined") return null
+            return runCatching { json.decodeFromString<ReaderPageInfo>(trimmed) }.getOrNull()
+        }
+    }
+}
 
 internal enum class ReaderNavigationDirection(val jsValue: String) {
     Forward("forward"),
@@ -23,6 +38,11 @@ internal object ReaderPaginationScripts {
 
     fun progressInvocation(): String =
         "window.hoshiReader.calculateProgress()"
+
+    fun pageInfoInvocation(): String =
+        "(window.hoshiReader && typeof window.hoshiReader.getPageInfo === 'function') ? window.hoshiReader.getPageInfo() : null"
+
+    fun pageInfoResult(result: String?): ReaderPageInfo? = ReaderPageInfo.fromWebViewResult(result)
 
     fun applySasayakiCuesInvocation(cuesJson: String): String =
         "if (window.hoshiReader && typeof window.hoshiReader.applySasayakiCues === 'function') { window.hoshiReader.applySasayakiCues($cuesJson); }"

@@ -850,12 +850,28 @@ fun ReaderWebView(
             closeLookupPopupsAndSelection()
         }
     }
+    var pageInfo by remember { mutableStateOf<ReaderPageInfo?>(null) }
+    LaunchedEffect(
+        webView,
+        readerPosition.displayedPosition,
+        stateHolder.isWebViewRestoring,
+        effectiveSettings.showChapter,
+    ) {
+        val targetWebView = webView
+        if (targetWebView == null || stateHolder.isWebViewRestoring || !effectiveSettings.showChapter) {
+            return@LaunchedEffect
+        }
+        targetWebView.evaluateJavascript(ReaderPaginationScripts.pageInfoInvocation()) { result ->
+            pageInfo = ReaderPaginationScripts.pageInfoResult(result)
+        }
+    }
     val chromeState = remember(
         book,
         readerPosition.displayedPosition,
         stateHolder.backTargetPosition,
         stateHolder.forwardTargetPosition,
         statisticsState,
+        pageInfo,
     ) {
         ReaderChromeState(
             title = book.title,
@@ -870,7 +886,15 @@ fun ReaderWebView(
                 )
             },
             chapter = ReaderChapterLabels.chapterPositionForIndex(book, readerPosition.displayedPosition.index)
-                ?.let { ReaderChapterChromeState(it.number, it.total, it.label) },
+                ?.let {
+                    ReaderChapterChromeState(
+                        number = it.number,
+                        total = it.total,
+                        label = it.label,
+                        page = pageInfo?.page,
+                        pages = pageInfo?.pages,
+                    )
+                },
         )
     }
     fun dispatchSasayakiCueToReader(cue: SasayakiMatch, reveal: Boolean) {

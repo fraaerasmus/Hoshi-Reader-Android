@@ -151,6 +151,18 @@ class ReaderChromeTest {
     }
 
     @Test
+    fun chapterTextPrefersPagePositionWhenAvailable() {
+        val state = ReaderChromeState(
+            title = "Harry Potter",
+            currentCharacter = 355,
+            totalCharacters = 169325,
+            chapter = ReaderChapterChromeState(number = 1, total = 12, label = "The Boy Who Lived", page = 3, pages = 17),
+        )
+
+        assertEquals("The Boy Who Lived (3/17)", state.chapterText(ReaderSettings(showChapter = true)))
+    }
+
+    @Test
     fun chapterTextIsBlankWhenToggleOffOrChapterDataMissing() {
         val withChapter = ReaderChromeState(
             title = "Harry Potter",

@@ -606,18 +606,17 @@ internal fun ReaderBottomSafeProgress(
                     color = Color(colors.infoText),
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
-                    textAlign = if (sasayakiPlaybackControls.visible) TextAlign.End else settings.infoPosition.lineTextAlign(),
-                    modifier = if (sasayakiPlaybackControls.visible) {
-                        Modifier
-                            .align(Alignment.CenterEnd)
-                            .fillMaxWidth()
-                            .padding(horizontal = sasayakiPlaybackControls.horizontalPaddingDp.dp)
-                    } else {
-                        Modifier
-                            .align(Alignment.Center)
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp)
-                    },
+                    textAlign = settings.infoPosition.lineTextAlign(),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .fillMaxWidth()
+                        .padding(
+                            horizontal = if (sasayakiPlaybackControls.visible) {
+                                sasayakiPlaybackControls.horizontalPaddingDp.dp
+                            } else {
+                                12.dp
+                            },
+                        ),
                 )
             }
         }

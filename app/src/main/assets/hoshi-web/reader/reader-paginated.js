@@ -526,6 +526,15 @@ window.hoshiReader = {
   getPagePosition: function(context) {
     return context.vertical ? context.scrollEl.scrollTop : context.scrollEl.scrollLeft;
   },
+  getPageInfo: function() {
+    var context = this.getScrollContext();
+    if (!context || context.pageSize <= 0) return null;
+    var pages = Math.max(1, Math.round(context.maxScroll / context.pageSize) + 1);
+    var page = Math.round(Math.abs(this.getPagePosition(context)) / context.pageSize) + 1;
+    if (page < 1) page = 1;
+    if (page > pages) page = pages;
+    return { page: page, pages: pages };
+  },
   lockRootViewport: function() {
     var root = document.documentElement;
     var didScroll = false;

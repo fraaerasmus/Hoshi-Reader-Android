@@ -40,7 +40,11 @@ data class ReaderChromeState(
     fun chapterText(settings: ReaderSettings): String {
         val chapter = chapter ?: return ""
         if (!settings.showChapter) return ""
-        val position = "(${chapter.number}/${chapter.total})"
+        val position = if (chapter.page != null && chapter.pages != null && chapter.pages > 0) {
+            "(${chapter.page}/${chapter.pages})"
+        } else {
+            "(${chapter.number}/${chapter.total})"
+        }
         return listOf(chapter.label, position).filter { it.isNotBlank() }.joinToString(separator = " ")
     }
 
@@ -70,6 +74,8 @@ data class ReaderChapterChromeState(
     val number: Int,
     val total: Int,
     val label: String,
+    val page: Int? = null,
+    val pages: Int? = null,
 )
 
 data class ReaderChromeColors(

@@ -26,6 +26,17 @@ class ReaderPaginationScriptsTest {
     }
 
     @Test
+    fun pageInfoInvocationGuardsMissingHelperAndParsesObjectResult() {
+        assertTrue(ReaderPaginationScripts.pageInfoInvocation().contains("getPageInfo"))
+        assertTrue(ReaderPaginationScripts.pageInfoInvocation().contains("typeof"))
+
+        assertEquals(ReaderPageInfo(page = 3, pages = 17), ReaderPaginationScripts.pageInfoResult("""{"page":3,"pages":17}"""))
+        assertEquals(null, ReaderPaginationScripts.pageInfoResult("null"))
+        assertEquals(null, ReaderPaginationScripts.pageInfoResult(null))
+        assertEquals(null, ReaderPaginationScripts.pageInfoResult("not json"))
+    }
+
+    @Test
     fun paginateScriptLeavesChapterChangesToNativeCodeLikeIos() {
         val script = ReaderPaginationScripts.shellScript()
 
