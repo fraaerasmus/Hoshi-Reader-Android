@@ -769,6 +769,20 @@ window.hoshiSelection = {
             self.shiftScan.active = e.shiftKey;
             if (e.shiftKey) self.scheduleShiftScan();
         }, { passive: true });
+        // When the WebView loses focus (e.g. Android split-screen, switching windows) the
+        // cached pointer goes stale, but native Shift key events keep arriving and would
+        // re-scan that frozen position forever. Drop the cached pointer and active flag on
+        // focus / visibility / hover loss; runShiftScan then no-ops until a fresh mousemove
+        // supplies a real position. Touch lookups are unaffected (they pass live coords).
+        const invalidate = () => {
+            self.shiftScan.pointer = null;
+            self.shiftScan.active = false;
+        };
+        window.addEventListener('blur', invalidate);
+        document.addEventListener('mouseleave', invalidate);
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) invalidate();
+        });
     },
 
     scheduleShiftScan() {
