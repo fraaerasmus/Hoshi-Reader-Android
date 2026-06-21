@@ -15,6 +15,7 @@ Historical release notes before v1.1.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 - Add hardware keyboard shortcuts for Sasayaki playback while audio is loaded: Space or K to play/pause, Left arrow or J to rewind, and Right arrow or L to skip forward; the keys stay out of the way while you are typing in a search field.
 - Add an Esc keyboard shortcut to dismiss the dictionary lookup popup.
 - Add Yomitan-style Shift-hover dictionary lookup: with a mouse or trackpad, hold Shift and the word under the pointer is scanned instantly without tapping, re-scanning as you move. Toggle it with "Scan Word on Shift Hover" in Dictionary settings (on by default).
+- Mine words looked up inside a popup (nested lookups) with the original book sentence and Sasayaki audio instead of the popup's own text, so drilling into a definition still produces a card with the reading context. Toggle it with "Mine nested lookups with reading context" in Dictionary settings (on by default).
 
 ### Fixed
 

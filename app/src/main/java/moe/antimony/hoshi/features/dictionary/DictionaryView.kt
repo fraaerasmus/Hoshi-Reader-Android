@@ -1091,6 +1091,14 @@ private fun DictionarySettingsView(
                         onSettingsChange { current -> current.copy(scanWithShiftKey = it) }
                     }
                     GroupDivider()
+                    ToggleRow(
+                        title = stringResource(R.string.dictionary_mine_nested_reading_context),
+                        checked = settings.mineNestedWithReadingContext,
+                        supportingText = stringResource(R.string.dictionary_mine_nested_reading_context_description),
+                    ) {
+                        onSettingsChange { current -> current.copy(mineNestedWithReadingContext = it) }
+                    }
+                    GroupDivider()
                     StepperRow(
                         title = stringResource(R.string.dictionary_max_results),
                         value = settings.maxResults,

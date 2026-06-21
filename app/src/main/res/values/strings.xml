@@ -189,6 +189,8 @@
     <string name="dictionary_scan_non_japanese">Scan Non-Japanese Text</string>
     <string name="dictionary_scan_multi_word">Scan Multi-Word Phrases</string>
     <string name="dictionary_scan_with_shift">Scan Word on Shift Hover</string>
+    <string name="dictionary_mine_nested_reading_context">Mine nested lookups with reading context</string>
+    <string name="dictionary_mine_nested_reading_context_description">When mining a word you looked up inside a popup, use the book sentence and Sasayaki audio instead of the popup\'s own text.</string>
     <string name="dictionary_max_results">Max Results</string>
     <string name="dictionary_scan_length">Scan Length</string>
     <string name="dictionary_collapse_dictionaries">Collapse Dictionaries</string>

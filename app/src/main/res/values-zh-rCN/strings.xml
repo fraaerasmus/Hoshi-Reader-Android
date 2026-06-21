@@ -187,6 +187,8 @@
     <string name="dictionary_scan_non_japanese">扫描非日语文本</string>
     <string name="dictionary_scan_multi_word">扫描多词短语</string>
     <string name="dictionary_scan_with_shift">按住 Shift 悬停扫描</string>
+    <string name="dictionary_mine_nested_reading_context">嵌套查词使用阅读上下文</string>
+    <string name="dictionary_mine_nested_reading_context_description">在弹窗中查词制卡时，使用书中句子和 Sasayaki 音频，而不是弹窗自身的文本。</string>
     <string name="dictionary_max_results">最大结果数</string>
     <string name="dictionary_scan_length">扫描长度</string>
     <string name="dictionary_collapse_dictionaries">折叠辞典</string>

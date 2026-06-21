@@ -686,11 +686,18 @@ fun ReaderWebView(
             is ReaderLookupPopupBridgeMessage.MineEntry -> {
                 val popup = popupById(message.popupId) ?: return
                 val messageId = message.messageId ?: return
-                val ankiContext = popup.sasayakiCue?.takeIf { ankiUiState.popupSettings.needsSasayakiAudio }?.let { cue ->
-                    popup.state.ankiContext.copy(
-                        sasayakiAudioPath = sasayakiPlayer?.exportCueAudio(cue, popup.state.selection.sentence)?.absolutePath,
+                // Mine nested lookups with the root popup's reading context (book sentence +
+                // sasayaki); the entry being mined still comes from the requesting popup's payload.
+                val contextPopup = if (popup.state.dictionarySettings.mineNestedWithReadingContext) {
+                    stateHolder.lookupPopups.firstOrNull() ?: popup
+                } else {
+                    popup
+                }
+                val ankiContext = contextPopup.sasayakiCue?.takeIf { ankiUiState.popupSettings.needsSasayakiAudio }?.let { cue ->
+                    contextPopup.state.ankiContext.copy(
+                        sasayakiAudioPath = sasayakiPlayer?.exportCueAudio(cue, contextPopup.state.selection.sentence)?.absolutePath,
                     )
-                } ?: popup.state.ankiContext
+                } ?: contextPopup.state.ankiContext
                 ankiViewModel.mineEntryAsync(message.payloadJson, ankiContext) { mined ->
                     replyReaderPopupMessage(message.popupId, messageId, mined.toString())
                 }

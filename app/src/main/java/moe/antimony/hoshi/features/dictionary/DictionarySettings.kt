@@ -66,6 +66,7 @@ data class DictionarySettings(
     val scanNonJapaneseText: Boolean = true,
     val scanMultiWordPhrases: Boolean = true,
     val scanWithShiftKey: Boolean = true,
+    val mineNestedWithReadingContext: Boolean = true,
     val maxResults: Int = 16,
     val scanLength: Int = 16,
     val collapseMode: DictionaryCollapseMode = DictionaryCollapseMode.ExpandAll,
@@ -113,6 +114,7 @@ class DictionarySettingsStore(context: Context) : DictionarySettingsLegacySource
         scanNonJapaneseText = preferences.getBoolean(KEY_SCAN_NON_JAPANESE_TEXT, true),
         scanMultiWordPhrases = preferences.getBoolean(KEY_SCAN_MULTI_WORD_PHRASES, true),
         scanWithShiftKey = preferences.getBoolean(KEY_SCAN_WITH_SHIFT_KEY, true),
+        mineNestedWithReadingContext = preferences.getBoolean(KEY_MINE_NESTED_READING_CONTEXT, true),
         maxResults = preferences.getInt(KEY_MAX_RESULTS, 16),
         scanLength = preferences.getInt(KEY_SCAN_LENGTH, 16),
         collapseMode = DictionaryCollapseMode.fromRawValue(preferences.getString(KEY_COLLAPSE_MODE, null))
@@ -152,6 +154,7 @@ class DictionarySettingsStore(context: Context) : DictionarySettingsLegacySource
             .putBoolean(KEY_SCAN_NON_JAPANESE_TEXT, normalized.scanNonJapaneseText)
             .putBoolean(KEY_SCAN_MULTI_WORD_PHRASES, normalized.scanMultiWordPhrases)
             .putBoolean(KEY_SCAN_WITH_SHIFT_KEY, normalized.scanWithShiftKey)
+            .putBoolean(KEY_MINE_NESTED_READING_CONTEXT, normalized.mineNestedWithReadingContext)
             .putInt(KEY_MAX_RESULTS, normalized.maxResults)
             .putInt(KEY_SCAN_LENGTH, normalized.scanLength)
             .putString(KEY_COLLAPSE_MODE, normalized.collapseMode.rawValue)
@@ -175,6 +178,7 @@ class DictionarySettingsStore(context: Context) : DictionarySettingsLegacySource
         const val KEY_SCAN_NON_JAPANESE_TEXT = "scanNonJapaneseText"
         const val KEY_SCAN_MULTI_WORD_PHRASES = "scanMultiWordPhrases"
         const val KEY_SCAN_WITH_SHIFT_KEY = "scanWithShiftKey"
+        const val KEY_MINE_NESTED_READING_CONTEXT = "mineNestedWithReadingContext"
         const val KEY_MAX_RESULTS = "maxResults"
         const val KEY_SCAN_LENGTH = "scanLength"
         const val KEY_COLLAPSE_DICTIONARIES = "collapseDictionaries"
@@ -313,6 +317,7 @@ class DictionarySettingsRepository(
             scanNonJapaneseText = this[KEY_SCAN_NON_JAPANESE_TEXT] ?: true,
             scanMultiWordPhrases = this[KEY_SCAN_MULTI_WORD_PHRASES] ?: true,
             scanWithShiftKey = this[KEY_SCAN_WITH_SHIFT_KEY] ?: true,
+            mineNestedWithReadingContext = this[KEY_MINE_NESTED_READING_CONTEXT] ?: true,
             maxResults = this[KEY_MAX_RESULTS] ?: 16,
             scanLength = this[KEY_SCAN_LENGTH] ?: 16,
             collapseMode = DictionaryCollapseMode.fromRawValue(this[KEY_COLLAPSE_MODE])
@@ -347,6 +352,7 @@ class DictionarySettingsRepository(
         this[KEY_SCAN_NON_JAPANESE_TEXT] = normalized.scanNonJapaneseText
         this[KEY_SCAN_MULTI_WORD_PHRASES] = normalized.scanMultiWordPhrases
         this[KEY_SCAN_WITH_SHIFT_KEY] = normalized.scanWithShiftKey
+        this[KEY_MINE_NESTED_READING_CONTEXT] = normalized.mineNestedWithReadingContext
         this[KEY_MAX_RESULTS] = normalized.maxResults
         this[KEY_SCAN_LENGTH] = normalized.scanLength
         this[KEY_COLLAPSE_MODE] = normalized.collapseMode.rawValue
@@ -430,6 +436,7 @@ class DictionarySettingsRepository(
         private val KEY_SCAN_NON_JAPANESE_TEXT = booleanPreferencesKey("scanNonJapaneseText")
         private val KEY_SCAN_MULTI_WORD_PHRASES = booleanPreferencesKey("scanMultiWordPhrases")
         private val KEY_SCAN_WITH_SHIFT_KEY = booleanPreferencesKey("scanWithShiftKey")
+        private val KEY_MINE_NESTED_READING_CONTEXT = booleanPreferencesKey("mineNestedWithReadingContext")
         private val KEY_MAX_RESULTS = intPreferencesKey("maxResults")
         private val KEY_SCAN_LENGTH = intPreferencesKey("scanLength")
         private val KEY_COLLAPSE_DICTIONARIES = booleanPreferencesKey("collapseDictionaries")

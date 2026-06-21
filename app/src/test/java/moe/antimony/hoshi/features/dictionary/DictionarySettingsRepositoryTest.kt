@@ -89,6 +89,7 @@ class DictionarySettingsRepositoryTest {
                     lastDictionaryUpdateEpochMillis = 1_900_000_000_000L,
                     dictionaryTabDefault = true,
                     scanNonJapaneseText = false,
+                    mineNestedWithReadingContext = false,
                     maxResults = 0,
                     scanLength = 100,
                     collapseMode = DictionaryCollapseMode.Custom,
@@ -111,6 +112,7 @@ class DictionarySettingsRepositoryTest {
             assertEquals(1_900_000_000_000L, saved.lastDictionaryUpdateEpochMillis)
             assertTrue(saved.dictionaryTabDefault)
             assertFalse(saved.scanNonJapaneseText)
+            assertFalse(saved.mineNestedWithReadingContext)
             assertEquals(1, saved.maxResults)
             assertEquals(64, saved.scanLength)
             assertEquals(DictionaryCollapseMode.Custom, saved.collapseMode)
