@@ -267,8 +267,8 @@ class ReaderHardwareKeyNavigationTest {
     }
 
     @Test
-    fun keyUpAndRepeatedKeyDownEventsAreIgnored() {
-        val settings = ReaderSettings(volumeKeysTurnPages = true, volumeKeysSeekSasayaki = true)
+    fun keyUpAndRepeatedNonSeekKeyDownEventsAreIgnored() {
+        val settings = ReaderSettings(volumeKeysTurnPages = true, volumeKeysSeekSasayaki = false)
 
         assertNull(
             readerNavigationDirectionForKeyEvent(
@@ -278,6 +278,7 @@ class ReaderHardwareKeyNavigationTest {
                 settings = settings,
             ),
         )
+        // Page turns must not auto-repeat while a key is held.
         assertNull(
             readerNavigationDirectionForKeyEvent(
                 keyCode = KeyEvent.KEYCODE_PAGE_DOWN,
@@ -296,6 +297,7 @@ class ReaderHardwareKeyNavigationTest {
                 hasSasayakiAudio = true,
             ),
         )
+        // Volume keys mapped to page turns must not auto-repeat either.
         assertNull(
             readerHardwareKeyActionForKeyEvent(
                 keyCode = KeyEvent.KEYCODE_VOLUME_UP,
@@ -306,6 +308,45 @@ class ReaderHardwareKeyNavigationTest {
                 hasSasayakiAudio = true,
             ),
         )
+        // Play/pause toggle must not auto-repeat while held.
+        assertNull(
+            readerHardwareKeyActionForKeyEvent(
+                keyCode = KeyEvent.KEYCODE_SPACE,
+                action = KeyEvent.ACTION_DOWN,
+                repeatCount = 1,
+                settings = settings,
+                sasayakiEnabled = true,
+                hasSasayakiAudio = true,
+            ),
+        )
+    }
+
+    @Test
+    fun sasayakiSeekKeysRepeatWhileHeld() {
+        val settings = ReaderSettings(volumeKeysSeekSasayaki = true)
+        val expectations = mapOf(
+            KeyEvent.KEYCODE_DPAD_LEFT to ReaderHardwareKeyAction.SasayakiSeekBackward,
+            KeyEvent.KEYCODE_J to ReaderHardwareKeyAction.SasayakiSeekBackward,
+            KeyEvent.KEYCODE_DPAD_RIGHT to ReaderHardwareKeyAction.SasayakiSeekForward,
+            KeyEvent.KEYCODE_L to ReaderHardwareKeyAction.SasayakiSeekForward,
+            // Volume keys (default direction): up seeks backward, down seeks forward.
+            KeyEvent.KEYCODE_VOLUME_UP to ReaderHardwareKeyAction.SasayakiSeekBackward,
+            KeyEvent.KEYCODE_VOLUME_DOWN to ReaderHardwareKeyAction.SasayakiSeekForward,
+        )
+
+        expectations.forEach { (keyCode, expected) ->
+            assertEquals(
+                expected,
+                readerHardwareKeyActionForKeyEvent(
+                    keyCode = keyCode,
+                    action = KeyEvent.ACTION_DOWN,
+                    repeatCount = 1,
+                    settings = settings,
+                    sasayakiEnabled = true,
+                    hasSasayakiAudio = true,
+                ),
+            )
+        }
     }
 
     @Test
@@ -373,9 +414,10 @@ class ReaderHardwareKeyNavigationTest {
     }
 
     @Test
-    fun sasayakiKeyboardKeysIgnoreKeyUpAndRepeats() {
+    fun sasayakiKeyboardKeysIgnoreKeyUpAndToggleRepeats() {
         val settings = ReaderSettings()
 
+        // Key-up never triggers an action, for toggle or seek keys.
         assertNull(
             readerHardwareKeyActionForKeyEvent(
                 keyCode = KeyEvent.KEYCODE_SPACE,
@@ -389,6 +431,17 @@ class ReaderHardwareKeyNavigationTest {
         assertNull(
             readerHardwareKeyActionForKeyEvent(
                 keyCode = KeyEvent.KEYCODE_J,
+                action = KeyEvent.ACTION_UP,
+                repeatCount = 0,
+                settings = settings,
+                sasayakiEnabled = true,
+                hasSasayakiAudio = true,
+            ),
+        )
+        // Play/pause toggle does not auto-repeat while held (seek keys do).
+        assertNull(
+            readerHardwareKeyActionForKeyEvent(
+                keyCode = KeyEvent.KEYCODE_SPACE,
                 action = KeyEvent.ACTION_DOWN,
                 repeatCount = 1,
                 settings = settings,

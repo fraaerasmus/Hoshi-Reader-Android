@@ -33,8 +33,8 @@ internal fun readerHardwareKeyActionForKeyEvent(
     hasSasayakiAudio: Boolean,
     textEditorFocused: Boolean = false,
 ): ReaderHardwareKeyAction? {
-    if (action != KeyEvent.ACTION_DOWN || repeatCount != 0) return null
-    return when (keyCode) {
+    if (action != KeyEvent.ACTION_DOWN) return null
+    val resolved = when (keyCode) {
         KeyEvent.KEYCODE_PAGE_DOWN -> ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward)
         KeyEvent.KEYCODE_PAGE_UP -> ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Backward)
         KeyEvent.KEYCODE_VOLUME_DOWN,
@@ -58,7 +58,15 @@ internal fun readerHardwareKeyActionForKeyEvent(
             textEditorFocused = textEditorFocused,
         )
         else -> null
+    } ?: return null
+    // Only Sasayaki seek repeats while a key is held; everything else fires once.
+    if (repeatCount != 0 &&
+        resolved !is ReaderHardwareKeyAction.SasayakiSeekForward &&
+        resolved !is ReaderHardwareKeyAction.SasayakiSeekBackward
+    ) {
+        return null
     }
+    return resolved
 }
 
 private fun sasayakiKeyboardAction(
