@@ -15,11 +15,18 @@ Historical release notes before v1.1.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 - Add hardware keyboard shortcuts for Sasayaki playback while audio is loaded: Space or K to play/pause, Left arrow or J to rewind, and Right arrow or L to skip forward; the keys stay out of the way while you are typing in a search field.
 - Add an Esc keyboard shortcut to dismiss the dictionary lookup popup.
 - Add Yomitan-style Shift-hover dictionary lookup: with a mouse or trackpad, hold Shift and the word under the pointer is scanned instantly without tapping, re-scanning as you move. Toggle it with "Scan Word on Shift Hover" in Dictionary settings (on by default).
+
+## [v1.2.2] - 2026-06-21
+
+### Added
+
 - Added reader in-book search with chapter-grouped, punctuation-preserving results, progress percentages, and a unified Go to panel for search, chapters, highlights, and character jumps.
+- Add optional AnkiConnect API key support for servers that require authenticated requests.
 
 ### Changed
 
 - Support installing Hoshi Reader Android on Android 8.0 and 8.1 devices.
+- Allow popup scale to be increased up to 2.00.
 
 ### Fixed
 
@@ -29,6 +36,7 @@ Historical release notes before v1.1.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 - Prevent repeated Reader re-entry from accumulating WebViews and causing long Sasayaki blank screens.
 - Prevent Reader from briefly rendering with the global profile appearance before the book's automatic profile is applied.
 - Keep continuous Reader scrolling from queuing expensive progress calculations that delay progress updates and lookup taps.
+- Keep popup nested lookup taps working when popup scale and custom zoom CSS are both enabled.
 
 ## [v1.2.1] - 2026-06-18
 

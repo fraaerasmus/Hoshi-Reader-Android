@@ -30,10 +30,12 @@ class FakeElement {
         this.attributes = new Map();
         this.children = [];
         this.className = '';
+        this.childProbeWidth = undefined;
         this.dataset = {};
         this.matches = new Set(matches);
         this.nodeType = 1;
         this.parentElement = null;
+        this.probeWidth = 100;
         this.textContent = '';
         this.style = {
             properties: new Map(),
@@ -59,6 +61,9 @@ class FakeElement {
 
     appendChild(child) {
         child.parentElement = this;
+        if (this.childProbeWidth !== undefined) {
+            child.probeWidth = this.childProbeWidth;
+        }
         this.children.push(child);
         return child;
     }
@@ -74,6 +79,19 @@ class FakeElement {
         this.listeners.set(type, listeners);
     }
 
+    getBoundingClientRect() {
+        return {
+            x: 0,
+            y: 0,
+            left: 0,
+            top: 0,
+            right: this.probeWidth,
+            bottom: 0,
+            width: this.probeWidth,
+            height: 0,
+        };
+    }
+
     closest(selector) {
         const selectors = selector.split(',').map((item) => item.trim());
         return selectors.some((item) => this.matches.has(item) || item === this.tagName.toLowerCase()) ? this : null;
@@ -82,10 +100,21 @@ class FakeElement {
     remove() {}
 }
 
-function popupContext({ loadJapaneseLanguageAsset = false, loadSelectionAssets = false } = {}) {
+function popupContext({
+    loadJapaneseLanguageAsset = false,
+    loadSelectionAssets = false,
+    htmlZoom = '1',
+    htmlProbeWidth = 100,
+    bodyProbeWidth = 100,
+} = {}) {
     const documentElement = new FakeElement();
+    documentElement.childProbeWidth = htmlProbeWidth;
     const body = new FakeContainer();
+    body.children = [];
     body.appendChild = function(element) {
+        element.parentElement = body;
+        element.probeWidth = bodyProbeWidth;
+        body.children.push(element);
         return element;
     };
     const documentListeners = new Map();
@@ -125,8 +154,8 @@ function popupContext({ loadJapaneseLanguageAsset = false, loadSelectionAssets =
     const context = {
         console,
         document,
-        getComputedStyle() {
-            return { zoom: '1' };
+        getComputedStyle(target) {
+            return { zoom: target === documentElement ? htmlZoom : '1' };
         },
         Node: { TEXT_NODE: 3 },
         webkit: {
@@ -212,6 +241,25 @@ test('popup touch tap selects text even when WebView suppresses the follow-up cl
     assert.deepEqual(selectTextCalls[0], [48, 148, 24, 48, 148]);
     assert.equal(tapOutsideMessages.length, 0);
     assert.equal(end.defaultPrevented, true);
+});
+
+test('popup tap coordinates ignore user body zoom when popup scale is active', () => {
+    const { context, selectTextCalls } = popupContext({
+        htmlZoom: '0.95',
+        htmlProbeWidth: 95,
+        bodyProbeWidth: 104.5,
+    });
+    const container = new FakeContainer();
+    const target = new FakeElement(['.glossary-content']);
+
+    context.installPopupTapHandlers(container);
+    container.dispatch('click', clickEvent(target, 45.35555648803711, 233.93334197998047));
+
+    assert.equal(selectTextCalls.length, 1);
+    assert.deepEqual(
+        selectTextCalls[0],
+        [45.35555648803711, 233.93334197998047, 24, 45.35555648803711, 233.93334197998047],
+    );
 });
 
 test('popup touch tap suppresses the duplicate click generated for the same tap', () => {

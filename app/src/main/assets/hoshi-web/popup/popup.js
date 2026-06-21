@@ -1339,15 +1339,25 @@ function playWordAudio(audioUrl) {
 
 function getButtonRectScale() {
     const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom);
-    if (zoom === 1) {
+    if (!Number.isFinite(zoom) || zoom === 1) {
         return 1;
     }
 
     const probe = el('div', { style: 'position:absolute;width:100px;visibility:hidden;' });
-    document.body.appendChild(probe);
+    const parent = document.documentElement || document.body;
+    if (!parent?.appendChild) {
+        return 1;
+    }
+
+    parent.appendChild(probe);
     const width = probe.getBoundingClientRect().width;
     probe.remove();
-    return 100 * zoom / width;
+    if (!Number.isFinite(width) || width <= 0) {
+        return 1;
+    }
+
+    const scale = 100 * zoom / width;
+    return Number.isFinite(scale) && scale > 0 ? scale : 1;
 }
 
 function createButtonSlot(kind, entryIndex, enabled = true) {
