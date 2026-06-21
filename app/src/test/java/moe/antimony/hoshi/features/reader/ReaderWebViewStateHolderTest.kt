@@ -273,6 +273,7 @@ class ReaderWebViewStateHolderTest {
             initialFragment = null,
             scanNonJapaneseText = false,
             scanMultiWordPhrases = true,
+            scanWithShiftKey = true,
             contentLanguageProfile = ContentLanguageProfile.Default,
             fontFaceUrl = "https://appassets.androidplatform.net/fonts/default.ttf",
         )
@@ -307,6 +308,7 @@ class ReaderWebViewStateHolderTest {
                 initialFragment = null,
                 scanNonJapaneseText = false,
                 scanMultiWordPhrases = true,
+                scanWithShiftKey = true,
                 contentLanguageProfile = ContentLanguageProfile.Default,
                 fontFaceUrl = "https://appassets.androidplatform.net/fonts/default.ttf",
             ),
@@ -320,6 +322,7 @@ class ReaderWebViewStateHolderTest {
                 initialFragment = null,
                 scanNonJapaneseText = false,
                 scanMultiWordPhrases = true,
+                scanWithShiftKey = true,
                 contentLanguageProfile = ContentLanguageProfile.Default,
                 fontFaceUrl = "https://appassets.androidplatform.net/fonts/default.ttf",
             ),
@@ -348,6 +351,7 @@ class ReaderWebViewStateHolderTest {
             initialFragment = null,
             scanNonJapaneseText = false,
             scanMultiWordPhrases = true,
+            scanWithShiftKey = true,
             contentLanguageProfile = ContentLanguageProfile.Default,
             fontFaceUrl = "https://appassets.androidplatform.net/fonts/default.ttf",
         )

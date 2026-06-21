@@ -522,7 +522,7 @@ class LookupPopupTest {
             selection = selection,
             options = LookupPopupOptions(isVertical = false),
             dictionaryStyles = emptyMap(),
-            lookup = { _, _, _, _ -> listOf(lookupResult("한국어", "한국어", "Korean")) },
+            lookup = { _, _, _ -> listOf(lookupResult("한국어", "한국어", "Korean")) },
         )
 
         assertEquals(ContentLanguageProfile.Default, defaultPopup?.first?.state?.contentLanguageProfile)

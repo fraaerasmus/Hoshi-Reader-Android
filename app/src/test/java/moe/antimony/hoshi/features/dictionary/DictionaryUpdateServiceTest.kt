@@ -15,6 +15,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.json.JsonObject
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import moe.antimony.hoshi.dictionary.DictionaryIndex
@@ -502,5 +503,9 @@ class DictionaryUpdateServiceTest {
         override suspend fun update(transform: (AnkiSettings) -> AnkiSettings) {
             settings.value = transform(settings.value)
         }
+
+        override suspend fun exportEntries(): JsonObject = JsonObject(emptyMap())
+
+        override suspend fun importEntries(entries: JsonObject) {}
     }
 }

@@ -11,6 +11,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.json.JsonObject
 import kotlinx.coroutines.runBlocking
 import moe.antimony.hoshi.dictionary.DictionaryIndex
 import moe.antimony.hoshi.dictionary.DictionaryImportDataSource
@@ -321,5 +322,9 @@ class DictionaryAutoUpdateSchedulerTest {
         override suspend fun update(transform: (AnkiSettings) -> AnkiSettings) {
             settings.value = transform(settings.value)
         }
+
+        override suspend fun exportEntries(): JsonObject = JsonObject(emptyMap())
+
+        override suspend fun importEntries(entries: JsonObject) {}
     }
 }

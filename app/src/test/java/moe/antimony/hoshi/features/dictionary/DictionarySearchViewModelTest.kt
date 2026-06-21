@@ -53,7 +53,7 @@ class DictionarySearchViewModelTest {
         assertTrue(state.hasSearched)
         assertFalse(state.isSearching)
         assertNull(state.errorMessage)
-        assertEquals(listOf("猫:2:7:fr"), repository.lookupCalls)
+        assertEquals(listOf("猫:2:7"), repository.lookupCalls)
         assertEquals(2, repository.rebuildCount)
         assertEquals(1, state.results.size)
         assertEquals("猫", state.results.single().matched)
@@ -247,7 +247,7 @@ class DictionarySearchViewModelTest {
 
         assertEquals(3, highlightCount)
         assertEquals(1, viewModel.uiState.value.popups.size)
-        assertEquals(listOf("食べる:4:12:de"), repository.lookupCalls)
+        assertEquals(listOf("食べる:4:12"), repository.lookupCalls)
 
         viewModel.recordLookupRedirected(2)
         viewModel.navigateBack()
@@ -345,8 +345,8 @@ private class FakeDictionarySearchRepository(
         rebuildCount += 1
     }
 
-    override fun lookup(query: String, maxResults: Int, scanLength: Int, language: String): List<LookupResult> {
-        lookupCalls += "$query:$maxResults:$scanLength:$language"
+    override fun lookup(query: String, maxResults: Int, scanLength: Int): List<LookupResult> {
+        lookupCalls += "$query:$maxResults:$scanLength"
         error?.let { throw it }
         return lookupResults
     }
