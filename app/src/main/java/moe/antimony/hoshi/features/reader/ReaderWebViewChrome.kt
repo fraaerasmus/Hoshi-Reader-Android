@@ -26,12 +26,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
-import androidx.compose.material.icons.rounded.FastForward
-import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.TravelExplore
 import androidx.compose.material.icons.rounded.Tune
@@ -530,58 +527,15 @@ internal fun ReaderBottomSafeProgress(
     Column(
         modifier = modifier.fillMaxWidth(),
     ) {
-        if (sasayakiPlaybackControls.visible) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(sasayakiPlaybackControls.rowHeightDp.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(onClick = onTapSafeArea),
-                )
-                Row(
-                    modifier = Modifier
-                        .align(if (sasayakiPlaybackControls.centered) Alignment.Center else Alignment.CenterStart)
-                        .padding(
-                            start = if (sasayakiPlaybackControls.centered) {
-                                0.dp
-                            } else {
-                                sasayakiPlaybackControls.horizontalPaddingDp.dp
-                            },
-                        )
-                        .height(sasayakiPlaybackControls.rowHeightDp.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ReaderBottomSafePlaybackButton(
-                        controls = sasayakiPlaybackControls,
-                        colors = colors,
-                        icon = Icons.Rounded.FastRewind,
-                        contentDescription = stringResource(R.string.sasayaki_rewind),
-                        onClick = onSasayakiSkipBackward,
-                    )
-                    ReaderBottomSafePlaybackButton(
-                        controls = sasayakiPlaybackControls,
-                        colors = colors,
-                        icon = if (sasayakiPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = if (sasayakiPlaying) {
-                            stringResource(R.string.sasayaki_pause)
-                        } else {
-                            stringResource(R.string.sasayaki_play)
-                        },
-                        onClick = onSasayakiTogglePlayback,
-                    )
-                    ReaderBottomSafePlaybackButton(
-                        controls = sasayakiPlaybackControls,
-                        colors = colors,
-                        icon = Icons.Rounded.FastForward,
-                        contentDescription = stringResource(R.string.sasayaki_fast_forward),
-                        onClick = onSasayakiSkipForward,
-                    )
-                }
-            }
-        }
+        ReaderSasayakiPlaybackRow(
+            controls = sasayakiPlaybackControls,
+            colors = colors,
+            sasayakiPlaying = sasayakiPlaying,
+            onTapSafeArea = onTapSafeArea,
+            onSkipBackward = onSasayakiSkipBackward,
+            onTogglePlayback = onSasayakiTogglePlayback,
+            onSkipForward = onSasayakiSkipForward,
+        )
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -610,30 +564,6 @@ internal fun ReaderBottomSafeProgress(
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun ReaderBottomSafePlaybackButton(
-    controls: ReaderSasayakiBottomPlaybackControls,
-    colors: ReaderChromeColors,
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .width(controls.buttonWidthDp.dp)
-            .height(controls.rowHeightDp.dp)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = Color(colors.infoText),
-            modifier = Modifier.size(controls.iconSizeDp.dp),
-        )
     }
 }
 
