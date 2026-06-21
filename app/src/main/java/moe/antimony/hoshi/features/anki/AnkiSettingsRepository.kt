@@ -18,14 +18,13 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import moe.antimony.hoshi.features.backup.PreferenceBackupStore
 import moe.antimony.hoshi.features.backup.PreferencesBackup
 import moe.antimony.hoshi.profiles.ProfileRepository
 
 interface AnkiSettingsRepository {
     val settings: Flow<AnkiSettings>
     suspend fun update(transform: (AnkiSettings) -> AnkiSettings)
-    suspend fun exportEntries(): JsonObject
-    suspend fun importEntries(entries: JsonObject)
     suspend fun updateAllProfiles(transform: (AnkiSettings) -> AnkiSettings) {
         update(transform)
     }
@@ -35,7 +34,7 @@ class DataStoreAnkiSettingsRepository(
     private val dataStore: DataStore<Preferences>,
     private val profileRepository: ProfileRepository? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-) : AnkiSettingsRepository {
+) : AnkiSettingsRepository, PreferenceBackupStore {
     private val profileSettingsVersion = MutableStateFlow(0)
     private val profileSettingsLock = Mutex()
 

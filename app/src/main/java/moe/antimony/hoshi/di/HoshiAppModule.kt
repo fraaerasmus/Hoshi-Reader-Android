@@ -17,6 +17,7 @@ import kotlinx.coroutines.SupervisorJob
 import moe.antimony.hoshi.BuildConfig
 import moe.antimony.hoshi.features.anki.AnkiSettingsRepository
 import moe.antimony.hoshi.features.anki.ankiSettingsRepository
+import moe.antimony.hoshi.features.backup.PreferenceBackupStore
 import moe.antimony.hoshi.features.audio.AudioSettingsRepository
 import moe.antimony.hoshi.features.audio.audioSettingsRepository
 import moe.antimony.hoshi.features.bookshelf.BookshelfSettingsRepository
@@ -109,6 +110,13 @@ internal object HoshiAppModule {
         @IoDispatcher ioDispatcher: CoroutineDispatcher,
     ): AnkiSettingsRepository =
         context.ankiSettingsRepository(profileRepository, ioDispatcher)
+
+    // AnkiSettingsRepository is an upstream-owned interface, so the backup hook lives on the
+    // concrete DataStoreAnkiSettingsRepository via PreferenceBackupStore instead of the interface.
+    @Provides
+    @Singleton
+    fun provideAnkiBackupStore(repository: AnkiSettingsRepository): PreferenceBackupStore =
+        repository as PreferenceBackupStore
 
     @Provides
     @Singleton

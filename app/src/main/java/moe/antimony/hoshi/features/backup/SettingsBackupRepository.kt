@@ -41,7 +41,6 @@ import kotlinx.serialization.json.long
 import kotlinx.serialization.json.put
 import moe.antimony.hoshi.BuildConfig
 import moe.antimony.hoshi.di.IoDispatcher
-import moe.antimony.hoshi.features.anki.AnkiSettingsRepository
 import moe.antimony.hoshi.features.audio.AudioSettingsRepository
 import moe.antimony.hoshi.features.bookshelf.BookshelfSettingsRepository
 import moe.antimony.hoshi.features.dictionary.DictionarySettingsRepository
@@ -64,7 +63,7 @@ class SettingsBackupRepository @Inject constructor(
     private val dictionarySettingsRepository: DictionarySettingsRepository,
     private val audioSettingsRepository: AudioSettingsRepository,
     private val sasayakiSettingsRepository: SasayakiSettingsRepository,
-    private val ankiSettingsRepository: AnkiSettingsRepository,
+    private val ankiBackupStore: PreferenceBackupStore,
     private val bookshelfSettingsRepository: BookshelfSettingsRepository,
     private val syncSettingsRepository: SyncSettingsRepository,
     private val updateSettingsRepository: UpdateSettingsRepository,
@@ -96,7 +95,7 @@ class SettingsBackupRepository @Inject constructor(
         val dictionary = dictionarySettingsRepository.exportEntries()
         val audio = audioSettingsRepository.exportEntries()
         val sasayaki = sasayakiSettingsRepository.exportEntries()
-        val anki = ankiSettingsRepository.exportEntries()
+        val anki = ankiBackupStore.exportEntries()
         val bookshelf = bookshelfSettingsRepository.exportEntries()
         val sync = syncSettingsRepository.exportEntries()
         val update = updateSettingsRepository.exportEntries()
@@ -134,7 +133,7 @@ class SettingsBackupRepository @Inject constructor(
         stores.store(STORE_DICTIONARY)?.let { dictionarySettingsRepository.importEntries(it) }
         stores.store(STORE_AUDIO)?.let { audioSettingsRepository.importEntries(it) }
         stores.store(STORE_SASAYAKI)?.let { sasayakiSettingsRepository.importEntries(it) }
-        stores.store(STORE_ANKI)?.let { ankiSettingsRepository.importEntries(it) }
+        stores.store(STORE_ANKI)?.let { ankiBackupStore.importEntries(it) }
         stores.store(STORE_BOOKSHELF)?.let { bookshelfSettingsRepository.importEntries(it) }
         stores.store(STORE_SYNC)?.let { syncSettingsRepository.importEntries(it) }
         stores.store(STORE_UPDATE)?.let { updateSettingsRepository.importEntries(it) }

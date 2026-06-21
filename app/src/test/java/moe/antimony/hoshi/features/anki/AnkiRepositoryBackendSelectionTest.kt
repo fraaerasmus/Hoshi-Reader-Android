@@ -5,7 +5,6 @@ import java.nio.file.Files
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
-import kotlinx.serialization.json.JsonObject
 import moe.antimony.hoshi.ui.UiText
 import moe.antimony.hoshi.features.audio.LocalAudioRepository
 import org.junit.Assert.assertEquals
@@ -551,10 +550,6 @@ class AnkiRepositoryBackendSelectionTest {
         override suspend fun update(transform: (AnkiSettings) -> AnkiSettings) {
             state.value = transform(state.value)
         }
-
-        override suspend fun exportEntries(): JsonObject = JsonObject(emptyMap())
-
-        override suspend fun importEntries(entries: JsonObject) {}
     }
 
     private class RecordingBackend(
