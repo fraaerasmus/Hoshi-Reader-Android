@@ -111,8 +111,7 @@ internal object HoshiAppModule {
     ): AnkiSettingsRepository =
         context.ankiSettingsRepository(profileRepository, ioDispatcher)
 
-    // AnkiSettingsRepository is an upstream-owned interface, so the backup hook lives on the
-    // concrete DataStoreAnkiSettingsRepository via PreferenceBackupStore instead of the interface.
+    // Anki's repository is an upstream interface, so the backup hook lives on the concrete impl.
     @Provides
     @Singleton
     fun provideAnkiBackupStore(repository: AnkiSettingsRepository): PreferenceBackupStore =

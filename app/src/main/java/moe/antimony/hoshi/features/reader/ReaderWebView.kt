@@ -937,7 +937,6 @@ fun ReaderWebView(
     // Latest mouse-hover position in raw screen px, tracked even when Shift isn't held so a
     // stationary Shift-press can scan the word already under the cursor. NaN = no hover yet.
     val lastHoverRaw = remember { floatArrayOf(Float.NaN, Float.NaN) }
-    // Convert raw screen px to WebView-local px and push to JS as the live scan position.
     val forwardScanPoint: (Float, Float) -> Unit = { rawX, rawY ->
         val view = webView
         if (view != null) {
@@ -956,14 +955,11 @@ fun ReaderWebView(
     val currentReaderKeyHandler = rememberUpdatedState<(KeyEvent) -> Boolean> { event ->
         val textEditorFocused = context.findActivity()?.currentFocus?.onCheckIsTextEditor() == true
         if (event.keyCode == KeyEvent.KEYCODE_SHIFT_LEFT || event.keyCode == KeyEvent.KEYCODE_SHIFT_RIGHT) {
-            // Track Shift so the generic-motion handler forwards hover only while Shift is held.
             shiftHeld.value = event.action == KeyEvent.ACTION_DOWN
-            // Forward Shift state to the reader so it can scan the word under the
-            // pointer (Yomitan-style). Non-consuming so Shift keeps normal behavior.
+            // Non-consuming so Shift keeps normal behavior.
             if (event.repeatCount == 0 && dictionarySettings.scanWithShiftKey && !textEditorFocused) {
                 val active = event.action == KeyEvent.ACTION_DOWN
-                // Prime the scan position from the last hover so pressing Shift while already
-                // hovering a word scans it immediately, without waiting for the next move.
+                // Prime from the last hover so pressing Shift while already hovering scans now.
                 if (active && !lastHoverRaw[0].isNaN()) {
                     forwardScanPoint(lastHoverRaw[0], lastHoverRaw[1])
                 }
@@ -1012,9 +1008,8 @@ fun ReaderWebView(
         onDispose { onReaderKeyEventHandlerChange(null) }
     }
     val currentReaderGenericMotionHandler = rememberUpdatedState<(MotionEvent) -> Boolean> { event ->
-        // Caught at the Activity (before the WebView), this keeps shift-hover alive after a
-        // split-screen refocus, when the WebView stops delivering DOM mousemove to the page.
-        // Track the cursor for Shift-press priming; forward it to JS while Shift is held.
+        // Activity-level hover keeps shift-hover alive after a split-screen refocus (the WebView
+        // stops sending DOM mousemove). Track the cursor for priming; forward it while Shift held.
         val isHover = event.actionMasked == MotionEvent.ACTION_HOVER_MOVE ||
             event.actionMasked == MotionEvent.ACTION_HOVER_ENTER
         if (isHover && event.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {

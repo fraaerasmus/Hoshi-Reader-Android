@@ -100,9 +100,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
-        // Caught before the WebView (like dispatchKeyEvent) so mouse hover reaches the reader even
-        // when the WebView stops delivering DOM mousemove after a split-screen refocus. Always
-        // non-consuming: the handler only reads the cursor position.
+        // Like dispatchKeyEvent, runs before the WebView so reader hover survives a split-screen
+        // refocus that stops DOM mousemove. Non-consuming: it only reads the cursor position.
         if (readerGenericMotionHandler?.invoke(event) == true) {
             return true
         }

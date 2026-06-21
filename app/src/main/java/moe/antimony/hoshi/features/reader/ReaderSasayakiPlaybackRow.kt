@@ -25,10 +25,9 @@ import androidx.compose.ui.unit.dp
 import moe.antimony.hoshi.R
 
 /**
- * Fork feature: the reader's bottom Sasayaki playback control row (rewind / play-pause /
- * forward), with optional centered layout and scaling. Kept in its own file so an upstream
- * rewrite of [ReaderBottomSafeProgress] conflicts on a single call site rather than this block.
- * Emits nothing when [controls] are hidden, matching the previous inline `if (visible)` guard.
+ * Fork feature: the reader's bottom Sasayaki playback row. Kept in its own file so an upstream
+ * rewrite of [ReaderBottomSafeProgress] conflicts on one call site, not this block. Emits nothing
+ * when [controls] are hidden.
  */
 @Composable
 internal fun ReaderSasayakiPlaybackRow(

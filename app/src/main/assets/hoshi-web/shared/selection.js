@@ -746,10 +746,8 @@ window.hoshiSelection = {
         this.selection = null;
     },
 
-    // Yomitan-style scan-on-hover: hold Shift and the word under the pointer is looked up
-    // without a tap. Native drives both inputs at the Activity level so it works regardless of
-    // WebView focus: setScanModifier (Shift state) and setScanPointer (cursor position),
-    // bypassing DOM mouse events entirely.
+    // Yomitan-style scan-on-hover. Native drives both inputs at the Activity level (works
+    // regardless of WebView focus): setScanModifier = Shift state, setScanPointer = cursor.
     setScanModifier(active, length) {
         this.shiftScan.active = !!active;
         if (typeof length === 'number' && length > 0) {
@@ -760,9 +758,7 @@ window.hoshiSelection = {
         }
     },
 
-    // Native pushes a live cursor position (raw device px) here so shift-hover survives WebView
-    // focus loss (e.g. Android split-screen refocus) where DOM mousemove stops firing. Converted
-    // to CSS viewport px via devicePixelRatio for caretRangeFromPoint in getCharacterAtPoint.
+    // Live cursor pushed by native in raw device px; convert to CSS px via devicePixelRatio.
     setScanPointer(deviceX, deviceY) {
         const ratio = window.devicePixelRatio || 1;
         this.shiftScan.pointer = { x: deviceX / ratio, y: deviceY / ratio };
