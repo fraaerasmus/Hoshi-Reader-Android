@@ -707,7 +707,7 @@ window.hoshiSelection = {
             const right = rect.x + rect.width;
             let group = null;
             for (const candidate of groups) {
-                if (left < candidate.right && right > candidate.left) {
+                if (window.hoshiRubyGeometry.rangesSubstantiallyOverlap(left, right, candidate.left, candidate.right)) {
                     group = candidate;
                     break;
                 }

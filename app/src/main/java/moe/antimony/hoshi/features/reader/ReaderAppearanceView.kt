@@ -189,9 +189,10 @@ private fun ReaderAppearanceContent(
         }
     }
     val fontOptions = remember(importedFonts, settings.selectedFont) {
-        (ReaderFontManager.defaultFonts + importedFonts.map { it.name } + settings.selectedFont)
-            .filter { it.isNotBlank() }
-            .distinct()
+        readerAppearanceFontOptions(
+            importedFontNames = importedFonts.map { it.name },
+            selectedFont = settings.selectedFont,
+        )
     }
     val palette = appearancePalette()
     val metrics = readerSheetDensityMetrics()
@@ -299,7 +300,8 @@ private fun ReaderAppearanceContent(
                             fontMenuExpanded = false
                             onSettingsChange(settings.copy(selectedFont = fontName))
                         },
-                        canDeleteFont = !fontManager.isDefaultFont(settings.selectedFont),
+                        canDeleteFont = !fontManager.isDefaultFont(settings.selectedFont) &&
+                            !ReaderFontManager.isPublisherFont(settings.selectedFont),
                         onDeleteFont = { fontToDelete = settings.selectedFont },
                     )
                     AppearanceDivider(palette)
@@ -331,16 +333,29 @@ private fun ReaderAppearanceContent(
                 AppearanceSection(title = stringResource(R.string.reader_appearance_layout), palette = palette) {
                     val paginatedLabel = stringResource(R.string.reader_appearance_paginated)
                     val continuousLabel = stringResource(R.string.reader_appearance_continuous)
+                    val visualNovelLabel = stringResource(R.string.reader_appearance_visual_novel)
                     SegmentedRow(
                         label = stringResource(R.string.reader_appearance_mode),
-                        options = listOf(paginatedLabel, continuousLabel),
-                        selected = if (settings.continuousMode) continuousLabel else paginatedLabel,
+                        options = listOf(paginatedLabel, continuousLabel, visualNovelLabel),
+                        selected = when (settings.viewMode) {
+                            ReaderViewMode.Paginated -> paginatedLabel
+                            ReaderViewMode.Continuous -> continuousLabel
+                            ReaderViewMode.VisualNovel -> visualNovelLabel
+                        },
                         onSelected = { label ->
-                            onSettingsChange(settings.copy(continuousMode = label == continuousLabel))
+                            onSettingsChange(
+                                settings.copy(
+                                    viewMode = when (label) {
+                                        continuousLabel -> ReaderViewMode.Continuous
+                                        visualNovelLabel -> ReaderViewMode.VisualNovel
+                                        else -> ReaderViewMode.Paginated
+                                    },
+                                ),
+                            )
                         },
                         palette = palette,
                     )
-                    if (settings.continuousMode) {
+                    if (settings.viewMode == ReaderViewMode.Continuous) {
                         AppearanceDivider(palette)
                         SliderRow(
                             label = stringResource(R.string.reader_appearance_chapter_swipe_distance),
@@ -350,6 +365,88 @@ private fun ReaderAppearanceContent(
                             steps = 9,
                             onValueChange = { value ->
                                 onSettingsChange(settings.copy(chapterSwipeDistance = (round(value / 5) * 5).toInt()))
+                            },
+                        )
+                    }
+                    if (settings.viewMode == ReaderViewMode.VisualNovel) {
+                        AppearanceDivider(palette)
+                        SliderRow(
+                            label = stringResource(R.string.reader_visual_novel_reveal_speed),
+                            value = if (settings.visualNovelRevealSpeed == 0) {
+                                stringResource(R.string.reader_visual_novel_reveal_speed_instant)
+                            } else {
+                                settings.visualNovelRevealSpeed.toString()
+                            },
+                            sliderValue = settings.visualNovelRevealSpeed.toFloat(),
+                            valueRange = 0f..120f,
+                            steps = 23,
+                            onValueChange = { value ->
+                                onSettingsChange(settings.copy(visualNovelRevealSpeed = (round(value / 5) * 5).toInt()))
+                            },
+                        )
+                        AppearanceDivider(palette)
+                        val blockLabel = stringResource(R.string.reader_visual_novel_screen_mode_block)
+                        val sentencesLabel = stringResource(R.string.reader_visual_novel_screen_mode_sentences)
+                        SegmentedRow(
+                            label = stringResource(R.string.reader_visual_novel_screen_mode),
+                            options = listOf(blockLabel, sentencesLabel),
+                            selected = when (settings.visualNovelScreenMode) {
+                                VisualNovelScreenMode.Block -> blockLabel
+                                VisualNovelScreenMode.Sentences -> sentencesLabel
+                            },
+                            onSelected = { label ->
+                                onSettingsChange(
+                                    settings.copy(
+                                        visualNovelScreenMode = if (label == sentencesLabel) {
+                                            VisualNovelScreenMode.Sentences
+                                        } else {
+                                            VisualNovelScreenMode.Block
+                                        },
+                                    ),
+                                )
+                            },
+                            palette = palette,
+                        )
+                        if (settings.visualNovelScreenMode == VisualNovelScreenMode.Sentences) {
+                            AppearanceDivider(palette)
+                            StepperRow(
+                                label = stringResource(R.string.reader_visual_novel_sentences_per_screen),
+                                value = settings.visualNovelSentencesPerScreen.toString(),
+                                onDecrease = {
+                                    onSettingsChange(
+                                        settings.copy(
+                                            visualNovelSentencesPerScreen = (settings.visualNovelSentencesPerScreen - 1).coerceAtLeast(1),
+                                        ),
+                                    )
+                                },
+                                onIncrease = {
+                                    onSettingsChange(
+                                        settings.copy(
+                                            visualNovelSentencesPerScreen = (settings.visualNovelSentencesPerScreen + 1).coerceAtMost(12),
+                                        ),
+                                    )
+                                },
+                                palette = palette,
+                            )
+                            AppearanceDivider(palette)
+                            SwitchRow(
+                                label = stringResource(R.string.reader_visual_novel_preserve_dialogue),
+                                checked = settings.visualNovelPreserveDialogueBubbles,
+                                onCheckedChange = { onSettingsChange(settings.copy(visualNovelPreserveDialogueBubbles = it)) },
+                            )
+                        }
+                        AppearanceDivider(palette)
+                        SwitchRow(
+                            label = stringResource(R.string.reader_visual_novel_click_advance),
+                            checked = settings.visualNovelClickAdvance,
+                            onCheckedChange = { onSettingsChange(settings.copy(visualNovelClickAdvance = it)) },
+                        )
+                        AppearanceDivider(palette)
+                        SwitchRow(
+                            label = stringResource(R.string.reader_visual_novel_merge_cross_screen_sasayaki_cues),
+                            checked = settings.visualNovelMergeCrossScreenSasayakiCues,
+                            onCheckedChange = {
+                                onSettingsChange(settings.copy(visualNovelMergeCrossScreenSasayakiCues = it))
                             },
                         )
                     }
@@ -369,12 +466,14 @@ private fun ReaderAppearanceContent(
                         onIncrease = { onSettingsChange(settings.copy(verticalPadding = (settings.verticalPadding + 1).coerceAtMost(50))) },
                         palette = palette,
                     )
-                    AppearanceDivider(palette)
-                    SwitchRow(
-                        label = stringResource(R.string.reader_appearance_avoid_page_break),
-                        checked = settings.avoidPageBreak,
-                        onCheckedChange = { onSettingsChange(settings.copy(avoidPageBreak = it)) },
-                    )
+                    if (settings.viewMode != ReaderViewMode.VisualNovel) {
+                        AppearanceDivider(palette)
+                        SwitchRow(
+                            label = stringResource(R.string.reader_appearance_avoid_page_break),
+                            checked = settings.avoidPageBreak,
+                            onCheckedChange = { onSettingsChange(settings.copy(avoidPageBreak = it)) },
+                        )
+                    }
                     AppearanceDivider(palette)
                     SwitchRow(
                         label = stringResource(R.string.reader_appearance_justify_text),
@@ -682,6 +781,11 @@ private fun ReaderAppearanceContent(
 internal fun readerAppearanceSasayakiRows(settings: SasayakiSettings): List<Int> =
     if (settings.enabled) listOf(R.string.reader_appearance_show_sasayaki_toggle) else emptyList()
 
+internal fun readerAppearanceFontOptions(importedFontNames: List<String>, selectedFont: String): List<String> =
+    (listOf(ReaderFontManager.publisherFont) + ReaderFontManager.defaultFonts + importedFontNames + selectedFont)
+        .filter { it.isNotBlank() }
+        .distinct()
+
 internal fun readerAppearanceShowsCustomInterfaceTheme(settings: ReaderSettings): Boolean =
     settings.theme == ReaderTheme.Custom
 
@@ -900,7 +1004,7 @@ internal fun segmentedControlWidthDp(optionCount: Int): Int =
 internal fun segmentedControlWidthDp(options: List<String>): Int =
     when {
         options.size > 2 -> options.size * 82
-        options.any { it.length >= 10 } -> 180
+        options.any { it.length >= 8 } -> 180
         options.any { it.length >= 6 } -> 120
         else -> 100
     }
@@ -916,6 +1020,7 @@ private fun ReaderFontRow(
     onDeleteFont: () -> Unit,
 ) {
     val metrics = readerSheetDensityMetrics()
+    val selectedFontLabel = readerFontLabel(settings.selectedFont)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -938,7 +1043,7 @@ private fun ReaderFontRow(
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                     TextButton(onClick = { onFontMenuExpandedChange(true) }) {
                         Text(
-                            text = settings.selectedFont,
+                            text = selectedFontLabel,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -949,7 +1054,7 @@ private fun ReaderFontRow(
                     ) {
                         fontOptions.forEach { fontName ->
                             DropdownMenuItem(
-                                text = { Text(fontName) },
+                                text = { Text(readerFontLabel(fontName)) },
                                 onClick = { onFontSelected(fontName) },
                             )
                         }
@@ -994,6 +1099,14 @@ private fun ActionRow(
         }
     }
 }
+
+@Composable
+private fun readerFontLabel(fontName: String): String =
+    if (ReaderFontManager.isPublisherFont(fontName)) {
+        stringResource(R.string.reader_appearance_font_publisher)
+    } else {
+        fontName
+    }
 
 @Composable
 private fun SwitchRow(

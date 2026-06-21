@@ -9,8 +9,10 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -18,13 +20,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.reader.ReaderWebView
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.epub.BookEntry
+import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
 import moe.antimony.hoshi.features.sync.SyncDirection
 import moe.antimony.hoshi.features.sync.SyncResult
@@ -41,7 +44,6 @@ internal fun ReaderRouteDestination(
     modifier: Modifier = Modifier,
 ) {
     val appContainer = LocalHoshiUiDependencies.current
-    val profileState by appContainer.profileRepository.state.collectAsStateWithLifecycle()
     val syncSettings = appContainer.syncSettingsRepository.settings.collectAsLoadedSettings()
     val sasayakiSettings = appContainer.sasayakiSettingsRepository.settings.collectAsLoadedSettings()
     val autoSyncState = ReaderRouteAutoSyncState(
@@ -57,8 +59,8 @@ internal fun ReaderRouteDestination(
     val readerLoadingBackground = Modifier.background(
         Color(readerSettings.backgroundColor(systemDarkTheme)),
     )
-    val routeState by produceState<ReaderRouteLoadState>(
-        ReaderRouteLoadState.Loading,
+    val routeState by produceState<ReaderRouteRenderState>(
+        ReaderRouteRenderState.Loading,
         bookId,
         stateHolder,
         reloadKey,
@@ -81,11 +83,16 @@ internal fun ReaderRouteDestination(
                 }
             }
         }
-        loaded.publishProfileActivation(
-            activateForBook = { metadata -> appContainer.profileActivationService.activateForBook(metadata) },
+        value = loaded.activateProfileAndPrepareRender(
+            activateForBook = { metadata ->
+                appContainer.profileActivationService.activateForBook(metadata).let { profile ->
+                    ContentLanguageProfile.fromDictionaryLanguageId(profile.dictionaryLanguageId)
+                        ?: ContentLanguageProfile.Default
+                }
+            },
             clearLoadedProfile = appContainer.profileActivationService::clearLoadedProfile,
+            loadReaderSettings = { appContainer.readerSettingsRepository.settings.first() },
         )
-        value = loaded
     }
 
     suspend fun exportBook(entry: BookEntry) {
@@ -136,7 +143,7 @@ internal fun ReaderRouteDestination(
     }
 
     when (val state = routeState) {
-        ReaderRouteLoadState.Loading -> Box(
+        ReaderRouteRenderState.Loading -> Box(
             modifier = modifier
                 .fillMaxSize()
                 .then(readerLoadingBackground),
@@ -144,7 +151,7 @@ internal fun ReaderRouteDestination(
         ) {
             CircularProgressIndicator()
         }
-        is ReaderRouteLoadState.Error -> Box(
+        is ReaderRouteRenderState.Error -> Box(
             modifier = modifier
                 .fillMaxSize()
                 .then(readerLoadingBackground),
@@ -152,34 +159,83 @@ internal fun ReaderRouteDestination(
         ) {
             Text(state.message)
         }
-        is ReaderRouteLoadState.Ready -> ReaderWebView(
-            book = state.book,
-            bookRoot = state.bookRoot,
-            bookCoverFile = state.bookCoverFile,
-            initialChapterIndex = state.bookmark?.chapterIndex ?: 0,
-            initialProgress = state.bookmark?.progress ?: 0.0,
-            readerSettings = readerSettings,
-            onReaderSettingsChange = onReaderSettingsChange,
-            onReaderKeyEventHandlerChange = onReaderKeyEventHandlerChange,
-            onSaveBookmark = { chapterIndex, progress, statistics ->
-                autoSyncExportController.launchSave {
-                    stateHolder.saveBookmark(
-                        state = state,
-                        chapterIndex = chapterIndex,
-                        progress = progress,
-                        statistics = statistics,
-                        onBookmarkSaved = onBookmarkSaved,
-                    )
+        is ReaderRouteRenderState.Ready -> {
+            val readyState = state.loadState
+            var routeReaderSettings by remember(readyState.entry.metadata.id, state.readerSettings) {
+                mutableStateOf(state.readerSettings)
+            }
+            LaunchedEffect(appContainer.readerSettingsRepository, readyState.entry.metadata.id, state.readerSettings) {
+                appContainer.readerSettingsRepository.settings.collect { settings ->
+                    routeReaderSettings = settings
                 }
-                scheduleExport(state.entry)
-            },
-            onFlushAutoSyncExport = ::flushExport,
-            onForegroundAutoSyncImport = { importOnForeground(state.entry) },
-            contentLanguageProfile = profileState.effectiveContentLanguageProfile,
-            onClose = onClose,
-            modifier = modifier.fillMaxSize(),
-        )
+            }
+            ReaderWebView(
+                book = readyState.book,
+                bookRoot = readyState.bookRoot,
+                bookCoverFile = readyState.bookCoverFile,
+                initialChapterIndex = readyState.bookmark?.chapterIndex ?: 0,
+                initialProgress = readyState.bookmark?.progress ?: 0.0,
+                readerSettings = routeReaderSettings,
+                onReaderSettingsChange = { settings ->
+                    routeReaderSettings = settings
+                    onReaderSettingsChange(settings)
+                },
+                onReaderKeyEventHandlerChange = onReaderKeyEventHandlerChange,
+                onSaveBookmark = { chapterIndex, progress, statistics ->
+                    autoSyncExportController.launchSave {
+                        stateHolder.saveBookmark(
+                            state = readyState,
+                            chapterIndex = chapterIndex,
+                            progress = progress,
+                            statistics = statistics,
+                            onBookmarkSaved = onBookmarkSaved,
+                        )
+                    }
+                    scheduleExport(readyState.entry)
+                },
+                onFlushAutoSyncExport = ::flushExport,
+                onForegroundAutoSyncImport = { importOnForeground(readyState.entry) },
+                contentLanguageProfile = state.contentLanguageProfile,
+                onClose = onClose,
+                modifier = modifier.fillMaxSize(),
+            )
+        }
     }
 }
+
+internal sealed interface ReaderRouteRenderState {
+    data object Loading : ReaderRouteRenderState
+
+    data class Ready(
+        val loadState: ReaderRouteLoadState.Ready,
+        val readerSettings: ReaderSettings,
+        val contentLanguageProfile: ContentLanguageProfile,
+    ) : ReaderRouteRenderState
+
+    data class Error(
+        val message: String,
+    ) : ReaderRouteRenderState
+}
+
+internal suspend fun ReaderRouteLoadState.activateProfileAndPrepareRender(
+    activateForBook: (BookMetadata) -> ContentLanguageProfile,
+    clearLoadedProfile: () -> Unit,
+    loadReaderSettings: suspend () -> ReaderSettings,
+): ReaderRouteRenderState =
+    when (this) {
+        is ReaderRouteLoadState.Ready -> {
+            val contentLanguageProfile = activateForBook(entry.metadata)
+            ReaderRouteRenderState.Ready(
+                loadState = this,
+                readerSettings = loadReaderSettings(),
+                contentLanguageProfile = contentLanguageProfile,
+            )
+        }
+        is ReaderRouteLoadState.Error -> {
+            clearLoadedProfile()
+            ReaderRouteRenderState.Error(message)
+        }
+        ReaderRouteLoadState.Loading -> ReaderRouteRenderState.Loading
+    }
 
 private const val ReaderAutoSyncLogTag = "HoshiReaderSync"

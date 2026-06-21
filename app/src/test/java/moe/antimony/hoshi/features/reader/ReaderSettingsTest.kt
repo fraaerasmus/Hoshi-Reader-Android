@@ -211,6 +211,19 @@ class ReaderSettingsTest {
     }
 
     @Test
+    fun publisherFontReaderCssKeepsEpubFontFamily() {
+        val css = ReaderContentStyles.styleTag(
+            settings = ReaderSettings(selectedFont = ReaderFontManager.publisherFont),
+            fontFaceUrl = "https://appassets.androidplatform.net/fonts/ignored.ttf",
+        )
+
+        assertFalse(css.contains("@font-face"))
+        assertFalse(css.contains("font-family:"))
+        assertTrue(css.contains("font-size: 22px !important;"))
+        assertTrue(css.contains("writing-mode: vertical-rl !important;"))
+    }
+
+    @Test
     fun horizontalReaderCssUsesIosWritingModeMapping() {
         val css = ReaderContentStyles.styleTag(ReaderSettings(verticalWriting = false))
 
@@ -219,7 +232,7 @@ class ReaderSettingsTest {
 
     @Test
     fun continuousReaderCssUsesScrollableIosLayoutInsteadOfPagedColumns() {
-        val css = ReaderContentStyles.styleTag(ReaderSettings(continuousMode = true))
+        val css = ReaderContentStyles.styleTag(ReaderSettings(viewMode = ReaderViewMode.Continuous))
 
         assertTrue(css.contains("overflow-y: hidden !important;"))
         assertTrue(css.lines().any { it.trim() == "height: var(--hoshi-continuous-height, 100vh) !important;" })
@@ -233,7 +246,7 @@ class ReaderSettingsTest {
     fun verticalContinuousLayoutMovesHorizontalPaddingToViewportOnly() {
         val layout = ReaderGeneratedLayout.from(
             ReaderSettings(
-                continuousMode = true,
+                viewMode = ReaderViewMode.Continuous,
                 verticalWriting = true,
                 horizontalPadding = 24,
                 verticalPadding = 10,
@@ -267,7 +280,7 @@ class ReaderSettingsTest {
     fun horizontalContinuousLayoutMovesVerticalPaddingToViewportOnly() {
         val layout = ReaderGeneratedLayout.from(
             ReaderSettings(
-                continuousMode = true,
+                viewMode = ReaderViewMode.Continuous,
                 verticalWriting = false,
                 horizontalPadding = 24,
                 verticalPadding = 10,
@@ -298,7 +311,7 @@ class ReaderSettingsTest {
         assertEquals(
             0.125,
             ReaderSettings(
-                continuousMode = true,
+                viewMode = ReaderViewMode.Continuous,
                 verticalWriting = true,
                 horizontalPadding = 25,
             ).continuousViewportHorizontalPaddingRatio,
@@ -307,7 +320,7 @@ class ReaderSettingsTest {
         assertEquals(
             0.0,
             ReaderSettings(
-                continuousMode = true,
+                viewMode = ReaderViewMode.Continuous,
                 verticalWriting = false,
                 horizontalPadding = 25,
             ).continuousViewportHorizontalPaddingRatio,
@@ -316,7 +329,7 @@ class ReaderSettingsTest {
         assertEquals(
             0.0,
             ReaderSettings(
-                continuousMode = false,
+                viewMode = ReaderViewMode.Paginated,
                 verticalWriting = true,
                 horizontalPadding = 25,
             ).continuousViewportHorizontalPaddingRatio,
@@ -329,7 +342,7 @@ class ReaderSettingsTest {
         assertEquals(
             0.16,
             ReaderSettings(
-                continuousMode = true,
+                viewMode = ReaderViewMode.Continuous,
                 verticalWriting = false,
                 verticalPadding = 32,
             ).continuousViewportVerticalPaddingRatio,
@@ -338,7 +351,7 @@ class ReaderSettingsTest {
         assertEquals(
             0.0,
             ReaderSettings(
-                continuousMode = true,
+                viewMode = ReaderViewMode.Continuous,
                 verticalWriting = true,
                 verticalPadding = 32,
             ).continuousViewportVerticalPaddingRatio,
@@ -347,7 +360,7 @@ class ReaderSettingsTest {
         assertEquals(
             0.0,
             ReaderSettings(
-                continuousMode = false,
+                viewMode = ReaderViewMode.Paginated,
                 verticalWriting = false,
                 verticalPadding = 32,
             ).continuousViewportVerticalPaddingRatio,
@@ -541,10 +554,10 @@ class ReaderSettingsTest {
     @Test
     fun paginatedReaderCssAllowsFillingPageBottomAcrossParagraphs() {
         val paginatedCss = ReaderContentStyles.styleTag(
-            ReaderSettings(continuousMode = false),
+            ReaderSettings(viewMode = ReaderViewMode.Paginated),
         )
         val continuousCss = ReaderContentStyles.styleTag(
-            ReaderSettings(continuousMode = true),
+            ReaderSettings(viewMode = ReaderViewMode.Continuous),
         )
 
         assertTrue(paginatedCss.contains("orphans: 1 !important;"))
@@ -556,16 +569,59 @@ class ReaderSettingsTest {
     @Test
     fun paginatedReaderCssResetsNestedColumnCounts() {
         val paginatedCss = ReaderContentStyles.styleTag(
-            ReaderSettings(continuousMode = false),
+            ReaderSettings(viewMode = ReaderViewMode.Paginated),
         )
         val continuousCss = ReaderContentStyles.styleTag(
-            ReaderSettings(continuousMode = true),
+            ReaderSettings(viewMode = ReaderViewMode.Continuous),
         )
 
-        assertTrue(paginatedCss.contains("body * {\n                column-count: auto !important;"))
+        assertTrue(Regex("""body \* \{\s+column-count: auto !important;""").containsMatchIn(paginatedCss))
         assertTrue(paginatedCss.contains("-webkit-column-count: auto !important;"))
         assertFalse(continuousCss.contains("column-count: auto !important;"))
         assertFalse(continuousCss.contains("-webkit-column-count: auto !important;"))
+    }
+
+    @Test
+    fun visualNovelReaderCssCentersCurrentScreenContent() {
+        val css = ReaderContentStyles.styleTag(
+            ReaderSettings(
+                viewMode = ReaderViewMode.VisualNovel,
+                verticalWriting = true,
+                fontSize = 28,
+                verticalPadding = 8,
+                horizontalPadding = 12,
+            ),
+        )
+
+        assertTrue(css.contains(".hoshi-vn-screen"))
+        assertTrue(css.contains("display: flex !important;"))
+        assertTrue(css.contains("align-items: center !important;"))
+        assertTrue(css.contains("justify-content: center !important;"))
+        assertTrue(css.contains("padding: var(--hoshi-vertical-padding-block, 4.0vh) 6.0vw !important;"))
+        assertTrue(css.contains("padding-bottom: calc(var(--hoshi-vertical-padding-block, 4.0vh) + 28px) !important;"))
+        assertTrue(css.contains(".hoshi-vn-content"))
+        assertTrue(css.contains("max-width: 100% !important;"))
+        assertTrue(css.contains("max-height: calc(100% - 28px) !important;"))
+        assertTrue(css.contains("overflow: visible !important;"))
+        assertTrue(css.contains("hanging-punctuation: none !important;"))
+        assertTrue(css.contains(".hoshi-vn-content svg"))
+        assertTrue(css.contains("width: var(--hoshi-image-max-width, 88vw) !important;"))
+        assertTrue(css.contains("height: var(--hoshi-image-max-height, calc(var(--page-height, 100vh) - 28px)) !important;"))
+    }
+
+    @Test
+    fun paginatedReaderKeepsHangingPunctuationWhileVisualNovelContentDisablesIt() {
+        val paginatedCss = ReaderContentStyles.styleTag(
+            ReaderSettings(viewMode = ReaderViewMode.Paginated),
+        )
+        val visualNovelCss = ReaderContentStyles.styleTag(
+            ReaderSettings(viewMode = ReaderViewMode.VisualNovel),
+        )
+
+        assertTrue(paginatedCss.contains("hanging-punctuation: allow-end !important;"))
+        assertFalse(paginatedCss.contains("hanging-punctuation: none !important;"))
+        assertTrue(visualNovelCss.contains(".hoshi-vn-content"))
+        assertTrue(visualNovelCss.contains("hanging-punctuation: none !important;"))
     }
 
     @Test
@@ -599,6 +655,7 @@ class ReaderSettingsTest {
         assertEquals(100, segmentedControlWidthDp(listOf("縦", "横")))
         assertEquals(120, segmentedControlWidthDp(listOf("Top", "Bottom")))
         assertEquals(180, segmentedControlWidthDp(listOf("Paginated", "Continuous")))
+        assertEquals(180, segmentedControlWidthDp(listOf("Block", "Sentences")))
     }
 
     @Test

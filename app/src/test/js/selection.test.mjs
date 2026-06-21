@@ -431,3 +431,27 @@ test('shared ruby geometry does not cascade a vertical single-character base rec
     assert.equal(rubyAware.width, 37);
     assert.equal(rubyAware.height, 21);
 });
+
+test('shared selection keeps vertical lookup rects split when adjacent ruby-aware columns barely overlap', () => {
+    const { selection, window } = loadSelection('信憑性がある');
+    window.getComputedStyle = () => ({ writingMode: 'vertical-rl' });
+
+    const rects = selection.unifyVerticalColumnRects([
+        { x: 294.9444580078125, y: 730.4166870117188, width: 39.11110782623291, height: 51.70001220703125 },
+        { x: 256.4444580078125, y: 4.472222328186035, width: 39.11110782623291, height: 22 },
+        { x: 256.4444580078125, y: 26.47222328186035, width: 32, height: 22.000001907348633 },
+        { x: 256.4444580078125, y: 48.472225189208984, width: 32, height: 21.999996185302734 },
+        { x: 256.4444580078125, y: 70.47222137451172, width: 32, height: 22 },
+    ]);
+
+    assert.deepEqual(
+        rects.map((rect) => [rect.x, rect.width]),
+        [
+            [294.9444580078125, 39.11110782623291],
+            [256.4444580078125, 39.11110782623291],
+            [256.4444580078125, 39.11110782623291],
+            [256.4444580078125, 39.11110782623291],
+            [256.4444580078125, 39.11110782623291],
+        ],
+    );
+});

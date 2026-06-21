@@ -102,8 +102,14 @@ internal object ReaderContentStyles {
         val backgroundColor = settings.backgroundColorCss(systemDark)
         val normalizedFont = settings.selectedFont
         val fontFaceFamily = normalizedFont.cssString()
-        val bodyFontFamily = normalizedFont.readerCssFontFamily(contentLanguageProfile)
-        val fontFaceCss = fontFaceUrl?.let { url ->
+        val bodyFontFamilyCss = if (ReaderFontManager.isPublisherFont(normalizedFont)) {
+            ""
+        } else {
+            "font-family: ${normalizedFont.readerCssFontFamily(contentLanguageProfile)} !important;"
+        }
+        val fontFaceCss = fontFaceUrl
+            ?.takeUnless { ReaderFontManager.isPublisherFont(normalizedFont) }
+            ?.let { url ->
             """
             @font-face {
                 font-family: $fontFaceFamily;
@@ -172,72 +178,127 @@ internal object ReaderContentStyles {
             """.trimIndent()
         }
         val generatedLayout = ReaderGeneratedLayout.from(settings)
-        val layoutCss = if (settings.continuousMode) {
-            val hiddenOverflowAxis = if (settings.verticalWriting) "overflow-y" else "overflow-x"
-            val viewportConstraintCss = if (settings.verticalWriting) {
-                "height: var(--hoshi-continuous-height, 100vh) !important;"
-            } else {
+        val visualNovelContentMaxHeight = if (settings.verticalWriting && settings.bottomOverlapPx > 0) {
+            "calc(100% - ${settings.bottomOverlapPx}px)"
+        } else {
+            "100%"
+        }
+        val layoutCss = when (settings.viewMode) {
+            ReaderViewMode.Continuous -> {
+                val hiddenOverflowAxis = if (settings.verticalWriting) "overflow-y" else "overflow-x"
+                val viewportConstraintCss = if (settings.verticalWriting) {
+                    "height: var(--hoshi-continuous-height, 100vh) !important;"
+                } else {
+                    """
+                    width: 100vw !important;
+                    min-height: 100vh !important;
+                    """.trimIndent()
+                }
                 """
-                width: 100vw !important;
-                min-height: 100vh !important;
+                html, body {
+                    $hiddenOverflowAxis: hidden !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: var(--hoshi-background-color) !important;
+                    color: var(--hoshi-text-color) !important;
+                    writing-mode: ${settings.writingModeCss} !important;
+                }
+                body {
+                    $bodyFontFamilyCss
+                    font-size: ${settings.fontSize}px !important;
+                    -webkit-text-size-adjust: none !important;
+                    $textSpacingCss
+                    box-sizing: border-box !important;
+                    $viewportConstraintCss
+                    padding: ${generatedLayout.continuousBodyPaddingCss} !important;
+                    padding-bottom: ${generatedLayout.continuousBodyBottomPaddingCss} !important;
+                    $gridCss
+                    text-orientation: mixed;
+                }
                 """.trimIndent()
             }
-            """
-            html, body {
-                $hiddenOverflowAxis: hidden !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                background: var(--hoshi-background-color) !important;
-                color: var(--hoshi-text-color) !important;
-                writing-mode: ${settings.writingModeCss} !important;
+            ReaderViewMode.VisualNovel -> {
+                """
+                html, body {
+                    overflow: hidden !important;
+                    height: var(--page-height, 100vh) !important;
+                    width: var(--page-width, 100vw) !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: var(--hoshi-background-color) !important;
+                    color: var(--hoshi-text-color) !important;
+                }
+                body {
+                    $bodyFontFamilyCss
+                    font-size: ${settings.fontSize}px !important;
+                    -webkit-text-size-adjust: none !important;
+                    $textSpacingCss
+                    box-sizing: border-box !important;
+                    height: var(--page-height, 100vh) !important;
+                    width: var(--page-width, 100vw) !important;
+                    padding: 0 !important;
+                    $gridCss
+                    text-orientation: mixed;
+                }
+                .hoshi-vn-screen {
+                    writing-mode: ${settings.writingModeCss} !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    height: var(--page-height, 100vh) !important;
+                    width: var(--page-width, 100vw) !important;
+                    padding: ${settings.pagePaddingCss} !important;
+                    padding-bottom: ${settings.bottomPaddingCss} !important;
+                }
+                .hoshi-vn-content {
+                    writing-mode: ${settings.writingModeCss} !important;
+                    box-sizing: border-box !important;
+                    max-width: 100% !important;
+                    max-height: $visualNovelContentMaxHeight !important;
+                    overflow: visible !important;
+                    hanging-punctuation: none !important;
+                }
+                .hoshi-vn-content svg {
+                    width: var(--hoshi-image-max-width, ${settings.imageMaxWidthFallbackCss}) !important;
+                    height: var(--hoshi-image-max-height, ${settings.imageMaxHeightFallbackCss}) !important;
+                }
+                """.trimIndent()
             }
-            body {
-                font-family: $bodyFontFamily !important;
-                font-size: ${settings.fontSize}px !important;
-                -webkit-text-size-adjust: none !important;
-                $textSpacingCss
-                box-sizing: border-box !important;
-                $viewportConstraintCss
-                padding: ${generatedLayout.continuousBodyPaddingCss} !important;
-                padding-bottom: ${generatedLayout.continuousBodyBottomPaddingCss} !important;
-                $gridCss
-                text-orientation: mixed;
+            ReaderViewMode.Paginated -> {
+                """
+                html, body {
+                    overflow: hidden !important;
+                    height: var(--page-height, 100vh) !important;
+                    width: var(--page-width, 100vw) !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    background: var(--hoshi-background-color) !important;
+                    color: var(--hoshi-text-color) !important;
+                    writing-mode: ${settings.writingModeCss} !important;
+                }
+                body {
+                    $bodyFontFamilyCss
+                    font-size: ${settings.fontSize}px !important;
+                    -webkit-text-size-adjust: none !important;
+                    $textSpacingCss
+                    box-sizing: border-box !important;
+                    column-width: ${generatedLayout.paginatedColumnWidthCss} !important;
+                    column-gap: ${settings.columnGapCss};
+                    padding: ${settings.pagePaddingCss} !important;
+                    padding-bottom: ${settings.bottomPaddingCss} !important;
+                    $gridCss
+                    text-orientation: mixed;
+                }
+                body * {
+                    column-count: auto !important;
+                    -webkit-column-count: auto !important;
+                }
+                body, body * {
+                    orphans: 1 !important;
+                    widows: 1 !important;
+                }
+                """.trimIndent()
             }
-            """.trimIndent()
-        } else {
-            """
-            html, body {
-                overflow: hidden !important;
-                height: var(--page-height, 100vh) !important;
-                width: var(--page-width, 100vw) !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                background: var(--hoshi-background-color) !important;
-                color: var(--hoshi-text-color) !important;
-                writing-mode: ${settings.writingModeCss} !important;
-            }
-            body {
-                font-family: $bodyFontFamily !important;
-                font-size: ${settings.fontSize}px !important;
-                -webkit-text-size-adjust: none !important;
-                $textSpacingCss
-                box-sizing: border-box !important;
-                column-width: ${generatedLayout.paginatedColumnWidthCss} !important;
-                column-gap: ${settings.columnGapCss};
-                padding: ${settings.pagePaddingCss} !important;
-                padding-bottom: ${settings.bottomPaddingCss} !important;
-                $gridCss
-                text-orientation: mixed;
-            }
-            body * {
-                column-count: auto !important;
-                -webkit-column-count: auto !important;
-            }
-            body, body * {
-                orphans: 1 !important;
-                widows: 1 !important;
-            }
-            """.trimIndent()
         }
         return (readerCssTemplate ?: ReaderCssTemplateSource.value)
             .replace("__HOSHI_FONT_FACE_CSS__", fontFaceCss)

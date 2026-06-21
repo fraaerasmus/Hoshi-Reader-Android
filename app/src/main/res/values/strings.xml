@@ -210,7 +210,7 @@
     <string name="dictionary_expanded">Expanded</string>
     <string name="dictionary_custom_css_font" comment="Custom CSS font setting, intentionally matching reader font labels.">Font</string>
     <string name="dictionary_custom_css_selector">Selector</string>
-    <string name="dictionary_search_placeholder">Search</string>
+    <string name="dictionary_search_placeholder" comment="Dictionary search field placeholder, intentionally matching reader search tab label.">Search</string>
     <string name="dictionary_lookup_failed">Lookup failed.</string>
     <string name="dictionary_pull_clear">Pull down to clear</string>
     <string name="dictionary_release_clear">Release to clear</string>
@@ -246,6 +246,17 @@
     <string name="reader_jump_back">Return to previous jump position</string>
     <string name="reader_jump_forward">Return to later jump position</string>
     <string name="reader_menu">Reader Menu</string>
+    <string name="reader_go_to">Go to</string>
+    <string name="reader_search" comment="Reader Go to panel tab label, distinct from dictionary search placeholder.">Search</string>
+    <string name="reader_search_in_book">Search in this book</string>
+    <string name="reader_search_empty_prompt">Enter text to search this book</string>
+    <string name="reader_searching">Searching...</string>
+    <string name="reader_no_search_results">No matches</string>
+    <string name="reader_search_failed">Could not search this book</string>
+    <plurals name="reader_search_result_count">
+        <item quantity="one">%d result</item>
+        <item quantity="other">%d results</item>
+    </plurals>
     <string name="reader_image_clip_label">Hoshi reader image</string>
     <string name="reader_image_copied">Image copied.</string>
     <string name="reader_image_saved">Image saved.</string>
@@ -304,6 +315,7 @@
     <string name="reader_appearance_vertical">Vertical</string>
     <string name="reader_appearance_horizontal">Horizontal</string>
     <string name="reader_appearance_font" comment="Reader font setting, intentionally matching dictionary custom CSS font.">Font</string>
+    <string name="reader_appearance_font_publisher">Publisher</string>
     <string name="reader_appearance_font_file" comment="Fallback filename label, intentionally matching font setting labels.">font</string>
     <string name="reader_appearance_import_font">Import Font</string>
     <string name="reader_appearance_importing" comment="Generic import progress label, intentionally shared with ッツ backup import.">Importing...</string>
@@ -312,6 +324,16 @@
     <string name="reader_appearance_mode" comment="Reader appearance setting label, intentionally matching dictionary mode.">Mode</string>
     <string name="reader_appearance_paginated">Paginated</string>
     <string name="reader_appearance_continuous">Continuous</string>
+    <string name="reader_appearance_visual_novel">VN</string>
+    <string name="reader_visual_novel_reveal_speed">Text Reveal Speed</string>
+    <string name="reader_visual_novel_reveal_speed_instant">Instant</string>
+    <string name="reader_visual_novel_screen_mode">Screen Content</string>
+    <string name="reader_visual_novel_screen_mode_block">Block</string>
+    <string name="reader_visual_novel_screen_mode_sentences">Sentences</string>
+    <string name="reader_visual_novel_sentences_per_screen">Sentences per Screen</string>
+    <string name="reader_visual_novel_preserve_dialogue">Keep Dialogue Together</string>
+    <string name="reader_visual_novel_click_advance">Tap Blank Area to Advance</string>
+    <string name="reader_visual_novel_merge_cross_screen_sasayaki_cues">Keep Sasayaki Text Together</string>
     <string name="reader_appearance_chapter_swipe_distance">Chapter Swipe Distance</string>
     <string name="reader_appearance_horizontal_padding">Horizontal Padding</string>
     <string name="reader_appearance_vertical_padding">Vertical Padding</string>

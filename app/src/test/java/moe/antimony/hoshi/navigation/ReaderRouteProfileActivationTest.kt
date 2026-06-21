@@ -5,6 +5,9 @@ import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubChapter
+import moe.antimony.hoshi.content.ContentLanguageProfile
+import moe.antimony.hoshi.features.reader.ReaderSettings
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -36,6 +39,26 @@ class ReaderRouteProfileActivationTest {
 
         assertNull(activatedMetadata)
         assertEquals(1, clearCount)
+    }
+
+    @Test
+    fun readyReaderRenderStateLoadsReaderSettingsAfterProfileActivation() = runBlocking {
+        var activeProfileId = "global-en"
+
+        val renderState = readerReadyState(profileId = "book-ja").activateProfileAndPrepareRender(
+            activateForBook = { metadata ->
+                activeProfileId = metadata.profileId.orEmpty()
+                ContentLanguageProfile.Japanese
+            },
+            clearLoadedProfile = {},
+            loadReaderSettings = {
+                ReaderSettings(fontSize = if (activeProfileId == "book-ja") 28 else 12)
+            },
+        )
+
+        val ready = renderState as ReaderRouteRenderState.Ready
+        assertEquals(28, ready.readerSettings.fontSize)
+        assertEquals(ContentLanguageProfile.Japanese, ready.contentLanguageProfile)
     }
 
     private fun readerReadyState(profileId: String): ReaderRouteLoadState.Ready {

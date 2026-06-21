@@ -8,6 +8,22 @@ import org.junit.Test
 
 class ReaderAppearanceSasayakiTest {
     @Test
+    fun appearanceFontOptionsIncludePublisherFontBeforeUserFonts() {
+        assertEquals(
+            listOf(
+                ReaderFontManager.publisherFont,
+                ReaderFontManager.defaultMinchoFont,
+                ReaderFontManager.defaultGothicFont,
+                "KleeOne-SemiBold",
+            ),
+            readerAppearanceFontOptions(
+                importedFontNames = listOf("KleeOne-SemiBold"),
+                selectedFont = ReaderFontManager.publisherFont,
+            ),
+        )
+    }
+
+    @Test
     fun appearanceShowsStatisticsRowsWhenStatisticsAreEnabled() {
         assertEquals(
             listOf(

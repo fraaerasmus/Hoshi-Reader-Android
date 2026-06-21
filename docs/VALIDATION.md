@@ -19,6 +19,19 @@ build behavior:
 ./gradlew lint
 ```
 
+Run a release build when changing `minSdk`, `targetSdk`, `compileSdk`, ABI
+filters, signing, native packaging, or other release packaging behavior:
+
+```bash
+./gradlew :app:assembleRelease
+```
+
+For `minSdk` changes, validate both the newly admitted Android version when
+available and an existing supported Android 9+ device path. Preserve app data
+for existing-user checks, compare release APK structure when packaging output
+changes, and keep older-version compatibility fixes guarded so Android 9+
+behavior stays on the existing path.
+
 For a single JVM unit test, do not use `./gradlew test --tests ...`; the
 `:app:test` aggregate task does not support filtering. Use:
 
@@ -78,7 +91,9 @@ press is for native selection/highlight-style flows when those are under test.
 Manual reader validation should cover:
 
 - cover image pages and multi-image illustration pages.
-- paginated and continuous modes in vertical and horizontal writing.
+- paginated, continuous, and VN modes in vertical and horizontal writing.
+- VN block and sentence screens, reveal speed 0/45/120, blank-area click
+  advance, text lookup taps, links, images, restore, and chapter boundaries.
 - long text page turns, chapter-list jumps into mid-book chapters, and bookmark
   restore.
 - forward and backward chapter boundaries, including reverse landing at the
@@ -101,6 +116,8 @@ For reader pagination bugs, inspect WebView metrics such as `scrollTop`,
 navigation changes chapter, compare native gesture boundaries with JS boundary
 checks. For blank trailing pages, check small fractional overflow from images,
 spacers, column gap, or CSS sizing.
+
+For performance investigation workflow, see `docs/PERFORMANCE.md`.
 
 ## Bookshelf, Import, And Backup
 

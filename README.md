@@ -111,7 +111,7 @@ This project is a native Android recreation of [Hoshi Reader](https://github.com
 
 Download the latest Hoshi Reader Android APK from [GitHub Releases](https://github.com/HuangAntimony/Hoshi-Reader-Android/releases/latest).
 
-Hoshi Reader Android requires Android 9 or later.
+Hoshi Reader Android requires Android 8.0 or later.
 
 ## Development Status
 

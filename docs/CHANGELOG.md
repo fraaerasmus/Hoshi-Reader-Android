@@ -15,11 +15,34 @@ Historical release notes before v1.1.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 - Add hardware keyboard shortcuts for Sasayaki playback while audio is loaded: Space or K to play/pause, Left arrow or J to rewind, and Right arrow or L to skip forward; the keys stay out of the way while you are typing in a search field.
 - Add an Esc keyboard shortcut to dismiss the dictionary lookup popup.
 - Add Yomitan-style Shift-hover dictionary lookup: with a mouse or trackpad, hold Shift and the word under the pointer is scanned instantly without tapping, re-scanning as you move. Toggle it with "Scan Word on Shift Hover" in Dictionary settings (on by default).
+- Added reader in-book search with chapter-grouped, punctuation-preserving results, progress percentages, and a unified Go to panel for search, chapters, highlights, and character jumps.
+
+### Changed
+
+- Support installing Hoshi Reader Android on Android 8.0 and 8.1 devices.
+
+### Fixed
+
+- Update VN reveal speed in Reader Appearance without reloading the current chapter.
+- Keep VN vertical text screens from splitting closing Japanese quotation marks onto their own page.
+- Speed up VN Reader opening for long chapters with Sasayaki cue merging.
+- Prevent repeated Reader re-entry from accumulating WebViews and causing long Sasayaki blank screens.
+- Prevent Reader from briefly rendering with the global profile appearance before the book's automatic profile is applied.
+- Keep continuous Reader scrolling from queuing expensive progress calculations that delay progress updates and lookup taps.
+
+## [v1.2.1] - 2026-06-18
+
+### Added
+
 - Add a Behavior setting to open the last read book on app launch.
+- Add a VN reading mode with block and sentence screens, dedicated appearance controls, optional tap-to-advance, and Sasayaki cue merging and highlighting.
+- Add a Reader Appearance Publisher font option that keeps EPUB-provided font families instead of forcing a reader font override.
 
 ### Fixed
 
 - Speed up opening Reader chapters with large Sasayaki subtitle matches.
+- Keep vertical reader lookup highlights from bleeding into adjacent ruby-aware columns.
+- Restore Japanese deinflected lookup filtering for entries that lack matching part-of-speech metadata.
 
 ## [v1.2.0] - 2026-06-15
 

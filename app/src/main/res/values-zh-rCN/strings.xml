@@ -208,7 +208,7 @@
     <string name="dictionary_expanded">已展开</string>
     <string name="dictionary_custom_css_font" comment="Custom CSS font setting, intentionally matching reader font labels.">字体</string>
     <string name="dictionary_custom_css_selector">选择器</string>
-    <string name="dictionary_search_placeholder">搜索</string>
+    <string name="dictionary_search_placeholder" comment="Dictionary search field placeholder, intentionally matching reader search tab label.">搜索</string>
     <string name="dictionary_lookup_failed">查词失败。</string>
     <string name="dictionary_pull_clear">下拉清除</string>
     <string name="dictionary_release_clear">松开清除</string>
@@ -244,6 +244,17 @@
     <string name="reader_jump_back">返回上一个跳转位置</string>
     <string name="reader_jump_forward">返回后一个跳转位置</string>
     <string name="reader_menu">阅读器菜单</string>
+    <string name="reader_go_to">跳转</string>
+    <string name="reader_search" comment="Reader Go to panel tab label, distinct from dictionary search placeholder.">搜索</string>
+    <string name="reader_search_in_book">在书中搜索</string>
+    <string name="reader_search_empty_prompt">输入文本搜索本书</string>
+    <string name="reader_searching">正在搜索...</string>
+    <string name="reader_no_search_results">没有匹配结果</string>
+    <string name="reader_search_failed">无法搜索本书</string>
+    <plurals name="reader_search_result_count">
+        <item quantity="one">%d 个结果</item>
+        <item quantity="other">%d 个结果</item>
+    </plurals>
     <string name="reader_image_clip_label">Hoshi 阅读器图片</string>
     <string name="reader_image_copied">已复制图片。</string>
     <string name="reader_image_saved">已保存图片。</string>
@@ -302,6 +313,7 @@
     <string name="reader_appearance_vertical">竖排</string>
     <string name="reader_appearance_horizontal">横排</string>
     <string name="reader_appearance_font" comment="Reader font setting, intentionally matching dictionary custom CSS font.">字体</string>
+    <string name="reader_appearance_font_publisher">出版社</string>
     <string name="reader_appearance_font_file" comment="Fallback filename label, intentionally matching font setting labels.">字体</string>
     <string name="reader_appearance_import_font">导入字体</string>
     <string name="reader_appearance_importing" comment="Generic import progress label, intentionally shared with ッツ backup import.">正在导入...</string>
@@ -310,6 +322,16 @@
     <string name="reader_appearance_mode" comment="Reader appearance setting label, intentionally matching dictionary mode.">模式</string>
     <string name="reader_appearance_paginated">分页</string>
     <string name="reader_appearance_continuous">连续</string>
+    <string name="reader_appearance_visual_novel">VN</string>
+    <string name="reader_visual_novel_reveal_speed">文字显示速度</string>
+    <string name="reader_visual_novel_reveal_speed_instant">立即</string>
+    <string name="reader_visual_novel_screen_mode">屏幕内容</string>
+    <string name="reader_visual_novel_screen_mode_block">按段落</string>
+    <string name="reader_visual_novel_screen_mode_sentences">按句子</string>
+    <string name="reader_visual_novel_sentences_per_screen">每屏句数</string>
+    <string name="reader_visual_novel_preserve_dialogue">对话保持同屏</string>
+    <string name="reader_visual_novel_click_advance">点击空白处前进</string>
+    <string name="reader_visual_novel_merge_cross_screen_sasayaki_cues">字幕文本同屏</string>
     <string name="reader_appearance_chapter_swipe_distance">章节滑动距离</string>
     <string name="reader_appearance_horizontal_padding">水平边距</string>
     <string name="reader_appearance_vertical_padding">垂直边距</string>

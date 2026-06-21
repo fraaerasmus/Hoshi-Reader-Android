@@ -94,9 +94,13 @@ class ReaderFontManager @Inject constructor(
     }
 
     companion object {
+        const val publisherFont = "__hoshi_publisher_font__"
         const val defaultMinchoFont = "Noto Serif CJK JP"
         const val defaultGothicFont = "Noto Sans CJK JP"
         val defaultFonts = listOf(defaultMinchoFont, defaultGothicFont)
+
+        fun isPublisherFont(name: String): Boolean =
+            name == publisherFont
     }
 }
 
