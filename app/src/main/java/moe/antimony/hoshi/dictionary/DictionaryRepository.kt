@@ -233,7 +233,13 @@ internal class DictionaryRepository @Inject constructor(
 
     fun lookup(text: String, maxResults: Int = 16, scanLength: Int = 16): List<LookupResult> {
         ensureLookupQueryReady()
-        return lookupQueryService.lookup(text, maxResults, scanLength)
+        val results = lookupQueryService.lookup(text, maxResults, scanLength)
+        // Also search the elision-stripped form (e.g. French l'homme → homme), keeping the original
+        // results too (Yomitan searchOriginal); merged and de-duped by entry.
+        val stripped = ElisionTextReplacement.stripElision(text, lookupQueryLanguageId) ?: return results
+        val strippedResults = lookupQueryService.lookup(stripped, maxResults, scanLength)
+        return (results + strippedResults)
+            .distinctBy { "${it.term.expression} ${it.term.reading} ${it.matched}" }
     }
 
     fun dictionaryStyles(): Map<String, String> {
