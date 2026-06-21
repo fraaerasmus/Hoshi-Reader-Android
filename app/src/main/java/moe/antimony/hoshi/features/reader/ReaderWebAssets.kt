@@ -44,7 +44,8 @@ internal data class ReaderWebAssets(
 
     fun selectionSupportJs(contentLanguageProfile: ContentLanguageProfile): String =
         when (contentLanguageProfile.dictionaryLanguageId) {
-            ContentLanguageProfile.EnglishLanguageId -> "$languageJapaneseJs\n$selectionEnglishJs"
-            else -> "$languageJapaneseJs\n$selectionJapaneseJs"
+            ContentLanguageProfile.JapaneseLanguageId -> "$languageJapaneseJs\n$selectionJapaneseJs"
+            // Non-Japanese languages are space-delimited; use the word-boundary English policy.
+            else -> "$languageJapaneseJs\n$selectionEnglishJs"
         }
 }

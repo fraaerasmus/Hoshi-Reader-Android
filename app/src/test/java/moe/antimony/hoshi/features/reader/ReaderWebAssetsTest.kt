@@ -1,11 +1,34 @@
 package moe.antimony.hoshi.features.reader
 
 import java.io.File
+import moe.antimony.hoshi.content.ContentLanguageProfile
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReaderWebAssetsTest {
+    @Test
+    fun selectionSupportJsUsesWordBoundaryPolicyForNonJapaneseLanguages() {
+        val assets = ReaderWebAssets(
+            languageJapaneseJs = "LANG_JA",
+            selectionJapaneseJs = "SEL_JA",
+            selectionEnglishJs = "SEL_EN",
+            selectionJs = "",
+            readerPaginatedJs = "",
+            readerContinuousJs = "",
+            readerVisualNovelJs = "",
+            highlightsJs = "",
+            readerCss = "",
+        )
+        val french = requireNotNull(ContentLanguageProfile.fromDictionaryLanguageId("fr"))
+
+        assertTrue(assets.selectionSupportJs(french).contains("SEL_EN"))
+        assertFalse(assets.selectionSupportJs(french).contains("SEL_JA"))
+        assertTrue(assets.selectionSupportJs(ContentLanguageProfile.English).contains("SEL_EN"))
+        assertTrue(assets.selectionSupportJs(ContentLanguageProfile.Japanese).contains("SEL_JA"))
+        assertFalse(assets.selectionSupportJs(ContentLanguageProfile.Japanese).contains("SEL_EN"))
+    }
+
     @Test
     fun readerWebAssetsExistInNeutralAssetTree() {
         val assets = listOf(

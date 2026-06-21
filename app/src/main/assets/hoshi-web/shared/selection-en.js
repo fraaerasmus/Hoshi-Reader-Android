@@ -11,7 +11,7 @@
     const EnglishWordInternalDelimiters = '\'’`-‐‑';
 
     function isEnglishWordChar(char) {
-        return !!char && /[A-Za-z0-9]/.test(char);
+        return !!char && /[\p{L}\p{N}]/u.test(char);
     }
 
     function isWordInternalDelimiter(text, offset) {
@@ -57,8 +57,10 @@
         },
     };
 
+    // Default for any space-delimited language (this file is loaded for all non-Japanese profiles).
     window.hoshiSelectionLanguagePolicies = {
         ...window.hoshiSelectionLanguagePolicies,
         en: EnglishSelectionLanguage,
+        default: EnglishSelectionLanguage,
     };
 })();

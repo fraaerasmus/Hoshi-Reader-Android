@@ -16,6 +16,10 @@ Historical release notes before v1.1.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 - Add an Esc keyboard shortcut to dismiss the dictionary lookup popup.
 - Add Yomitan-style Shift-hover dictionary lookup: with a mouse or trackpad, hold Shift and the word under the pointer is scanned instantly without tapping, re-scanning as you move. Toggle it with "Scan Word on Shift Hover" in Dictionary settings (on by default).
 
+### Fixed
+
+- Look up the whole word when tapping or hovering the middle of a word in non-English space-delimited languages (e.g. the "i" in French "jamais" now finds "jamais", not "is"), matching the reader popup and English behavior. The reader previously scanned forward from the tapped character for those languages.
+
 ## [v1.2.2] - 2026-06-21
 
 ### Added

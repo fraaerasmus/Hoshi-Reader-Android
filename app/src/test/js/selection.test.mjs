@@ -255,6 +255,13 @@ test('english reader selection scans from the beginning of a tapped word', () =>
     );
 });
 
+test('non-English space-delimited selection scans from the beginning of a tapped word', () => {
+    assert.equal(
+        scanTextFromOffset('jamais', 4, { language: 'fr' }),
+        'jamais',
+    );
+});
+
 test('english reader selection keeps spaces while scanning for phrase lookups', () => {
     assert.equal(
         scanTextFromOffset('New York style pizza.', 0, { language: 'en' }),
