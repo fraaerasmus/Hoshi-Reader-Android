@@ -349,6 +349,11 @@
     <string name="reader_appearance_show_character_count">Show Character Count</string>
     <string name="reader_appearance_show_word_count">Show Word Count</string>
     <string name="reader_appearance_show_percentage">Show Percentage</string>
+    <string name="reader_appearance_show_chapter">Show Chapter Information</string>
+    <string name="reader_appearance_info_position">Information Position</string>
+    <string name="reader_appearance_info_position_left">Left</string>
+    <string name="reader_appearance_info_position_center">Center</string>
+    <string name="reader_appearance_info_position_right">Right</string>
     <string name="reader_appearance_always_show_progress">Always Show Progress</string>
     <string name="reader_appearance_show_back_button">Show Back Button</string>
     <string name="reader_appearance_progress_position">Progress Position</string>

@@ -869,6 +869,8 @@ fun ReaderWebView(
                     readingTimeSeconds = it.readingTime,
                 )
             },
+            chapter = ReaderChapterLabels.chapterPositionForIndex(book, readerPosition.displayedPosition.index)
+                ?.let { ReaderChapterChromeState(it.number, it.total, it.label) },
         )
     }
     fun dispatchSasayakiCueToReader(cue: SasayakiMatch, reveal: Boolean) {

@@ -40,6 +40,25 @@ class ReaderSettingsTest {
     }
 
     @Test
+    fun chapterInfoDefaultsOffWithCenteredInfoPosition() {
+        val settings = ReaderSettings()
+
+        assertFalse(settings.showChapter)
+        assertEquals(ReaderInfoPosition.Center, settings.infoPosition)
+    }
+
+    @Test
+    fun infoPositionStorageRoundTripsThroughRawValues() {
+        assertEquals("left", ReaderInfoPosition.Left.rawValue)
+        assertEquals("center", ReaderInfoPosition.Center.rawValue)
+        assertEquals("right", ReaderInfoPosition.Right.rawValue)
+        assertEquals(ReaderInfoPosition.Left, ReaderInfoPosition.fromStorage("left"))
+        assertEquals(ReaderInfoPosition.Right, ReaderInfoPosition.fromStorage("Right"))
+        assertEquals(ReaderInfoPosition.Center, ReaderInfoPosition.fromStorage(null))
+        assertEquals(ReaderInfoPosition.Center, ReaderInfoPosition.fromStorage("bogus"))
+    }
+
+    @Test
     fun statisticsAutostartModesUseIosRawLabels() {
         assertEquals("Off", StatisticsAutostartMode.Off.rawValue)
         assertEquals("Page Turn", StatisticsAutostartMode.PageTurn.rawValue)

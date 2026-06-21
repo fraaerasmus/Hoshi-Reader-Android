@@ -60,6 +60,30 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import moe.antimony.hoshi.R
 
+private fun ReaderInfoPosition.columnAlignment(): Alignment.Horizontal = when (this) {
+    ReaderInfoPosition.Left -> Alignment.Start
+    ReaderInfoPosition.Center -> Alignment.CenterHorizontally
+    ReaderInfoPosition.Right -> Alignment.End
+}
+
+private fun ReaderInfoPosition.topBubbleAlignment(): Alignment = when (this) {
+    ReaderInfoPosition.Left -> Alignment.TopStart
+    ReaderInfoPosition.Center -> Alignment.TopCenter
+    ReaderInfoPosition.Right -> Alignment.TopEnd
+}
+
+private fun ReaderInfoPosition.bottomBubbleAlignment(): Alignment = when (this) {
+    ReaderInfoPosition.Left -> Alignment.CenterStart
+    ReaderInfoPosition.Center -> Alignment.Center
+    ReaderInfoPosition.Right -> Alignment.CenterEnd
+}
+
+private fun ReaderInfoPosition.lineTextAlign(): TextAlign = when (this) {
+    ReaderInfoPosition.Left -> TextAlign.Start
+    ReaderInfoPosition.Center -> TextAlign.Center
+    ReaderInfoPosition.Right -> TextAlign.End
+}
+
 @Composable
 internal fun ReaderTopInfo(
     state: ReaderChromeState,
@@ -77,6 +101,7 @@ internal fun ReaderTopInfo(
     modifier: Modifier = Modifier,
 ) {
     val progress = state.progressText(settings, progressDisplay)
+    val chapter = state.chapterText(settings)
     val showProgressInTopInfo = readerShowsProgressInTopBubble(settings)
     val showBackJump = visibility.showBackJump && state.backTargetCharacter != null && onJumpBack != null
     val showForwardJump = visibility.showForwardJump && state.forwardTargetCharacter != null && onJumpForward != null
@@ -87,7 +112,8 @@ internal fun ReaderTopInfo(
         !showBackJump &&
         !showForwardJump &&
         !showSasayakiToggle &&
-        (!visibility.showTitleAndProgress || progress.isBlank() || !showProgressInTopInfo)
+        (!visibility.showTitleAndProgress || progress.isBlank() || !showProgressInTopInfo) &&
+        (!visibility.showTitleAndProgress || chapter.isBlank() || !showProgressInTopInfo)
     ) return
     Box(modifier = modifier.fillMaxWidth()) {
         val showStartControls = showStatisticsToggle || showBackJump
@@ -112,12 +138,13 @@ internal fun ReaderTopInfo(
             dynamicTitlePadding,
         )
         val showCenterInfo = visibility.showTitleAndProgress &&
-            (settings.showTitle || (showProgressInTopInfo && progress.isNotBlank()))
+            (settings.showTitle || (showProgressInTopInfo && (progress.isNotBlank() || chapter.isNotBlank())))
         if (showCenterInfo) {
             val bubbleMetrics = readerInfoBubbleMetrics()
             Surface(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
+                    .align(settings.infoPosition.topBubbleAlignment())
+                    .padding(horizontal = 12.dp)
                     .readerChromeShadow(
                         elevationDp = colors.bubbleShadowElevationDp,
                         shadowColor = Color(colors.bubbleShadowColor),
@@ -142,7 +169,7 @@ internal fun ReaderTopInfo(
                         horizontal = bubbleMetrics.horizontalPaddingDp.dp,
                         vertical = bubbleMetrics.verticalPaddingDp.dp,
                     ),
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                    horizontalAlignment = settings.infoPosition.columnAlignment(),
                     verticalArrangement = Arrangement.spacedBy(0.dp),
                 ) {
                     if (settings.showTitle) {
@@ -155,6 +182,14 @@ internal fun ReaderTopInfo(
                                 start = resolvedTitlePadding,
                                 end = resolvedTitlePadding,
                             ),
+                        )
+                    }
+                    if (showProgressInTopInfo && chapter.isNotBlank()) {
+                        Text(
+                            text = chapter,
+                            color = Color(colors.infoText),
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
                         )
                     }
                     if (showProgressInTopInfo && progress.isNotBlank()) {
@@ -422,9 +457,18 @@ internal fun BoxScope.ReaderBottomChrome(
         ) {
             if (layout.bottomCenterLineCount > 0) {
                 val bubbleMetrics = readerInfoBubbleMetrics()
+                val pillStartInset =
+                    if (settings.infoPosition == ReaderInfoPosition.Left && settings.showReaderBackButton) {
+                        metrics.buttonSizeDp + 8
+                    } else {
+                        0
+                    }
+                val pillEndInset =
+                    if (settings.infoPosition == ReaderInfoPosition.Right) metrics.buttonSizeDp + 8 else 0
                 Surface(
                     modifier = Modifier
-                        .align(Alignment.Center)
+                        .align(settings.infoPosition.bottomBubbleAlignment())
+                        .padding(start = pillStartInset.dp, end = pillEndInset.dp)
                         .heightIn(max = layout.bottomCenterMaxHeightDp.dp)
                         .readerChromeShadow(
                             elevationDp = colors.bubbleShadowElevationDp,
@@ -450,12 +494,20 @@ internal fun BoxScope.ReaderBottomChrome(
                             horizontal = bubbleMetrics.horizontalPaddingDp.dp,
                             vertical = bubbleMetrics.verticalPaddingDp.dp,
                         ),
-                        horizontalAlignment = Alignment.CenterHorizontally,
+                        horizontalAlignment = settings.infoPosition.columnAlignment(),
                         verticalArrangement = Arrangement.Center,
                     ) {
                         if (layout.showStatisticsInBottomBar) {
                             Text(
                                 text = state.statisticsText(settings, progressDisplay),
+                                color = Color(colors.infoText),
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                            )
+                        }
+                        if (layout.showChapterInBottomBar) {
+                            Text(
+                                text = state.chapterText(settings),
                                 color = Color(colors.infoText),
                                 style = MaterialTheme.typography.labelMedium,
                                 maxLines = 1,
@@ -524,6 +576,8 @@ internal fun ReaderBottomSafeProgress(
         focusMode = focusMode,
         progressDisplay = progressDisplay,
     )
+    val chapter = readerBottomSafeChapterText(state = state, settings = settings, focusMode = focusMode)
+    val combined = listOf(chapter, progress).filter { it.isNotBlank() }.joinToString(separator = " · ")
     Column(
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -546,20 +600,23 @@ internal fun ReaderBottomSafeProgress(
                     .fillMaxSize()
                     .clickable(onClick = onTapSafeArea),
             )
-            if (progress.isNotBlank()) {
+            if (combined.isNotBlank()) {
                 Text(
-                    text = progress,
+                    text = combined,
                     color = Color(colors.infoText),
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1,
-                    textAlign = if (sasayakiPlaybackControls.visible) TextAlign.End else TextAlign.Center,
+                    textAlign = if (sasayakiPlaybackControls.visible) TextAlign.End else settings.infoPosition.lineTextAlign(),
                     modifier = if (sasayakiPlaybackControls.visible) {
                         Modifier
                             .align(Alignment.CenterEnd)
                             .fillMaxWidth()
                             .padding(horizontal = sasayakiPlaybackControls.horizontalPaddingDp.dp)
                     } else {
-                        Modifier.align(Alignment.Center)
+                        Modifier
+                            .align(Alignment.Center)
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
                     },
                 )
             }

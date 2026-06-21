@@ -85,8 +85,10 @@ class ReaderSettingsRepositoryTest {
             assertTrue(settings.showTitle)
             assertTrue(settings.showCharacters)
             assertTrue(settings.showPercentage)
+            assertFalse(settings.showChapter)
             assertTrue(settings.alwaysShowProgress)
             assertTrue(settings.showProgressTop)
+            assertEquals(ReaderInfoPosition.Center, settings.infoPosition)
             assertTrue(settings.showReaderBackButton)
             assertEquals(320, settings.popupWidth)
             assertEquals(250, settings.popupHeight)
@@ -199,8 +201,10 @@ class ReaderSettingsRepositoryTest {
                     showTitle = false,
                     showCharacters = false,
                     showPercentage = false,
+                    showChapter = true,
                     alwaysShowProgress = false,
                     showProgressTop = false,
+                    infoPosition = ReaderInfoPosition.Right,
                     showReaderBackButton = false,
                     popupWidth = 420,
                     popupHeight = 300,
@@ -257,8 +261,10 @@ class ReaderSettingsRepositoryTest {
             assertFalse(saved.showTitle)
             assertFalse(saved.showCharacters)
             assertFalse(saved.showPercentage)
+            assertTrue(saved.showChapter)
             assertFalse(saved.alwaysShowProgress)
             assertFalse(saved.showProgressTop)
+            assertEquals(ReaderInfoPosition.Right, saved.infoPosition)
             assertFalse(saved.showReaderBackButton)
             assertEquals(420, saved.popupWidth)
             assertEquals(300, saved.popupHeight)

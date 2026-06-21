@@ -16,6 +16,8 @@ Historical release notes before v1.1.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 - Add an Esc keyboard shortcut to dismiss the dictionary lookup popup.
 - Add Yomitan-style Shift-hover dictionary lookup: with a mouse or trackpad, hold Shift and the word under the pointer is scanned instantly without tapping, re-scanning as you move. Toggle it with "Scan Word on Shift Hover" in Dictionary settings (on by default).
 - Mine words looked up inside a popup (nested lookups) with the original book sentence and Sasayaki audio instead of the popup's own text, so drilling into a definition still produces a card with the reading context. Toggle it with "Mine nested lookups with reading context" in Dictionary settings (on by default).
+- Add a "Show Chapter Information" toggle in reader Appearance > Display that shows the current chapter as "Title (n/total)" alongside the progress info, using the EPUB's table of contents (hidden for books without one); off by default.
+- Add an "Information Position" control in reader Appearance > Display to align the reader info (title, chapter, progress, percentage) to the left, center, or right.
 
 ### Fixed
 

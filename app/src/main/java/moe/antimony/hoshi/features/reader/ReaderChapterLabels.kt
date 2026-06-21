@@ -38,4 +38,21 @@ internal object ReaderChapterLabels {
         }
         return labels[index].orEmpty()
     }
+
+    data class ChapterPositionInfo(val number: Int, val total: Int, val label: String)
+
+    fun chapterPositionForIndex(book: EpubBook, chapterIndex: Int): ChapterPositionInfo? {
+        val pathToSpine = book.chapters.mapIndexed { fallbackIndex, chapter ->
+            chapter.href to (chapter.spineIndex ?: fallbackIndex)
+        }
+            .toMap()
+        val tops = book.toc.mapNotNull { item ->
+            val path = item.href?.substringBefore("#") ?: return@mapNotNull null
+            (pathToSpine[path] ?: return@mapNotNull null) to item.label
+        }
+            .sortedBy { it.first }
+        if (tops.isEmpty()) return null
+        val pos = tops.indexOfLast { it.first <= chapterIndex }.coerceAtLeast(0)
+        return ChapterPositionInfo(number = pos + 1, total = tops.size, label = tops[pos].second)
+    }
 }

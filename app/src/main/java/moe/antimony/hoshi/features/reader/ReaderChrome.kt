@@ -13,6 +13,7 @@ data class ReaderChromeState(
     val backTargetCharacter: Int? = null,
     val forwardTargetCharacter: Int? = null,
     val statistics: ReaderStatisticsChromeState? = null,
+    val chapter: ReaderChapterChromeState? = null,
 ) {
     fun progressText(
         settings: ReaderSettings,
@@ -34,6 +35,13 @@ data class ReaderChromeState(
             parts += String.format(Locale.US, "%.2f%%", percent)
         }
         return parts.joinToString(separator = " ")
+    }
+
+    fun chapterText(settings: ReaderSettings): String {
+        val chapter = chapter ?: return ""
+        if (!settings.showChapter) return ""
+        val position = "(${chapter.number}/${chapter.total})"
+        return listOf(chapter.label, position).filter { it.isNotBlank() }.joinToString(separator = " ")
     }
 
     fun statisticsText(
@@ -58,6 +66,12 @@ data class ReaderStatisticsChromeState(
     val readingTimeSeconds: Double,
 )
 
+data class ReaderChapterChromeState(
+    val number: Int,
+    val total: Int,
+    val label: String,
+)
+
 data class ReaderChromeColors(
     val buttonContainer: Long,
     val buttonBorder: Long,
@@ -78,6 +92,7 @@ data class ReaderChromeColors(
 
 data class ReaderChromeLayout(
     val showProgressInBottomBar: Boolean,
+    val showChapterInBottomBar: Boolean,
     val showStatisticsInBottomBar: Boolean,
     val bottomCenterLineCount: Int,
     val bottomCenterMaxHeightDp: Int,
@@ -178,13 +193,16 @@ fun readerChromeLayout(
     focusMode: Boolean = false,
 ): ReaderChromeLayout {
     val progress = state.progressText(settings, progressDisplay)
+    val chapter = state.chapterText(settings)
     val statistics = state.statisticsText(settings, progressDisplay)
     val showProgressInBottomBar = !settings.alwaysShowProgress && !settings.showProgressTop && progress.isNotBlank()
+    val showChapterInBottomBar = !settings.alwaysShowProgress && !settings.showProgressTop && chapter.isNotBlank()
     val showStatisticsInBottomBar = statistics.isNotBlank()
     return ReaderChromeLayout(
         showProgressInBottomBar = showProgressInBottomBar,
+        showChapterInBottomBar = showChapterInBottomBar,
         showStatisticsInBottomBar = showStatisticsInBottomBar,
-        bottomCenterLineCount = listOf(showStatisticsInBottomBar, showProgressInBottomBar).count { it },
+        bottomCenterLineCount = listOf(showStatisticsInBottomBar, showChapterInBottomBar, showProgressInBottomBar).count { it },
         bottomCenterMaxHeightDp = ReaderBottomChromeButtonSizeDp,
     )
 }
@@ -199,6 +217,13 @@ fun readerBottomSafeProgressText(
     focusMode: Boolean = false,
     progressDisplay: ReaderProgressDisplay = ReaderProgressDisplay.characters(),
 ): String = if (settings.alwaysShowProgress) state.progressText(settings, progressDisplay) else ""
+
+@Suppress("UNUSED_PARAMETER")
+fun readerBottomSafeChapterText(
+    state: ReaderChromeState,
+    settings: ReaderSettings,
+    focusMode: Boolean = false,
+): String = if (settings.alwaysShowProgress) state.chapterText(settings) else ""
 
 @Suppress("UNUSED_PARAMETER")
 fun readerContentChromeInsets(

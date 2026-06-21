@@ -552,6 +552,12 @@ private fun ReaderAppearanceContent(
                         checked = settings.showPercentage,
                         onCheckedChange = { onSettingsChange(settings.copy(showPercentage = it)) },
                     )
+                    AppearanceDivider(palette)
+                    SwitchRow(
+                        label = stringResource(R.string.reader_appearance_show_chapter),
+                        checked = settings.showChapter,
+                        onCheckedChange = { onSettingsChange(settings.copy(showChapter = it)) },
+                    )
                     if (readerAppearanceShowsAlwaysShowProgress(settings)) {
                         AppearanceDivider(palette)
                         SwitchRow(
@@ -572,6 +578,31 @@ private fun ReaderAppearanceContent(
                             palette = palette,
                         )
                     }
+                    AppearanceDivider(palette)
+                    val infoLeftLabel = stringResource(R.string.reader_appearance_info_position_left)
+                    val infoCenterLabel = stringResource(R.string.reader_appearance_info_position_center)
+                    val infoRightLabel = stringResource(R.string.reader_appearance_info_position_right)
+                    SegmentedRow(
+                        label = stringResource(R.string.reader_appearance_info_position),
+                        options = listOf(infoLeftLabel, infoCenterLabel, infoRightLabel),
+                        selected = when (settings.infoPosition) {
+                            ReaderInfoPosition.Left -> infoLeftLabel
+                            ReaderInfoPosition.Center -> infoCenterLabel
+                            ReaderInfoPosition.Right -> infoRightLabel
+                        },
+                        onSelected = { label ->
+                            onSettingsChange(
+                                settings.copy(
+                                    infoPosition = when (label) {
+                                        infoLeftLabel -> ReaderInfoPosition.Left
+                                        infoRightLabel -> ReaderInfoPosition.Right
+                                        else -> ReaderInfoPosition.Center
+                                    },
+                                ),
+                            )
+                        },
+                        palette = palette,
+                    )
                     AppearanceDivider(palette)
                     val sasayakiLeftLabel = stringResource(R.string.reader_appearance_sasayaki_controls_position_left)
                     val sasayakiCenterLabel = stringResource(R.string.reader_appearance_sasayaki_controls_position_center)
@@ -799,7 +830,7 @@ internal fun readerAppearanceCustomColorRows(settings: ReaderSettings): List<Rea
     }
 
 internal fun readerAppearanceShowsAlwaysShowProgress(settings: ReaderSettings): Boolean =
-    settings.showCharacters || settings.showPercentage
+    settings.showCharacters || settings.showPercentage || settings.showChapter
 
 internal fun readerAppearanceShowsProgressPosition(settings: ReaderSettings): Boolean =
     readerAppearanceShowsAlwaysShowProgress(settings) && !settings.alwaysShowProgress

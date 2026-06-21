@@ -139,6 +139,71 @@ class ReaderChromeTest {
     }
 
     @Test
+    fun chapterTextFormatsLabelWithPositionWhenEnabled() {
+        val state = ReaderChromeState(
+            title = "Harry Potter",
+            currentCharacter = 355,
+            totalCharacters = 169325,
+            chapter = ReaderChapterChromeState(number = 1, total = 12, label = "The Boy Who Lived"),
+        )
+
+        assertEquals("The Boy Who Lived (1/12)", state.chapterText(ReaderSettings(showChapter = true)))
+    }
+
+    @Test
+    fun chapterTextIsBlankWhenToggleOffOrChapterDataMissing() {
+        val withChapter = ReaderChromeState(
+            title = "Harry Potter",
+            currentCharacter = 355,
+            totalCharacters = 169325,
+            chapter = ReaderChapterChromeState(number = 1, total = 12, label = "The Boy Who Lived"),
+        )
+        val withoutChapter = withChapter.copy(chapter = null)
+
+        assertEquals("", withChapter.chapterText(ReaderSettings()))
+        assertEquals("", withoutChapter.chapterText(ReaderSettings(showChapter = true)))
+    }
+
+    @Test
+    fun chapterTextOmitsBlankLabelButKeepsPosition() {
+        val state = ReaderChromeState(
+            title = "Harry Potter",
+            currentCharacter = 355,
+            totalCharacters = 169325,
+            chapter = ReaderChapterChromeState(number = 3, total = 12, label = ""),
+        )
+
+        assertEquals("(3/12)", state.chapterText(ReaderSettings(showChapter = true)))
+    }
+
+    @Test
+    fun chapterLineJoinsProgressInBottomBarAndAlwaysShowStrip() {
+        val state = ReaderChromeState(
+            title = "Harry Potter",
+            currentCharacter = 355,
+            totalCharacters = 169325,
+            chapter = ReaderChapterChromeState(number = 1, total = 12, label = "The Boy Who Lived"),
+        )
+
+        val bottomLayout = readerChromeLayout(
+            state,
+            ReaderSettings(alwaysShowProgress = false, showProgressTop = false, showChapter = true),
+        )
+        assertTrue(bottomLayout.showChapterInBottomBar)
+        assertEquals(2, bottomLayout.bottomCenterLineCount)
+        assertFalse(
+            readerChromeLayout(state, ReaderSettings(alwaysShowProgress = false, showProgressTop = false))
+                .showChapterInBottomBar,
+        )
+
+        assertEquals(
+            "The Boy Who Lived (1/12)",
+            readerBottomSafeChapterText(state, ReaderSettings(showChapter = true)),
+        )
+        assertEquals("", readerBottomSafeChapterText(state, ReaderSettings()))
+    }
+
+    @Test
     fun readerContentReservesOnlyTheTopSafetyArea() {
         val state = ReaderChromeState(
             title = "屍人荘の殺人",
