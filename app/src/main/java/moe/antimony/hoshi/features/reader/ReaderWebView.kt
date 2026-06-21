@@ -934,6 +934,25 @@ fun ReaderWebView(
     sasayakiPlayer?.autoScroll = sasayakiSettings.autoScroll
     sasayakiPlayer?.readerSkipButtonAction = sasayakiSettings.readerSkipButtonAction
     val shiftHeld = remember { mutableStateOf(false) }
+    // Latest mouse-hover position in raw screen px, tracked even when Shift isn't held so a
+    // stationary Shift-press can scan the word already under the cursor. NaN = no hover yet.
+    val lastHoverRaw = remember { floatArrayOf(Float.NaN, Float.NaN) }
+    // Convert raw screen px to WebView-local px and push to JS as the live scan position.
+    val forwardScanPoint: (Float, Float) -> Unit = { rawX, rawY ->
+        val view = webView
+        if (view != null) {
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            val localX = rawX - location[0]
+            val localY = rawY - location[1]
+            if (localX in 0f..view.width.toFloat() && localY in 0f..view.height.toFloat()) {
+                view.evaluateJavascript(
+                    "window.hoshiSelection && window.hoshiSelection.setScanPointer($localX, $localY)",
+                    null,
+                )
+            }
+        }
+    }
     val currentReaderKeyHandler = rememberUpdatedState<(KeyEvent) -> Boolean> { event ->
         val textEditorFocused = context.findActivity()?.currentFocus?.onCheckIsTextEditor() == true
         if (event.keyCode == KeyEvent.KEYCODE_SHIFT_LEFT || event.keyCode == KeyEvent.KEYCODE_SHIFT_RIGHT) {
@@ -943,6 +962,11 @@ fun ReaderWebView(
             // pointer (Yomitan-style). Non-consuming so Shift keeps normal behavior.
             if (event.repeatCount == 0 && dictionarySettings.scanWithShiftKey && !textEditorFocused) {
                 val active = event.action == KeyEvent.ACTION_DOWN
+                // Prime the scan position from the last hover so pressing Shift while already
+                // hovering a word scans it immediately, without waiting for the next move.
+                if (active && !lastHoverRaw[0].isNaN()) {
+                    forwardScanPoint(lastHoverRaw[0], lastHoverRaw[1])
+                }
                 webView?.evaluateJavascript(
                     "window.hoshiSelection && window.hoshiSelection.setScanModifier($active, ${dictionarySettings.scanLength})",
                     null,
@@ -990,28 +1014,17 @@ fun ReaderWebView(
     val currentReaderGenericMotionHandler = rememberUpdatedState<(MotionEvent) -> Boolean> { event ->
         // Caught at the Activity (before the WebView), this keeps shift-hover alive after a
         // split-screen refocus, when the WebView stops delivering DOM mousemove to the page.
-        // Forward the live cursor position (WebView-local device px) to JS while Shift is held.
+        // Track the cursor for Shift-press priming; forward it to JS while Shift is held.
         val isHover = event.actionMasked == MotionEvent.ACTION_HOVER_MOVE ||
             event.actionMasked == MotionEvent.ACTION_HOVER_ENTER
-        val view = webView
-        if (isHover &&
-            view != null &&
-            shiftHeld.value &&
-            dictionarySettings.scanWithShiftKey &&
-            event.isFromSource(InputDevice.SOURCE_CLASS_POINTER) &&
-            context.findActivity()?.currentFocus?.onCheckIsTextEditor() != true
-        ) {
-            val location = IntArray(2)
-            view.getLocationOnScreen(location)
-            val localX = event.rawX - location[0]
-            val localY = event.rawY - location[1]
-            if (localX >= 0f && localY >= 0f &&
-                localX <= view.width.toFloat() && localY <= view.height.toFloat()
+        if (isHover && event.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
+            lastHoverRaw[0] = event.rawX
+            lastHoverRaw[1] = event.rawY
+            if (shiftHeld.value &&
+                dictionarySettings.scanWithShiftKey &&
+                context.findActivity()?.currentFocus?.onCheckIsTextEditor() != true
             ) {
-                view.evaluateJavascript(
-                    "window.hoshiSelection && window.hoshiSelection.setScanPointer($localX, $localY)",
-                    null,
-                )
+                forwardScanPoint(event.rawX, event.rawY)
             }
         }
         false

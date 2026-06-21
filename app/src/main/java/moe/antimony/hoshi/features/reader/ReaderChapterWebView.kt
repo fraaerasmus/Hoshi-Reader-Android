@@ -879,9 +879,6 @@ private fun readerSetupScript(
             rubyAwareRects: true,
             scaleRects: false
           });
-          if (window.scanWithShiftKey !== false) {
-            window.hoshiSelection.enableShiftScan();
-          }
           if (!document.getElementById('hoshi-reader-popup-host-script')) {
             var popupHostScript = document.createElement('script');
             popupHostScript.id = 'hoshi-reader-popup-host-script';

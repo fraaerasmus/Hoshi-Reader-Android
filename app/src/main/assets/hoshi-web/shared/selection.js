@@ -140,7 +140,7 @@ window.hoshiRubyGeometry = window.hoshiRubyGeometry || {
 
 window.hoshiSelection = {
     selection: null,
-    shiftScan: { active: false, length: 16, pointer: null, rafPending: false, installed: false },
+    shiftScan: { active: false, length: 16, pointer: null, rafPending: false },
     options: {
         bridge: 'webkit',
         language: 'ja',
@@ -746,10 +746,10 @@ window.hoshiSelection = {
         this.selection = null;
     },
 
-    // Yomitan-style scan-on-hover: hold Shift and the word under the pointer is
-    // looked up without a tap. Native forwards Shift state via setScanModifier so
-    // it works regardless of WebView focus; the mousemove listener tracks the
-    // pointer (and re-syncs Shift from the event) so moving while held re-scans.
+    // Yomitan-style scan-on-hover: hold Shift and the word under the pointer is looked up
+    // without a tap. Native drives both inputs at the Activity level so it works regardless of
+    // WebView focus: setScanModifier (Shift state) and setScanPointer (cursor position),
+    // bypassing DOM mouse events entirely.
     setScanModifier(active, length) {
         this.shiftScan.active = !!active;
         if (typeof length === 'number' && length > 0) {
@@ -769,31 +769,6 @@ window.hoshiSelection = {
         if (this.shiftScan.active) {
             this.scheduleShiftScan();
         }
-    },
-
-    enableShiftScan() {
-        if (this.shiftScan.installed) return;
-        this.shiftScan.installed = true;
-        const self = this;
-        document.addEventListener('mousemove', (e) => {
-            self.shiftScan.pointer = { x: e.clientX, y: e.clientY };
-            self.shiftScan.active = e.shiftKey;
-            if (e.shiftKey) self.scheduleShiftScan();
-        }, { passive: true });
-        // When the WebView loses focus (e.g. Android split-screen, switching windows) the
-        // cached pointer goes stale, but native Shift key events keep arriving and would
-        // re-scan that frozen position forever. Drop the cached pointer and active flag on
-        // focus / visibility / hover loss; runShiftScan then no-ops until a fresh mousemove
-        // supplies a real position. Touch lookups are unaffected (they pass live coords).
-        const invalidate = () => {
-            self.shiftScan.pointer = null;
-            self.shiftScan.active = false;
-        };
-        window.addEventListener('blur', invalidate);
-        document.addEventListener('mouseleave', invalidate);
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) invalidate();
-        });
     },
 
     scheduleShiftScan() {
