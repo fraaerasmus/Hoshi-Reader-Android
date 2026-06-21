@@ -37,6 +37,8 @@ class ContentLanguageProfileTest {
     fun supportedLanguagesRejectUnsupportedDictionaryIds() {
         assertEquals(ContentLanguageProfile.Japanese, ContentLanguageProfile.fromDictionaryLanguageId("ja"))
         assertEquals(ContentLanguageProfile.English, ContentLanguageProfile.fromDictionaryLanguageId("en"))
-        assertEquals(null, ContentLanguageProfile.fromDictionaryLanguageId("fr"))
+        // The fork supports all 18 kaihouguide languages (e.g. French), unlike upstream's JA+EN.
+        assertEquals("fr", ContentLanguageProfile.fromDictionaryLanguageId("fr")?.dictionaryLanguageId)
+        assertEquals(null, ContentLanguageProfile.fromDictionaryLanguageId("zz"))
     }
 }

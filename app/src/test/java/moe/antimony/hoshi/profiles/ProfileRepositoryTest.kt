@@ -168,7 +168,8 @@ class ProfileRepositoryTest {
         val repository = ProfileRepository(tempFolder.newFolder("files"))
 
         try {
-            repository.createProfile("French", "fr")
+            // "fr" is supported by the fork's 18-language engine; use an unknown code.
+            repository.createProfile("Unknown", "zz")
             fail("Unsupported dictionary language id should be rejected.")
         } catch (error: IllegalArgumentException) {
             assertTrue(error.message.orEmpty().contains("Unsupported dictionary language"))
