@@ -760,6 +760,17 @@ window.hoshiSelection = {
         }
     },
 
+    // Native pushes a live cursor position (raw device px) here so shift-hover survives WebView
+    // focus loss (e.g. Android split-screen refocus) where DOM mousemove stops firing. Converted
+    // to CSS viewport px via devicePixelRatio for caretRangeFromPoint in getCharacterAtPoint.
+    setScanPointer(deviceX, deviceY) {
+        const ratio = window.devicePixelRatio || 1;
+        this.shiftScan.pointer = { x: deviceX / ratio, y: deviceY / ratio };
+        if (this.shiftScan.active) {
+            this.scheduleShiftScan();
+        }
+    },
+
     enableShiftScan() {
         if (this.shiftScan.installed) return;
         this.shiftScan.installed = true;

@@ -5,7 +5,9 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.SystemClock
 import android.webkit.WebView
+import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.WindowManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -89,6 +91,7 @@ fun ReaderWebView(
     readerSettings: ReaderSettings = ReaderSettings(),
     onReaderSettingsChange: (ReaderSettings) -> Unit = {},
     onReaderKeyEventHandlerChange: (((KeyEvent) -> Boolean)?) -> Unit = {},
+    onReaderGenericMotionHandlerChange: (((MotionEvent) -> Boolean)?) -> Unit = {},
     onSaveBookmark: (chapterIndex: Int, progress: Double, statistics: List<ReadingStatistics>?) -> Unit = { _, _, _ -> },
     onFlushAutoSyncExport: () -> Unit = {},
     onForegroundAutoSyncImport: () -> Unit = {},
@@ -930,9 +933,12 @@ fun ReaderWebView(
     }
     sasayakiPlayer?.autoScroll = sasayakiSettings.autoScroll
     sasayakiPlayer?.readerSkipButtonAction = sasayakiSettings.readerSkipButtonAction
+    val shiftHeld = remember { mutableStateOf(false) }
     val currentReaderKeyHandler = rememberUpdatedState<(KeyEvent) -> Boolean> { event ->
         val textEditorFocused = context.findActivity()?.currentFocus?.onCheckIsTextEditor() == true
         if (event.keyCode == KeyEvent.KEYCODE_SHIFT_LEFT || event.keyCode == KeyEvent.KEYCODE_SHIFT_RIGHT) {
+            // Track Shift so the generic-motion handler forwards hover only while Shift is held.
+            shiftHeld.value = event.action == KeyEvent.ACTION_DOWN
             // Forward Shift state to the reader so it can scan the word under the
             // pointer (Yomitan-style). Non-consuming so Shift keeps normal behavior.
             if (event.repeatCount == 0 && dictionarySettings.scanWithShiftKey && !textEditorFocused) {
@@ -980,6 +986,39 @@ fun ReaderWebView(
     DisposableEffect(onReaderKeyEventHandlerChange) {
         onReaderKeyEventHandlerChange { event -> currentReaderKeyHandler.value(event) }
         onDispose { onReaderKeyEventHandlerChange(null) }
+    }
+    val currentReaderGenericMotionHandler = rememberUpdatedState<(MotionEvent) -> Boolean> { event ->
+        // Caught at the Activity (before the WebView), this keeps shift-hover alive after a
+        // split-screen refocus, when the WebView stops delivering DOM mousemove to the page.
+        // Forward the live cursor position (WebView-local device px) to JS while Shift is held.
+        val isHover = event.actionMasked == MotionEvent.ACTION_HOVER_MOVE ||
+            event.actionMasked == MotionEvent.ACTION_HOVER_ENTER
+        val view = webView
+        if (isHover &&
+            view != null &&
+            shiftHeld.value &&
+            dictionarySettings.scanWithShiftKey &&
+            event.isFromSource(InputDevice.SOURCE_CLASS_POINTER) &&
+            context.findActivity()?.currentFocus?.onCheckIsTextEditor() != true
+        ) {
+            val location = IntArray(2)
+            view.getLocationOnScreen(location)
+            val localX = event.rawX - location[0]
+            val localY = event.rawY - location[1]
+            if (localX >= 0f && localY >= 0f &&
+                localX <= view.width.toFloat() && localY <= view.height.toFloat()
+            ) {
+                view.evaluateJavascript(
+                    "window.hoshiSelection && window.hoshiSelection.setScanPointer($localX, $localY)",
+                    null,
+                )
+            }
+        }
+        false
+    }
+    DisposableEffect(onReaderGenericMotionHandlerChange) {
+        onReaderGenericMotionHandlerChange { event -> currentReaderGenericMotionHandler.value(event) }
+        onDispose { onReaderGenericMotionHandlerChange(null) }
     }
     val keepScreenOn = ReaderScreenAwake.shouldKeepScreenOn(
         keepScreenOnWhileReading = effectiveSettings.keepScreenOnWhileReading,

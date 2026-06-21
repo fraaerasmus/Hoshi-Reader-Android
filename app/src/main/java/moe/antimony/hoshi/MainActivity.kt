@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -34,6 +35,7 @@ class MainActivity : ComponentActivity() {
 
     private var pendingImportUri by mutableStateOf<Uri?>(null)
     private var readerKeyEventHandler: ((KeyEvent) -> Boolean)? = null
+    private var readerGenericMotionHandler: ((MotionEvent) -> Boolean)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,6 +80,9 @@ class MainActivity : ComponentActivity() {
                         },
                         onReaderKeyEventHandlerChange = { handler ->
                             readerKeyEventHandler = handler
+                        },
+                        onReaderGenericMotionHandlerChange = { handler ->
+                            readerGenericMotionHandler = handler
                         }
                     )
                     DownloadedUpdatePrompt()
@@ -92,6 +97,16 @@ class MainActivity : ComponentActivity() {
             return true
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+        // Caught before the WebView (like dispatchKeyEvent) so mouse hover reaches the reader even
+        // when the WebView stops delivering DOM mousemove after a split-screen refocus. Always
+        // non-consuming: the handler only reads the cursor position.
+        if (readerGenericMotionHandler?.invoke(event) == true) {
+            return true
+        }
+        return super.dispatchGenericMotionEvent(event)
     }
 
     override fun onNewIntent(intent: Intent) {

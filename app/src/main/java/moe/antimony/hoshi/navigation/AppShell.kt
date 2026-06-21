@@ -3,6 +3,7 @@ package moe.antimony.hoshi.navigation
 import android.content.Intent
 import android.net.Uri
 import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.ContentTransform
 import androidx.compose.animation.EnterTransition
@@ -71,6 +72,7 @@ fun AppShell(
     readerSettings: ReaderSettings,
     onReaderSettingsChange: (ReaderSettings) -> Unit,
     onReaderKeyEventHandlerChange: (((KeyEvent) -> Boolean)?) -> Unit = {},
+    onReaderGenericMotionHandlerChange: (((MotionEvent) -> Boolean)?) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -95,6 +97,7 @@ fun AppShell(
     val currentOnPendingImportConsumed by rememberUpdatedState(onPendingImportConsumed)
     val currentOnReaderSettingsChange by rememberUpdatedState(onReaderSettingsChange)
     val currentOnReaderKeyEventHandlerChange by rememberUpdatedState(onReaderKeyEventHandlerChange)
+    val currentOnReaderGenericMotionHandlerChange by rememberUpdatedState(onReaderGenericMotionHandlerChange)
     val currentPendingImportUri by rememberUpdatedState(pendingImportUri)
     val readerBookmarkRefreshState = remember { ReaderBookmarkRefreshState() }
     var bookshelfRefreshKey by remember { mutableIntStateOf(0) }
@@ -281,6 +284,7 @@ fun AppShell(
                         readerSettings = currentReaderSettings,
                         onReaderSettingsChange = currentOnReaderSettingsChange,
                         onReaderKeyEventHandlerChange = currentOnReaderKeyEventHandlerChange,
+                        onReaderGenericMotionHandlerChange = currentOnReaderGenericMotionHandlerChange,
                         onBookmarkSaved = readerBookmarkRefreshState::markDirty,
                         onClose = ::closeReaderRoute,
                         modifier = Modifier.fillMaxSize(),

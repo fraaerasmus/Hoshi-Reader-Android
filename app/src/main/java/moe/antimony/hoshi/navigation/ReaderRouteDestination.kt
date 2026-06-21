@@ -2,6 +2,7 @@ package moe.antimony.hoshi.navigation
 
 import android.util.Log
 import android.view.KeyEvent
+import android.view.MotionEvent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +40,7 @@ internal fun ReaderRouteDestination(
     readerSettings: ReaderSettings,
     onReaderSettingsChange: (ReaderSettings) -> Unit,
     onReaderKeyEventHandlerChange: (((KeyEvent) -> Boolean)?) -> Unit,
+    onReaderGenericMotionHandlerChange: (((MotionEvent) -> Boolean)?) -> Unit,
     onBookmarkSaved: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -181,6 +183,7 @@ internal fun ReaderRouteDestination(
                     onReaderSettingsChange(settings)
                 },
                 onReaderKeyEventHandlerChange = onReaderKeyEventHandlerChange,
+                onReaderGenericMotionHandlerChange = onReaderGenericMotionHandlerChange,
                 onSaveBookmark = { chapterIndex, progress, statistics ->
                     autoSyncExportController.launchSave {
                         stateHolder.saveBookmark(
