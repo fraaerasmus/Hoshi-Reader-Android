@@ -9,8 +9,10 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.view.KeyEvent
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
+import androidx.core.content.IntentCompat
 import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -193,6 +195,39 @@ class SasayakiMediaSession(
                 .setAvailablePlayerCommands(playerCommands)
                 .setMediaButtonPreferences(mediaButtons)
                 .build()
+        }
+
+        // A single-item player doesn't advertise SEEK_TO_NEXT/PREVIOUS, so the default
+        // routing drops headset next/previous keys. Intercept the transport keys here
+        // (before that gate) and reuse the skip callbacks, which honor Skip Action.
+        override fun onMediaButtonEvent(
+            session: MediaSession,
+            controllerInfo: MediaSession.ControllerInfo,
+            intent: Intent,
+        ): Boolean {
+            val keyEvent = IntentCompat.getParcelableExtra(
+                intent,
+                Intent.EXTRA_KEY_EVENT,
+                KeyEvent::class.java,
+            ) ?: return false
+            val isDown = keyEvent.action == KeyEvent.ACTION_DOWN
+            return when (keyEvent.keyCode) {
+                KeyEvent.KEYCODE_MEDIA_NEXT,
+                KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+                -> {
+                    if (isDown) onSkipToNext()
+                    true
+                }
+
+                KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+                KeyEvent.KEYCODE_MEDIA_REWIND,
+                -> {
+                    if (isDown) onSkipToPrevious()
+                    true
+                }
+
+                else -> false
+            }
         }
     }
 
