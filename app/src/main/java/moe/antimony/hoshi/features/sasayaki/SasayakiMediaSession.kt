@@ -221,10 +221,12 @@ class SasayakiMediaSession(
             when (seekCommand) {
                 Player.COMMAND_SEEK_TO_PREVIOUS,
                 Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+                Player.COMMAND_SEEK_BACK,
                 -> onSkipToPrevious()
 
                 Player.COMMAND_SEEK_TO_NEXT,
                 Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+                Player.COMMAND_SEEK_FORWARD,
                 -> onSkipToNext()
 
                 else -> onSeekTo(positionMs)

@@ -19,6 +19,7 @@ Historical release notes before v1.1.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 - Add a "Show Chapter Information" toggle in reader Appearance > Display that shows the current chapter title with your page position within that chapter, e.g. "The Boy Who Lived (3/17)", using the EPUB's table of contents (hidden for books without one); off by default.
 - Add an "Information Position" control in reader Appearance > Display to align the reader info (title, chapter, progress, percentage) to the left, center, or right.
 - Hold the Sasayaki rewind or forward control to keep skipping until you let go, instead of tapping once per step. Works for the on-screen buttons and the hardware seek keys (J/L, the arrow keys, and the volume keys when set to seek); a quick tap still skips a single step.
+- Support headphone and Bluetooth rewind/fast-forward gestures for Sasayaki, matching the Skip Action setting like the on-screen and lock-screen controls; previously these seeked by a fixed amount that ignored the setting.
 
 ### Fixed
 
