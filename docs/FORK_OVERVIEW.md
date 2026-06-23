@@ -1,13 +1,14 @@
 # Hoshi Custom — Fork Overview
 
-Date: 2026-06-16
+Date: 2026-06-23
 
 This document explains what this fork is, why it exists, and the decisions
 behind how it tracks upstream. It also keeps a dated log of significant
 fork-maintenance work (upstream merges and the reasoning behind reconciliation
 choices). For the architecture of the app itself, see
-[ARCHITECTURE.md](ARCHITECTURE.md); for user-visible change notes, see
-[CHANGELOG.md](CHANGELOG.md).
+[ARCHITECTURE.md](ARCHITECTURE.md); for this fork's own change notes, see
+[FORK_CHANGELOG.md](FORK_CHANGELOG.md) (upstream's release notes are mirrored in
+[CHANGELOG.md](CHANGELOG.md)).
 
 ## What this fork is
 
@@ -43,7 +44,11 @@ else comes from upstream and is taken as-is.
   languages** (Arabic, German, Modern Greek, English, Esperanto, Spanish,
   Basque, French, Irish, Ancient Greek, Japanese, Georgian, Korean, Latin, Old
   Irish, Albanian, Tagalog, Yiddish). As of the v1.2.0 merge this is driven by
-  the active dictionary **profile's** language.
+  the active dictionary **profile's** language. Lookup quality for these
+  languages is also refined: whole-word scanning when tapping mid-word in
+  space-delimited languages, French elided forms (`l'homme` → `homme`),
+  spaced-out inflected-form glossary entries, and ranking a word's real
+  definition above bare "form of" pointers.
 - **JSON settings backup & restore.** From *Advanced > Backup*, export/import all
   app settings — and credentials (Google Drive tokens, AnkiConnect URL) — as a
   single JSON file so a fresh install can fully take over. The file holds
@@ -51,10 +56,16 @@ else comes from upstream and is taken as-is.
   importing. Upstream has no settings/credentials backup.
 - **Reader UX additions:**
   - Sasayaki playback controls on their own footer row, with configurable
-    position/size and hardware-keyboard shortcuts.
+    position/size and hardware-keyboard shortcuts; hold the rewind/forward
+    controls — on-screen, hardware keys, or headphone/Bluetooth — to seek
+    continuously.
   - Yomitan-style **Shift-hover** dictionary lookup (scan the word under the
     pointer without tapping), and **Esc** to dismiss the lookup popup.
   - **Multi-word phrase** scanning for space-delimited languages.
+  - **Nested-lookup mining** that keeps the original book sentence and Sasayaki
+    audio when drilling into a definition.
+  - Reader footer **chapter information** (chapter title plus in-chapter page
+    position) and a left/center/right **Information Position** control.
 
 ## Build & distribution
 
@@ -89,6 +100,23 @@ a strong bias toward adopting upstream:
 ---
 
 ## History log
+
+### 2026-06-21 — Merge upstream v1.2.2
+
+Merged upstream through **v1.2.2** (`60a5263`) — reader in-book search, Android 8.0/8.1
+support, and assorted VN/Reader fixes, all taken as-is. The fork's reader features were
+re-threaded onto upstream's changes; this merge added no new permanent divergence beyond
+the existing dictionary-engine seam.
+
+Alongside the merge, a batch of fork features landed (2026-06-21 → 23): nested-lookup
+mining with the original reading context; reader footer chapter info and a
+left/center/right Information Position control; hold-to-seek for the Sasayaki
+rewind/forward controls, including headphone and Bluetooth gestures; and
+dictionary-quality refinements (whole-word scanning for space-delimited languages, French
+elided forms, and better inflected-form ranking).
+
+Fork change notes now live in [FORK_CHANGELOG.md](FORK_CHANGELOG.md); `CHANGELOG.md` is
+kept as a clean mirror of upstream's release notes.
 
 ### 2026-06-16 — Merge upstream v1.2.0
 
