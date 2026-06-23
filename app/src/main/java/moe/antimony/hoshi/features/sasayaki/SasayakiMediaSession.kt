@@ -56,12 +56,12 @@ class SasayakiMediaSession(
     private val mediaButtons = listOf(
         CommandButton.Builder(CommandButton.ICON_PREVIOUS)
             .setDisplayName(appContext.getString(R.string.sasayaki_previous_cue))
-            .setPlayerCommand(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .setPlayerCommand(Player.COMMAND_SEEK_BACK)
             .setSlots(CommandButton.SLOT_BACK)
             .build(),
         CommandButton.Builder(CommandButton.ICON_NEXT)
             .setDisplayName(appContext.getString(R.string.sasayaki_next_cue))
-            .setPlayerCommand(Player.COMMAND_SEEK_TO_NEXT)
+            .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
             .setSlots(CommandButton.SLOT_FORWARD)
             .build(),
     )
