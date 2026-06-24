@@ -121,8 +121,11 @@ fun ReaderWebView(
     LaunchedEffect(bookRoot, bookRepository) {
         sasayakiMatchData = bookRoot?.let { bookRepository.loadSasayakiMatch(it) }
     }
+    // Default to an empty list (not null) so the reader WebView is created and starts painting
+    // immediately instead of waiting for the loadHighlights disk read below; the highlights overlay
+    // is applied once it lands and isn't needed to render text.
     var highlights by remember(bookRoot) {
-        mutableStateOf<List<ReaderHighlight>?>(if (bookRoot == null) emptyList() else null)
+        mutableStateOf<List<ReaderHighlight>?>(emptyList())
     }
     LaunchedEffect(bookRoot, bookRepository) {
         highlights = if (bookRoot != null) {
@@ -1205,7 +1208,9 @@ fun ReaderWebView(
     val stableStatusBarPaddingDp = stableStatusBarPadding.value.roundToInt().coerceAtLeast(0)
     val sasayakiBottomPlaybackControls = readerSasayakiBottomPlaybackControls(
         settings = sasayakiSettings,
-        hasAudio = sasayakiPlayer?.hasAudio == true,
+        // Show controls as soon as we know audio exists (cheap sidecar check), like the top toggle,
+        // instead of waiting for the player/engine to finish building.
+        hasAudio = sasayakiPlayer?.hasAudio == true || sasayakiPlaybackData.hasStoredAudioSource(),
         metrics = bottomChromeMetrics,
         centered = effectiveSettings.sasayakiControlsCentered,
         scalePercent = effectiveSettings.sasayakiControlsScalePercent,

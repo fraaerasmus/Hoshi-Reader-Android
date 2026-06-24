@@ -746,15 +746,19 @@ window.hoshiReader = {
     return totalChars > 0 ? exploredChars / totalChars : 0;
   },
   restoreProgress: async function(progress) {
-    await document.fonts.ready;
-    var context = this.getScrollContext();
-    if (context.pageSize <= 0) {
+    if (progress <= 0) {
+      var startContext = this.getScrollContext();
+      if (startContext.pageSize > 0) {
+        this.setPagePosition(startContext, 0);
+      }
       this.registerSnapScroll(0);
       this.notifyRestoreComplete();
       return;
     }
-    if (progress <= 0) {
-      this.setPagePosition(context, 0);
+    // Reveal in a fallback face within ~120ms instead of blocking on multi-MB web fonts.
+    await Promise.race([document.fonts.ready, new Promise(function (r) { setTimeout(r, 120); })]);
+    var context = this.getScrollContext();
+    if (context.pageSize <= 0) {
       this.registerSnapScroll(0);
       this.notifyRestoreComplete();
       return;
@@ -815,7 +819,7 @@ window.hoshiReader = {
     });
   },
   jumpToFragment: async function(fragment) {
-    await document.fonts.ready;
+    await Promise.race([document.fonts.ready, new Promise(function (r) { setTimeout(r, 120); })]);
     var context = this.getScrollContext();
     var rawFragment = (fragment || '').trim();
     var target = rawFragment && (document.getElementById(rawFragment) || document.getElementsByName(rawFragment)[0]);
