@@ -597,6 +597,10 @@
     <string name="sasayaki_copy_audiobook_to_storage_help">保留私有副本，而不是链接到所选外部媒体文件</string>
     <string name="sasayaki_delay">延迟</string>
     <string name="sasayaki_speed">速度</string>
+    <string name="sasayaki_sleep_timer">睡眠定时器</string>
+    <string name="sasayaki_sleep_timer_off">关闭</string>
+    <string name="sasayaki_sleep_timer_minutes">%1$d 分钟</string>
+    <string name="sasayaki_sleep_timer_end_of_chapter">本章结束</string>
     <string name="sasayaki_reader_controls">阅读器控制</string>
     <string name="sasayaki_show_bottom_playback_controls">固定播放控制到底部安全区</string>
     <string name="sasayaki_show_bottom_playback_controls_help">在底部安全区显示后退、播放或暂停和快进控制。</string>

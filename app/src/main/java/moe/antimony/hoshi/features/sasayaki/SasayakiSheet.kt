@@ -40,10 +40,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.epub.SasayakiPlaybackData
+import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.features.reader.ReaderBottomPanel
 import moe.antimony.hoshi.features.reader.ReaderColorPickerDialog
@@ -262,6 +264,7 @@ fun SasayakiSheet(
                     checked = settings.autoPause,
                     onCheckedChange = { onSettingsChange(settings.copy(autoPause = it)) },
                 )
+                SasayakiSleepTimerRow()
                 HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
                 SasayakiColorSheetSection(
                     title = stringResource(R.string.sasayaki_light_theme),
@@ -431,6 +434,53 @@ private fun SasayakiSettingsSwitchRow(
             onCheckedChange = onCheckedChange,
         )
     }
+}
+
+@Composable
+private fun SasayakiSleepTimerRow() {
+    val holder = LocalHoshiUiDependencies.current.sasayakiPlaybackHolder
+    val state by holder.sleepTimer.collectAsStateWithLifecycle()
+    var expanded by remember { mutableStateOf(false) }
+    val metrics = readerSheetDensityMetrics()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = metrics.sasayakiRowVerticalPaddingDp.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.sasayaki_sleep_timer), style = MaterialTheme.typography.bodyLarge)
+        Box {
+            TextButton(onClick = { expanded = true }) {
+                Text(sleepTimerValueText(state))
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                SasayakiSleepTimerOption.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(sleepTimerOptionLabel(option)) },
+                        onClick = {
+                            expanded = false
+                            holder.setSleepTimer(option)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun sleepTimerValueText(state: SasayakiSleepTimerState): String = when (state.option) {
+    SasayakiSleepTimerOption.Off -> stringResource(R.string.sasayaki_sleep_timer_off)
+    SasayakiSleepTimerOption.EndOfChapter -> stringResource(R.string.sasayaki_sleep_timer_end_of_chapter)
+    else -> DateUtils.formatElapsedTime(state.remainingSeconds.toLong().coerceAtLeast(0L))
+}
+
+@Composable
+private fun sleepTimerOptionLabel(option: SasayakiSleepTimerOption): String = when (option) {
+    SasayakiSleepTimerOption.Off -> stringResource(R.string.sasayaki_sleep_timer_off)
+    SasayakiSleepTimerOption.EndOfChapter -> stringResource(R.string.sasayaki_sleep_timer_end_of_chapter)
+    else -> stringResource(R.string.sasayaki_sleep_timer_minutes, option.minutes ?: 0)
 }
 
 private fun formatDuration(seconds: Double): String =

@@ -6,6 +6,8 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,12 +34,19 @@ class SasayakiPlaybackHolder @Inject constructor(
     private val visibleChapter = SasayakiVisibleChapterTracker()
     private var currentIdentity: SasayakiNowPlaying? = null
     private val _nowPlaying = MutableStateFlow<SasayakiNowPlaying?>(null)
+    private var lastCueChapter: Int = 0
+    private var sleepTimerJob: Job? = null
+    private var sleepUntilChapterChangesFrom: Int? = null
+    private val _sleepTimer = MutableStateFlow(SasayakiSleepTimerState())
 
     /** The book whose audio is currently engaged (played at least once); null otherwise. */
     val nowPlaying: StateFlow<SasayakiNowPlaying?> = _nowPlaying.asStateFlow()
 
     /** Live transport state (play/pause, position) of the active player. */
     val snapshot: StateFlow<SasayakiPlaybackSnapshot> = SasayakiPlaybackStatePublisher.snapshot
+
+    /** Active sleep timer, counting down on the application scope so it survives backgrounding. */
+    val sleepTimer: StateFlow<SasayakiSleepTimerState> = _sleepTimer.asStateFlow()
 
     init {
         // Surface "now playing" only once playback actually engages, so the mini-player doesn't
@@ -79,7 +88,10 @@ class SasayakiPlaybackHolder @Inject constructor(
             getCurrentChapterIndex = {
                 visibleChapter.resolve(binding?.getCurrentChapterIndex?.invoke())
             },
-            onCue = { cue, reveal -> binding?.onCue?.invoke(cue, reveal) },
+            onCue = { cue, reveal ->
+                onCuePlayed(cue.chapterIndex)
+                binding?.onCue?.invoke(cue, reveal)
+            },
             onClearCue = { binding?.onClearCue?.invoke() },
             onLoadChapter = { index -> binding?.onLoadChapter?.invoke(index) },
         ).also {
@@ -116,6 +128,43 @@ class SasayakiPlaybackHolder @Inject constructor(
         currentPlayer?.previousCue()
     }
 
+    fun setSleepTimer(option: SasayakiSleepTimerOption) {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        sleepUntilChapterChangesFrom = null
+        val minutes = option.minutes
+        when {
+            option == SasayakiSleepTimerOption.Off -> _sleepTimer.value = SasayakiSleepTimerState()
+            option == SasayakiSleepTimerOption.EndOfChapter -> {
+                sleepUntilChapterChangesFrom = lastCueChapter
+                _sleepTimer.value = SasayakiSleepTimerState(option = option)
+            }
+            minutes != null -> {
+                sleepTimerJob = appScope.launch {
+                    var remaining = minutes * 60
+                    _sleepTimer.value = SasayakiSleepTimerState(option, remaining)
+                    while (remaining > 0) {
+                        delay(1000L)
+                        remaining -= 1
+                        _sleepTimer.value = SasayakiSleepTimerState(option, remaining)
+                    }
+                    currentPlayer?.pausePlayback()
+                    _sleepTimer.value = SasayakiSleepTimerState()
+                }
+            }
+        }
+    }
+
+    private fun onCuePlayed(chapterIndex: Int) {
+        lastCueChapter = chapterIndex
+        val from = sleepUntilChapterChangesFrom ?: return
+        if (chapterIndex != from) {
+            sleepUntilChapterChangesFrom = null
+            currentPlayer?.pausePlayback()
+            _sleepTimer.value = SasayakiSleepTimerState()
+        }
+    }
+
     /** Stop and tear down the active player (no book / shutdown). */
     fun releaseForBook() {
         binding = null
@@ -124,6 +173,10 @@ class SasayakiPlaybackHolder @Inject constructor(
         currentBookKey = null
         currentIdentity = null
         _nowPlaying.value = null
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        sleepUntilChapterChangesFrom = null
+        _sleepTimer.value = SasayakiSleepTimerState()
         SasayakiPlaybackStatePublisher.snapshot.value = SasayakiPlaybackSnapshot()
     }
 }
