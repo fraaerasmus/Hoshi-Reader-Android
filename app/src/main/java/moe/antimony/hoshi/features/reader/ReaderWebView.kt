@@ -76,6 +76,7 @@ import moe.antimony.hoshi.features.sasayaki.BookSasayakiPlaybackRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiAudioRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiCueRange
 import moe.antimony.hoshi.features.sasayaki.SasayakiPlayer
+import moe.antimony.hoshi.features.sasayaki.SasayakiReaderBinding
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import moe.antimony.hoshi.features.sasayaki.SasayakiSheet
 import kotlin.math.roundToInt
@@ -113,6 +114,7 @@ fun ReaderWebView(
     val audioSettingsRepository = appContainer.audioSettingsRepository
     val sasayakiSettingsRepository = appContainer.sasayakiSettingsRepository
     val bookRepository = appContainer.bookRepository
+    val sasayakiPlaybackHolder = appContainer.sasayakiPlaybackHolder
     var sasayakiSettings by remember { mutableStateOf(SasayakiSettings()) }
     var sasayakiMatchData by remember(bookRoot) { mutableStateOf<SasayakiMatchData?>(null) }
     LaunchedEffect(bookRoot, bookRepository) {
@@ -930,39 +932,45 @@ fun ReaderWebView(
         dispatchSasayakiCueToReader(pending.cue, pending.reveal)
     }
     LaunchedEffect(bookRoot, sasayakiMatchData, isSasayakiPlaybackLoaded, sasayakiPlaybackData) {
-        sasayakiPlayer?.release()
         sasayakiPlayer = if (bookRoot != null && sasayakiMatchData != null && isSasayakiPlaybackLoaded) {
-            SasayakiPlayer(
-                context = context,
+            val player = sasayakiPlaybackHolder.loadBook(
                 bookRoot = bookRoot,
                 playbackRepository = BookSasayakiPlaybackRepository(bookRoot, bookRepository),
                 bookTitle = book.title,
                 bookCoverFile = sasayakiCoverFile,
                 matchData = sasayakiMatchData,
                 initialPlayback = sasayakiPlaybackData,
-                persistenceScope = scope,
-                getCurrentChapterIndex = { stateHolder.readerPosition.displayedPosition.index },
-                onCue = { cue, reveal ->
-                    dispatchSasayakiCueToReader(cue, reveal)
-                },
-                onClearCue = {
-                    pendingSasayakiCue = null
-                    webView?.evaluateJavascript(ReaderPaginationScripts.clearSasayakiCueInvocation(), null)
-                },
-                onLoadChapter = { chapterIndex ->
-                    statisticsForSave()
-                    val target = ReaderChapterPosition(index = chapterIndex, progress = 0.0)
-                    val savedPosition = stateHolder.jumpTo(target)
-                    resetStatisticsBaseline()
-                    saveReaderPosition(savedPosition, statisticsTracker?.statisticsForPersistenceOrNull())
-                },
             )
+            sasayakiPlaybackHolder.attachReader(
+                SasayakiReaderBinding(
+                    getCurrentChapterIndex = { stateHolder.readerPosition.displayedPosition.index },
+                    onCue = { cue, reveal ->
+                        dispatchSasayakiCueToReader(cue, reveal)
+                    },
+                    onClearCue = {
+                        pendingSasayakiCue = null
+                        webView?.evaluateJavascript(ReaderPaginationScripts.clearSasayakiCueInvocation(), null)
+                    },
+                    onLoadChapter = { chapterIndex ->
+                        statisticsForSave()
+                        val target = ReaderChapterPosition(index = chapterIndex, progress = 0.0)
+                        val savedPosition = stateHolder.jumpTo(target)
+                        resetStatisticsBaseline()
+                        saveReaderPosition(savedPosition, statisticsTracker?.statisticsForPersistenceOrNull())
+                    },
+                ),
+            )
+            player
         } else {
-            null
+            // No playable book for this view. Don't tear down a live player for the same book
+            // (transient match/playback load races on re-entry); only stop when there's no book.
+            if (bookRoot == null) sasayakiPlaybackHolder.releaseForBook()
+            sasayakiPlaybackHolder.playerFor(bookRoot)
         }
     }
     DisposableEffect(Unit) {
-        onDispose { sasayakiPlayer?.release() }
+        // Leaving the reader detaches the presenter but keeps playback alive (background audio).
+        onDispose { sasayakiPlaybackHolder.detachReader() }
     }
     sasayakiPlayer?.autoScroll = sasayakiSettings.autoScroll
     sasayakiPlayer?.readerSkipButtonAction = sasayakiSettings.readerSkipButtonAction
