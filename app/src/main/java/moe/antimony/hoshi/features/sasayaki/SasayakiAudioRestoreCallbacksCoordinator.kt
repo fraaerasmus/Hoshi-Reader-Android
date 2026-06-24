@@ -14,6 +14,7 @@ class SasayakiAudioRestoreCallbacksCoordinator(
         previousCue: () -> Unit,
         nextCue: () -> Unit,
         isPlaying: () -> Boolean,
+        cycleSpeed: () -> Unit,
     ): SasayakiAudioRestoreCallbacks =
         SasayakiAudioRestoreCallbacks(
             onPrepared = handlePrepared,
@@ -32,5 +33,6 @@ class SasayakiAudioRestoreCallbacksCoordinator(
                     isPlaying = isPlaying(),
                 )
             },
+            onCycleSpeed = cycleSpeed,
         )
 }

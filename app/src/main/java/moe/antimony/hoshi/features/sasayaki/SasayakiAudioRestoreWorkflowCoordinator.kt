@@ -18,6 +18,7 @@ class SasayakiAudioRestoreWorkflowCoordinator(
         previousCue: () -> Unit,
         nextCue: () -> Unit,
         isPlaying: () -> Boolean,
+        cycleSpeed: () -> Unit,
         updateCue: (Double) -> Unit,
     ) {
         val result = runCatching {
@@ -41,6 +42,7 @@ class SasayakiAudioRestoreWorkflowCoordinator(
                     previousCue = previousCue,
                     nextCue = nextCue,
                     isPlaying = isPlaying,
+                    cycleSpeed = cycleSpeed,
                 ),
             )
         }.onFailure(audioRestoreResult::handleFailure).getOrNull() ?: return

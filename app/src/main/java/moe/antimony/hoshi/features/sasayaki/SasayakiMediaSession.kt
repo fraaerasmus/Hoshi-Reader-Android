@@ -3,6 +3,7 @@ package moe.antimony.hoshi.features.sasayaki
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.KeyEvent
@@ -15,6 +16,8 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import moe.antimony.hoshi.R
@@ -33,6 +36,7 @@ class SasayakiMediaSession(
     private val onSkipToPrevious: () -> Unit,
     private val onSkipToNext: () -> Unit,
     private val onSeekTo: (Long) -> Unit,
+    private val onCycleSpeed: () -> Unit,
 ) {
     private val appContext = context.applicationContext
     private val sessionPlayer = SasayakiSessionPlayer(
@@ -43,6 +47,7 @@ class SasayakiMediaSession(
         onSkipToNext = onSkipToNext,
         onSeekTo = onSeekTo,
     )
+    private val cycleSpeedCommand = SessionCommand(CycleSpeedAction, Bundle.EMPTY)
     private val mediaButtons = listOf(
         CommandButton.Builder(CommandButton.ICON_PREVIOUS)
             .setDisplayName(appContext.getString(R.string.sasayaki_previous_cue))
@@ -53,6 +58,10 @@ class SasayakiMediaSession(
             .setDisplayName(appContext.getString(R.string.sasayaki_next_cue))
             .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
             .setSlots(CommandButton.SLOT_FORWARD)
+            .build(),
+        CommandButton.Builder(CommandButton.ICON_PLAYBACK_SPEED)
+            .setDisplayName(appContext.getString(R.string.sasayaki_speed))
+            .setSessionCommand(cycleSpeedCommand)
             .build(),
     )
     private val session = MediaSession.Builder(appContext, sessionPlayer)
@@ -135,6 +144,11 @@ class SasayakiMediaSession(
                 .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailablePlayerCommands(playerCommands)
+                .setAvailableSessionCommands(
+                    MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                        .add(cycleSpeedCommand)
+                        .build(),
+                )
                 .setMediaButtonPreferences(mediaButtons)
                 .build()
         }
@@ -170,6 +184,19 @@ class SasayakiMediaSession(
 
                 else -> false
             }
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == cycleSpeedCommand.customAction) {
+                onCycleSpeed()
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            return super.onCustomCommand(session, controller, customCommand, args)
         }
     }
 
@@ -214,6 +241,7 @@ class SasayakiMediaSession(
 
     companion object {
         private const val MaxArtworkDimensionPx = 900
+        private const val CycleSpeedAction = "moe.antimony.hoshi.sasayaki.CYCLE_SPEED"
 
         fun loadCoverArt(file: File?): Bitmap? {
             file?.takeIf { it.isFile } ?: return null

@@ -211,6 +211,11 @@ internal class SasayakiPlaybackController(
         )
     }
 
+    private fun cycleSpeed() {
+        val speeds = listOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+        setRate(speeds.firstOrNull { it > rate + 0.001f } ?: speeds.first())
+    }
+
     override fun importAudio(audioUri: Uri, copiedAudioFileName: String?) {
         audioCommands.importAudio(
             audioUri = audioUri,
@@ -364,6 +369,7 @@ internal class SasayakiPlaybackController(
             previousCue = ::previousCue,
             nextCue = ::nextCue,
             isPlaying = { isPlaying },
+            cycleSpeed = ::cycleSpeed,
             updateCue = ::updateCue,
         )
     }

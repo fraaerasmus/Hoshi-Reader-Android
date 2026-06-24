@@ -15,6 +15,7 @@ data class SasayakiAudioRestoreCallbacks(
     val onSkipToPrevious: () -> Unit,
     val onSkipToNext: () -> Unit,
     val onSeekTo: (Long) -> Unit,
+    val onCycleSpeed: () -> Unit,
 )
 
 data class SasayakiAudioRestoreResult(
@@ -60,6 +61,7 @@ class SasayakiAudioRestoreController(
                 onSkipToPrevious = callbacks.onSkipToPrevious,
                 onSkipToNext = callbacks.onSkipToNext,
                 onSeekTo = callbacks.onSeekTo,
+                onCycleSpeed = callbacks.onCycleSpeed,
             ),
             durationMs = engine.durationMs,
         )

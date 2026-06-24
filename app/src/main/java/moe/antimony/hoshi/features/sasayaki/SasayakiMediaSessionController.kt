@@ -29,6 +29,7 @@ class AndroidSasayakiMediaSessionHandle(
     onSkipToPrevious: () -> Unit,
     onSkipToNext: () -> Unit,
     onSeekTo: (Long) -> Unit,
+    onCycleSpeed: () -> Unit,
 ) : SasayakiMediaSessionHandle {
     private val appContext = context.applicationContext
     private val session = SasayakiMediaSession(
@@ -41,6 +42,7 @@ class AndroidSasayakiMediaSessionHandle(
         onSkipToPrevious = onSkipToPrevious,
         onSkipToNext = onSkipToNext,
         onSeekTo = onSeekTo,
+        onCycleSpeed = onCycleSpeed,
     )
 
     override fun activate() {
