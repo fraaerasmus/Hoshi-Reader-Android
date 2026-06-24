@@ -22,6 +22,17 @@ class ReaderFontManager @Inject constructor(
 ) {
     private val fontsDirectory = File(filesDir, "Fonts")
 
+    @Volatile
+    private var cachedFonts: List<ReaderFontInfo>? = null
+
+    @Volatile
+    private var cachedPopupFontFaceCss: String? = null
+
+    private fun invalidateFontCaches() {
+        cachedFonts = null
+        cachedPopupFontFaceCss = null
+    }
+
     fun importFont(source: File): ReaderFontInfo {
         require(source.name.isSupportedFontFileName()) { "Unsupported font file." }
         fontsDirectory.mkdirs()
@@ -29,6 +40,7 @@ class ReaderFontManager @Inject constructor(
         source.inputStream().use { input ->
             destination.outputStream().use { output -> input.copyTo(output) }
         }
+        invalidateFontCaches()
         return destination.toFontInfo()
     }
 
@@ -41,16 +53,23 @@ class ReaderFontManager @Inject constructor(
             requireNotNull(input) { "Unable to open font file." }
             destination.outputStream().use { output -> input.copyTo(output) }
         }
+        invalidateFontCaches()
         return destination.toFontInfo()
     }
 
     fun storedFonts(): List<ReaderFontInfo> {
-        fontsDirectory.mkdirs()
-        return fontsDirectory.listFiles()
-            ?.filter { it.isFile && !it.isHidden }
-            ?.sortedBy { it.nameWithoutExtension }
-            ?.map { it.toFontInfo() }
-            .orEmpty()
+        cachedFonts?.let { return it }
+        return synchronized(this) {
+            cachedFonts ?: run {
+                fontsDirectory.mkdirs()
+                fontsDirectory.listFiles()
+                    ?.filter { it.isFile && !it.isHidden }
+                    ?.sortedBy { it.nameWithoutExtension }
+                    ?.map { it.toFontInfo() }
+                    .orEmpty()
+                    .also { cachedFonts = it }
+            }
+        }
     }
 
     fun storedFont(name: String): ReaderFontInfo? =
@@ -58,6 +77,7 @@ class ReaderFontManager @Inject constructor(
 
     fun deleteFont(name: String) {
         storedFont(name)?.file?.delete()
+        invalidateFontCaches()
     }
 
     fun isDefaultFont(name: String): Boolean =
@@ -72,18 +92,22 @@ class ReaderFontManager @Inject constructor(
     fun cssFontName(name: String): String =
         name
 
-    fun popupFontFaceCss(): String =
-        storedFonts().joinToString(separator = "\n") { font ->
-            val family = cssFontName(font.name).cssString()
-            val source = requireNotNull(webViewFontUrl(font.name)).cssString()
-            """
-                @font-face {
-                    font-family: $family;
-                    src: url($source);
-                    font-display: swap;
-                }
-            """.trimIndent()
+    fun popupFontFaceCss(): String {
+        cachedPopupFontFaceCss?.let { return it }
+        return synchronized(this) {
+            cachedPopupFontFaceCss ?: storedFonts().joinToString(separator = "\n") { font ->
+                val family = cssFontName(font.name).cssString()
+                val source = requireNotNull(webViewFontUrl(font.name)).cssString()
+                """
+                    @font-face {
+                        font-family: $family;
+                        src: url($source);
+                        font-display: swap;
+                    }
+                """.trimIndent()
+            }.also { cachedPopupFontFaceCss = it }
         }
+    }
 
     fun fontFileForRequest(fileName: String): File? {
         val requested = File(fontsDirectory, fileName)

@@ -94,7 +94,7 @@ internal object LookupPopupHtml {
             </style>
         """.trimIndent()
         val customCss = customCssStyle(normalizedSettings.customCSS)
-        val fontPrewarmScript = """<script>${popupFontPrewarmScript()}</script>"""
+        val fontPrewarmScript = """<script>$popupFontPrewarmScript</script>"""
         val eInkCss = if (eInkMode) """<style>$eInkPopupCss</style>""" else ""
         val selectionSupportJs = assets
             ?.selectionSupportJs(contentLanguageProfile)
@@ -229,7 +229,7 @@ internal object LookupPopupHtml {
                 $popupJs
             </head>
             <body>
-                <script>${popupGestureScript()}</script>
+                <script>$popupGestureScript</script>
                 <div id="entries-container"></div>
                 <div class="overlay">
                     <div class="overlay-close" onclick="closeOverlay()">×</div>
@@ -372,7 +372,7 @@ internal object LookupPopupHtml {
     private fun String.styleElementContentEscaped(): String =
         replace(Regex("</style", RegexOption.IGNORE_CASE), "<\\/style")
 
-    private fun popupFontPrewarmScript(): String = """
+    private val popupFontPrewarmScript: String = """
         (function() {
             var prewarmedFaces = typeof WeakSet === 'function' ? new WeakSet() : null;
             function rememberFace(face) {
@@ -402,7 +402,7 @@ internal object LookupPopupHtml {
         })();
     """.trimIndent()
 
-    private fun popupGestureScript(): String = """
+    private val popupGestureScript: String = """
         (function() {
             if (window.reducedMotionScrolling) {
                 var reducedMotionStartY = 0;
