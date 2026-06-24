@@ -189,6 +189,7 @@ fun AppShell(
     }
 
     fun openReader(bookId: String) {
+        moe.antimony.hoshi.features.reader.ReaderOpenTrace.markClick()
         selectedTab = MainTab.Books
         booksBackStack.openReaderRoute(bookId)
     }
