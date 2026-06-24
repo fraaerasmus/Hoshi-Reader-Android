@@ -129,6 +129,10 @@ class SasayakiPlayerFacadeTest {
             commands += "redisplayCue"
         }
 
+        override fun cycleSpeed() {
+            commands += "cycleSpeed"
+        }
+
         override fun skipForward(seconds: Int) {
             commands += "skipForward:$seconds"
         }

@@ -28,7 +28,7 @@ below is a single living summary of everything the fork adds, grouped Added / Fi
 - Add curated color presets (Rosé Pine, Gruvbox, Everforest) to the reader's Custom theme via a Preset dropdown in Appearance > Theme. The Interface (System / Light / Dark) control selects each preset's light or dark variant, so System follows the device — e.g. Rosé Pine shows the light "Dawn" palette in light mode and the dark palette in dark mode. Defaults to Rosé Pine; pick "Custom" in the dropdown to hand-set background, text, and info colors as before.
 - Add a now-playing mini-player: once Sasayaki audio is playing, a bar appears above the tab bar on the bookshelf and other screens showing the book cover, title, rewind/play/forward, and a progress line. Tap it to jump straight back into the book; it stays put as you move around the app.
 - Add a Sasayaki sleep timer in the playback sheet: stop after 15/30/45/60 minutes or at the end of the current chapter. It counts down in the background and pauses playback when it elapses.
-- Add a playback-speed button to the Sasayaki media notification and lock screen that cycles through 1.0×–2.0×; the lock-screen scrubber already lets you seek within the audio.
+- Control Sasayaki playback speed up to 3.0×: a speed chip in the mini-player and a speed button on the media notification cycle through 1.0×–3.0× (the notification icon reflects the current speed where the platform provides one — up to 2.0×), and the speed slider in the playback sheet now reaches 3.0×. The lock-screen scrubber lets you seek within the audio.
 
 ## Fixed
 

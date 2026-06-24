@@ -17,6 +17,7 @@ class SasayakiMediaSessionPublishingCoordinator(
             isPlaying = isPlaying,
             positionMs = (currentTime * 1000.0).toLong(),
             durationMs = (duration * 1000.0).toLong(),
+            speed = rate,
         )
         mediaSessionHandle.update(
             isPlaying = isPlaying,

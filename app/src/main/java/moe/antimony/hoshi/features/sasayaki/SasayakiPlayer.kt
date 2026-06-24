@@ -121,4 +121,8 @@ class SasayakiPlayer internal constructor(
     fun redisplayCue() {
         controller.redisplayCue()
     }
+
+    fun cycleSpeed() {
+        controller.cycleSpeed()
+    }
 }

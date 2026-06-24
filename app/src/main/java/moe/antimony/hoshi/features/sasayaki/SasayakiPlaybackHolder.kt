@@ -128,6 +128,10 @@ class SasayakiPlaybackHolder @Inject constructor(
         currentPlayer?.previousCue()
     }
 
+    fun cycleSpeed() {
+        currentPlayer?.cycleSpeed()
+    }
+
     fun setSleepTimer(option: SasayakiSleepTimerOption) {
         sleepTimerJob?.cancel()
         sleepTimerJob = null

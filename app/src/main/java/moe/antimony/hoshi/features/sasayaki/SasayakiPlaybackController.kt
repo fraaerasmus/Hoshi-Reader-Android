@@ -41,6 +41,7 @@ internal interface SasayakiPlaybackControllerContract {
     fun exportCueAudio(cue: SasayakiMatch, sentence: String): File?
     fun release()
     fun redisplayCue()
+    fun cycleSpeed()
 }
 
 internal class SasayakiPlaybackController(
@@ -211,9 +212,9 @@ internal class SasayakiPlaybackController(
         )
     }
 
-    private fun cycleSpeed() {
-        val speeds = listOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
-        setRate(speeds.firstOrNull { it > rate + 0.001f } ?: speeds.first())
+    override fun cycleSpeed() {
+        val speeds = listOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.5f, 3.0f)
+        setRate(speeds.firstOrNull { it > rate + 0.01f } ?: speeds.first())
     }
 
     override fun importAudio(audioUri: Uri, copiedAudioFileName: String?) {

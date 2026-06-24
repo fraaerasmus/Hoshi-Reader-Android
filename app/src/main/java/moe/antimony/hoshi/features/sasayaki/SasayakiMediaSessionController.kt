@@ -57,7 +57,9 @@ class AndroidSasayakiMediaSessionHandle(
         durationMs: Long,
         rate: Float,
     ) {
-        // No-op: media3's notification provider observes the player directly.
+        // media3's notification provider observes play/position directly; we only need to refresh
+        // the speed-button icon when the rate changes.
+        session.onRateChanged(rate)
     }
 
     override fun release() {

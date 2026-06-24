@@ -48,7 +48,8 @@ class SasayakiMediaSession(
         onSeekTo = onSeekTo,
     )
     private val cycleSpeedCommand = SessionCommand(CycleSpeedAction, Bundle.EMPTY)
-    private val mediaButtons = listOf(
+    private var currentSpeedIcon = CommandButton.ICON_PLAYBACK_SPEED_1_0
+    private fun mediaButtons(): List<CommandButton> = listOf(
         CommandButton.Builder(CommandButton.ICON_PREVIOUS)
             .setDisplayName(appContext.getString(R.string.sasayaki_previous_cue))
             .setPlayerCommand(Player.COMMAND_SEEK_BACK)
@@ -59,14 +60,16 @@ class SasayakiMediaSession(
             .setPlayerCommand(Player.COMMAND_SEEK_FORWARD)
             .setSlots(CommandButton.SLOT_FORWARD)
             .build(),
-        CommandButton.Builder(CommandButton.ICON_PLAYBACK_SPEED)
+        // The icon reflects the current speed (media3 ships speed glyphs up to 2.0x; above that
+        // falls back to the generic speed icon). Republished from onRateChanged.
+        CommandButton.Builder(currentSpeedIcon)
             .setDisplayName(appContext.getString(R.string.sasayaki_speed))
             .setSessionCommand(cycleSpeedCommand)
             .build(),
     )
     private val session = MediaSession.Builder(appContext, sessionPlayer)
         .setId("hoshi-sasayaki-${System.identityHashCode(this)}")
-        .setMediaButtonPreferences(mediaButtons)
+        .setMediaButtonPreferences(mediaButtons())
         .setCallback(SasayakiSessionCallback())
         .apply {
             contentIntent()?.let { setSessionActivity(it) }
@@ -84,6 +87,24 @@ class SasayakiMediaSession(
             SasayakiSessionRegistry.session = null
         }
         session.release()
+    }
+
+    /** Update the notification speed-button icon to reflect the current rate. */
+    fun onRateChanged(rate: Float) {
+        val icon = speedIconFor(rate)
+        if (icon != currentSpeedIcon) {
+            currentSpeedIcon = icon
+            session.setMediaButtonPreferences(mediaButtons())
+        }
+    }
+
+    private fun speedIconFor(rate: Float): Int = when {
+        rate < 1.1f -> CommandButton.ICON_PLAYBACK_SPEED_1_0
+        rate < 1.35f -> CommandButton.ICON_PLAYBACK_SPEED_1_2
+        rate < 1.65f -> CommandButton.ICON_PLAYBACK_SPEED_1_5
+        rate < 1.9f -> CommandButton.ICON_PLAYBACK_SPEED_1_8
+        rate < 2.25f -> CommandButton.ICON_PLAYBACK_SPEED_2_0
+        else -> CommandButton.ICON_PLAYBACK_SPEED
     }
 
     private fun publishMetadata() {
@@ -149,7 +170,7 @@ class SasayakiMediaSession(
                         .add(cycleSpeedCommand)
                         .build(),
                 )
-                .setMediaButtonPreferences(mediaButtons)
+                .setMediaButtonPreferences(mediaButtons())
                 .build()
         }
 
