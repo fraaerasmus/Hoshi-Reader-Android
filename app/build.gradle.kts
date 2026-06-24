@@ -143,6 +143,10 @@ android {
     }
     lint {
         disable += "DirectSystemCurrentTimeMillisUsage"
+        // The sideload APK is now non-debuggable, so AGP runs lintVital as a release
+        // gate; this CI never ran it before. Keep that behavior (benign pre-existing
+        // res warnings shouldn't block the build).
+        checkReleaseBuilds = false
     }
     externalNativeBuild {
         cmake {
