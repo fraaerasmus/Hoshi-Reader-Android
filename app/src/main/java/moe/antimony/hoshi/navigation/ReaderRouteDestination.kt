@@ -162,7 +162,6 @@ internal fun ReaderRouteDestination(
             Text(state.message)
         }
         is ReaderRouteRenderState.Ready -> {
-            moe.antimony.hoshi.features.reader.ReaderOpenTrace.markReady()
             val readyState = state.loadState
             var routeReaderSettings by remember(readyState.entry.metadata.id, state.readerSettings) {
                 mutableStateOf(state.readerSettings)

@@ -242,8 +242,7 @@ internal fun ChapterWebView(
             .onSizeChanged(onReaderViewportSizeChanged)
             .background(Color(readerSettings.backgroundColor(systemDark))),
         factory = { context ->
-            ReaderOpenTrace.markWebViewCreated()
-            HoshiReaderWebView(context).also { ReaderOpenTrace.markWebViewBuilt() }.apply {
+            HoshiReaderWebView(context).apply {
                 applyHoshiWebViewSecurityDefaults()
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
@@ -479,7 +478,6 @@ internal fun ChapterWebView(
                         restoreToken = restoreToken,
                     )
                 }
-                ReaderOpenTrace.markLoadUrl()
                 webView.loadUrl(baseUrl)
             }
         },
@@ -1339,7 +1337,6 @@ private fun WebView.showAfterReaderRestore(onVisible: () -> Unit) {
                     if (readerRestoreGenerations[this@showAfterReaderRestore] == generation) {
                         animate().cancel()
                         alpha = 1f
-                        ReaderOpenTrace.markVisible(this@showAfterReaderRestore.context)
                         onVisible()
                     }
                 }
