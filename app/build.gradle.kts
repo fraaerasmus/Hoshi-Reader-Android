@@ -93,9 +93,9 @@ android {
 
     buildTypes {
         debug {
-            // Sideload build: keep debug signing + the ".debug" identity, but ship it
-            // non-debuggable so ART applies normal JIT/AOT optimization (debuggable apps
-            // run de-optimized). BuildConfig.DEBUG is unused, so this changes no behavior.
+            // Sideload build: keep debug signing, but ship it non-debuggable so ART applies
+            // normal JIT/AOT optimization (debuggable apps run de-optimized). BuildConfig.DEBUG
+            // is unused, so this changes no behavior.
             isDebuggable = false
             // Shrink the sideload like a release build (proguard-rules.pro keeps the
             // JNI/uniffi/JNA/WebView-bridge seams). Experimental — test key flows.
@@ -105,7 +105,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            applicationIdSuffix = ".debug"
+            // Distinct app id so Hoshi Custom coexists with upstream instead of being
+            // overwritten by upstream's debug APK (which uses the ".debug" suffix).
+            applicationIdSuffix = ".custom"
             manifestPlaceholders["appLabel"] = "Hoshi Custom"
             buildConfigField(
                 "String",
