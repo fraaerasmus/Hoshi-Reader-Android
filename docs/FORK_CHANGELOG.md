@@ -34,6 +34,8 @@ below is a single living summary of everything the fork adds, grouped Added / Fi
 
 ## Fixed
 
+- Include per-profile settings in the Advanced > Backup export/import. Reader Appearance, Dictionary, and Anki settings are stored per profile and were silently dropped from the JSON backup, so they reset to defaults when restoring on a new install; the backup now captures the profile list and each profile's reader/dictionary/Anki settings. Older backup files without this data still import.
+- Persist the Sasayaki control position/size (reader Appearance) and the Dictionary "Scan Multi-Word Phrases", "Scan Word on Shift Hover", and "Mine nested lookups with reading context" toggles. These were never written to disk under the active profile, so they reset to defaults on restart; they now persist per profile (and are covered by the settings backup).
 - Make the Sasayaki lock-screen and notification skip buttons work: with a single audio file the player never exposed next/previous, so those buttons (especially next) did nothing. They now rewind/forward by the Skip Action setting like the on-screen and headphone controls.
 - Look up the whole word when tapping or hovering the middle of a word in non-English space-delimited languages (e.g. the "i" in French "jamais" now finds "jamais", not "is"), matching the reader popup and English behavior. The reader previously scanned forward from the tapped character for those languages.
 - Space out inflected-form ("form of") dictionary entries so the lemma and its grammatical description no longer run together (e.g. French "détestait" now shows "détester third-person singular imperfect indicative"), with multiple senses on separate lines.
