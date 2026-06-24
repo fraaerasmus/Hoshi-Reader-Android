@@ -96,6 +96,10 @@ internal fun ChapterWebView(
     readerPopupFrames: List<ReaderLookupPopupFramePayload>,
     fontManager: ReaderFontManager,
     systemDark: Boolean,
+    edgeSwipeEnabled: Boolean,
+    onEdgeBrightnessDrag: (Float) -> Unit,
+    onEdgeVolumeDrag: (Float) -> Unit,
+    onEdgeDragEnd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val currentOnTextSelected = rememberUpdatedState(onTextSelected)
@@ -116,6 +120,10 @@ internal fun ChapterWebView(
     val currentWebViewRestoreEpoch = rememberUpdatedState(webViewRestoreEpoch)
     val currentOnRestoreStarted = rememberUpdatedState(onRestoreStarted)
     val currentOnRestoreCompleted = rememberUpdatedState(onRestoreCompleted)
+    val currentEdgeSwipeEnabled = rememberUpdatedState(edgeSwipeEnabled)
+    val currentOnEdgeBrightnessDrag = rememberUpdatedState(onEdgeBrightnessDrag)
+    val currentOnEdgeVolumeDrag = rememberUpdatedState(onEdgeVolumeDrag)
+    val currentOnEdgeDragEnd = rememberUpdatedState(onEdgeDragEnd)
     val context = LocalContext.current
     val readerWebAssets = remember(context) { ReaderWebAssets.load(context) }
     val viewportDensity = context.resources.displayMetrics.density.coerceAtLeast(1f)
@@ -383,6 +391,20 @@ internal fun ChapterWebView(
                     webView.setOnTouchListener(object : SwipePageTouchListener() {
                         override fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean =
                             shouldIgnoreReaderGestureEvent(event)
+
+                        override fun isEdgeSwipeEnabled(): Boolean = currentEdgeSwipeEnabled.value
+
+                        override fun onEdgeBrightnessDrag(fraction: Float) {
+                            currentOnEdgeBrightnessDrag.value(fraction)
+                        }
+
+                        override fun onEdgeVolumeDrag(fraction: Float) {
+                            currentOnEdgeVolumeDrag.value(fraction)
+                        }
+
+                        override fun onEdgeDragEnd() {
+                            currentOnEdgeDragEnd.value()
+                        }
 
                         override fun onTap(x: Float, y: Float) {
                             selectAt(x, y) {

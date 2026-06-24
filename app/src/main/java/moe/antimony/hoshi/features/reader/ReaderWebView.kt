@@ -1077,6 +1077,10 @@ fun ReaderWebView(
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
+    val edgeAdjust = remember(context) { ReaderEdgeAdjustController(context) }
+    DisposableEffect(context, edgeAdjust) {
+        onDispose { edgeAdjust.resetBrightnessOverride() }
+    }
 
     var lastInactiveAtMillis by remember { mutableStateOf<Long?>(null) }
     val currentLifecycleResume = rememberUpdatedState {
@@ -1391,6 +1395,10 @@ fun ReaderWebView(
                         readerPopupFrames = readerLookupPopupPayloads,
                         fontManager = fontManager,
                         systemDark = systemDarkTheme,
+                        edgeSwipeEnabled = effectiveSettings.edgeSwipeControls,
+                        onEdgeBrightnessDrag = edgeAdjust::onBrightnessDrag,
+                        onEdgeVolumeDrag = edgeAdjust::onVolumeDrag,
+                        onEdgeDragEnd = edgeAdjust::onDragEnd,
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(
@@ -1561,6 +1569,7 @@ fun ReaderWebView(
                 modifier = Modifier.fillMaxSize(),
             )
         }
+        ReaderEdgeAdjustHud(controller = edgeAdjust)
         webView?.let { _ -> Unit }
     }
 }
