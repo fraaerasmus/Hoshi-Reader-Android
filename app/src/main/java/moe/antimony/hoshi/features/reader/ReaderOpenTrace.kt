@@ -3,12 +3,11 @@ package moe.antimony.hoshi.features.reader
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
-import android.widget.Toast
 
 /**
  * TEMPORARY book-open latency tracing (pre-release diagnostics — remove before stable).
- * Marks the tap, route-load, WebView creation, loadUrl, and text-visible milestones, then surfaces
- * the per-phase breakdown as a Toast + logcat (tag "HoshiOpen") so we can find the real bottleneck.
+ * Marks the tap, route-load, WebView creation, loadUrl, and text-visible milestones, then logs
+ * the per-phase breakdown to logcat (tag "HoshiOpen") so we can find the real bottleneck.
  */
 object ReaderOpenTrace {
     @Volatile private var clickAt = 0L
@@ -51,7 +50,6 @@ object ReaderOpenTrace {
             "vp=${delta(loadUrlAt, builtAt)} " +
             "render=${if (loadUrlAt > 0L) "${now - loadUrlAt}" else "?"}"
         Log.d("HoshiOpen", msg)
-        Toast.makeText(context.applicationContext, msg, Toast.LENGTH_LONG).show()
         clickAt = 0L
     }
 }

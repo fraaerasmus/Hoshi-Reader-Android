@@ -953,6 +953,14 @@ window.hoshiReader.initialize = function() {
   document.body.appendChild(spacer);
   window.hoshiReader.normalizeRubyTextNodes();
   window.hoshiReader.stabilizeRubyAdjacentTextNodes();
+  // Reveal chapter-start opens after first paint; don't wait on image decode.
+  if (__HOSHI_INITIAL_FRAGMENT_LITERAL__ === null && __HOSHI_INITIAL_PROGRESS__ <= 0) {
+    requestAnimationFrame(function() {
+      window.hoshiReader.buildNodeOffsets();
+      __HOSHI_RESTORE_SCRIPTS__
+    });
+    return;
+  }
   Promise.all(imagePromises).then(function() {
     if (!images.length) return;
     return new Promise(function(resolve) { setTimeout(resolve, 50); });

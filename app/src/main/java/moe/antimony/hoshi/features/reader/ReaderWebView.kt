@@ -30,7 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -1294,6 +1296,18 @@ fun ReaderWebView(
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val viewportHorizontalPadding = maxWidth * effectiveSettings.continuousViewportHorizontalPaddingRatio.toFloat()
                 val viewportVerticalPadding = maxHeight * effectiveSettings.continuousViewportVerticalPaddingRatio.toFloat()
+                // Seed the WebView viewport from known constraints so loadUrl fires on the
+                // first update pass instead of waiting for onSizeChanged + a recomposition.
+                val seedDensity = LocalDensity.current
+                LaunchedEffect(constraints, viewportHorizontalPadding, viewportVerticalPadding) {
+                    if (stateHolder.webViewViewportSize == IntSize.Zero) {
+                        val seedWidth = constraints.maxWidth - with(seedDensity) { viewportHorizontalPadding.roundToPx() } * 2
+                        val seedHeight = constraints.maxHeight - with(seedDensity) { viewportVerticalPadding.roundToPx() } * 2
+                        if (seedWidth > 0 && seedHeight > 0) {
+                            stateHolder.updateViewportSize(IntSize(seedWidth, seedHeight))
+                        }
+                    }
+                }
                 val readerLookupPopupViewport = ReaderLookupPopupViewport(
                     width = (maxWidth.value - viewportHorizontalPadding.value * 2f).coerceAtLeast(0f).toDouble(),
                     height = (maxHeight.value - viewportVerticalPadding.value * 2f).coerceAtLeast(0f).toDouble(),
