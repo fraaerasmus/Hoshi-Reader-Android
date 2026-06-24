@@ -25,7 +25,7 @@ class SasayakiPlaybackHolder @Inject constructor(
     private var currentPlayer: SasayakiPlayer? = null
     private var currentBookKey: File? = null
     private var binding: SasayakiReaderBinding? = null
-    private var lastVisibleChapter: Int = 0
+    private val visibleChapter = SasayakiVisibleChapterTracker()
 
     /** Build the player for [bookRoot], or return the live one if it is already loaded. */
     fun loadBook(
@@ -50,8 +50,7 @@ class SasayakiPlaybackHolder @Inject constructor(
             // Stable forwarding lambdas: they read the current binding at call time, so the live
             // reader can be swapped (or removed) without rebuilding the controller.
             getCurrentChapterIndex = {
-                binding?.getCurrentChapterIndex?.invoke()?.also { lastVisibleChapter = it }
-                    ?: lastVisibleChapter
+                visibleChapter.resolve(binding?.getCurrentChapterIndex?.invoke())
             },
             onCue = { cue, reveal -> binding?.onCue?.invoke(cue, reveal) },
             onClearCue = { binding?.onClearCue?.invoke() },
