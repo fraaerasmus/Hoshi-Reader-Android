@@ -399,6 +399,7 @@ private fun TopLevelRouteContent(
     HoshiMainShell(
         selectedTab = selectedTab,
         onSelectedTabChange = onSelectedTabChange,
+        onOpenReader = onOpenReader,
     ) { contentModifier, layoutSpec ->
         when (selectedTab) {
             MainTab.Books -> BookshelfView(

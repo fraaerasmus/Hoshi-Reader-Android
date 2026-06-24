@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import moe.antimony.hoshi.features.sasayaki.SasayakiMiniPlayer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -532,6 +533,7 @@ fun BookshelfView(
 internal fun HoshiMainShell(
     selectedTab: MainTab,
     onSelectedTabChange: (MainTab) -> Unit,
+    onOpenReader: (String) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable (Modifier, MainShellLayoutSpec) -> Unit,
 ) {
@@ -544,11 +546,14 @@ internal fun HoshiMainShell(
                 contentColor = MaterialTheme.colorScheme.onBackground,
                 contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                 bottomBar = {
-                    HoshiCompactBottomNavigation(
-                        selectedTab = selectedTab,
-                        onSelectedTabChange = onSelectedTabChange,
-                        layoutSpec = layoutSpec,
-                    )
+                    Column {
+                        SasayakiMiniPlayer(onOpenReader = onOpenReader)
+                        HoshiCompactBottomNavigation(
+                            selectedTab = selectedTab,
+                            onSelectedTabChange = onSelectedTabChange,
+                            layoutSpec = layoutSpec,
+                        )
+                    }
                 },
             ) { innerPadding ->
                 Box(Modifier.fillMaxSize()) {
@@ -583,10 +588,12 @@ internal fun HoshiMainShell(
                 containerColor = MaterialTheme.colorScheme.background,
                 contentColor = MaterialTheme.colorScheme.onBackground,
             ) {
-                content(
-                    Modifier.fillMaxSize(),
-                    layoutSpec,
-                )
+                Column(Modifier.fillMaxSize()) {
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        content(Modifier.fillMaxSize(), layoutSpec)
+                    }
+                    SasayakiMiniPlayer(onOpenReader = onOpenReader)
+                }
             }
         }
     }

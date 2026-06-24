@@ -85,6 +85,7 @@ import kotlin.math.roundToInt
 @Composable
 fun ReaderWebView(
     book: EpubBook,
+    bookId: String,
     bookRoot: File? = null,
     bookCoverFile: File? = null,
     initialChapterIndex: Int = 0,
@@ -934,6 +935,7 @@ fun ReaderWebView(
     LaunchedEffect(bookRoot, sasayakiMatchData, isSasayakiPlaybackLoaded, sasayakiPlaybackData) {
         sasayakiPlayer = if (bookRoot != null && sasayakiMatchData != null && isSasayakiPlaybackLoaded) {
             val player = sasayakiPlaybackHolder.loadBook(
+                bookId = bookId,
                 bookRoot = bookRoot,
                 playbackRepository = BookSasayakiPlaybackRepository(bookRoot, bookRepository),
                 bookTitle = book.title,

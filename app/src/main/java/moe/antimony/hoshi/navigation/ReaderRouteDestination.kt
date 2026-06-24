@@ -173,6 +173,7 @@ internal fun ReaderRouteDestination(
             }
             ReaderWebView(
                 book = readyState.book,
+                bookId = bookId,
                 bookRoot = readyState.bookRoot,
                 bookCoverFile = readyState.bookCoverFile,
                 initialChapterIndex = readyState.bookmark?.chapterIndex ?: 0,

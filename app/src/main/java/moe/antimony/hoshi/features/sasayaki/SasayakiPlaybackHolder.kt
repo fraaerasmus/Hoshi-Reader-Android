@@ -6,6 +6,10 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import moe.antimony.hoshi.di.ApplicationScope
 import moe.antimony.hoshi.epub.SasayakiMatchData
 import moe.antimony.hoshi.epub.SasayakiPlaybackData
@@ -26,9 +30,28 @@ class SasayakiPlaybackHolder @Inject constructor(
     private var currentBookKey: File? = null
     private var binding: SasayakiReaderBinding? = null
     private val visibleChapter = SasayakiVisibleChapterTracker()
+    private var currentIdentity: SasayakiNowPlaying? = null
+    private val _nowPlaying = MutableStateFlow<SasayakiNowPlaying?>(null)
+
+    /** The book whose audio is currently engaged (played at least once); null otherwise. */
+    val nowPlaying: StateFlow<SasayakiNowPlaying?> = _nowPlaying.asStateFlow()
+
+    /** Live transport state (play/pause, position) of the active player. */
+    val snapshot: StateFlow<SasayakiPlaybackSnapshot> = SasayakiPlaybackStatePublisher.snapshot
+
+    init {
+        // Surface "now playing" only once playback actually engages, so the mini-player doesn't
+        // appear for a book you merely opened to read.
+        appScope.launch {
+            SasayakiPlaybackStatePublisher.snapshot.collect { snapshot ->
+                if (snapshot.isPlaying) currentIdentity?.let { _nowPlaying.value = it }
+            }
+        }
+    }
 
     /** Build the player for [bookRoot], or return the live one if it is already loaded. */
     fun loadBook(
+        bookId: String,
         bookRoot: File,
         playbackRepository: SasayakiPlaybackRepository,
         bookTitle: String?,
@@ -38,6 +61,10 @@ class SasayakiPlaybackHolder @Inject constructor(
     ): SasayakiPlayer {
         currentPlayer?.let { if (currentBookKey == bookRoot) return it }
         currentPlayer?.release()
+        // New book: hold its identity but keep the mini-player hidden until it is played.
+        currentIdentity = SasayakiNowPlaying(bookId, bookTitle ?: bookRoot.name, bookCoverFile)
+        _nowPlaying.value = null
+        SasayakiPlaybackStatePublisher.snapshot.value = SasayakiPlaybackSnapshot()
         return SasayakiPlayer(
             context = appContext,
             bookRoot = bookRoot,
@@ -76,11 +103,27 @@ class SasayakiPlaybackHolder @Inject constructor(
         binding = null
     }
 
+    fun togglePlayback() {
+        currentPlayer?.togglePlayback()
+    }
+
+    /** Skip forward/back honoring the Skip Action setting, like the reader's own controls. */
+    fun skipForward() {
+        currentPlayer?.nextCue()
+    }
+
+    fun skipBackward() {
+        currentPlayer?.previousCue()
+    }
+
     /** Stop and tear down the active player (no book / shutdown). */
     fun releaseForBook() {
         binding = null
         currentPlayer?.release()
         currentPlayer = null
         currentBookKey = null
+        currentIdentity = null
+        _nowPlaying.value = null
+        SasayakiPlaybackStatePublisher.snapshot.value = SasayakiPlaybackSnapshot()
     }
 }
