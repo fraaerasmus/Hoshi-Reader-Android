@@ -1,9 +1,5 @@
 package moe.antimony.hoshi.features.sasayaki
 
-import android.annotation.SuppressLint
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -11,7 +7,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.KeyEvent
 import androidx.annotation.OptIn
-import androidx.core.app.NotificationCompat
 import androidx.core.content.IntentCompat
 import androidx.media3.common.ForwardingSimpleBasePlayer
 import androidx.media3.common.MediaItem
@@ -20,7 +15,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
-import androidx.media3.session.MediaStyleNotificationHelper
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import moe.antimony.hoshi.R
@@ -41,10 +35,6 @@ class SasayakiMediaSession(
     private val onSeekTo: (Long) -> Unit,
 ) {
     private val appContext = context.applicationContext
-    private val notificationManager = appContext.getSystemService(NotificationManager::class.java)
-    private var isPlaying = false
-    private var notificationPlaying: Boolean? = null
-    private var hasPublishedNotification = false
     private val sessionPlayer = SasayakiSessionPlayer(
         player = player,
         onPlay = onPlay,
@@ -75,28 +65,15 @@ class SasayakiMediaSession(
         .build()
 
     init {
-        ensureNotificationChannel()
         publishMetadata()
-    }
-
-    fun activate() {
-        publishNotification()
-    }
-
-    fun update(
-        isPlaying: Boolean,
-        currentTimeMs: Long,
-        durationMs: Long,
-        rate: Float,
-    ) {
-        this.isPlaying = isPlaying
-        if ((session.connectedControllers.isNotEmpty() || hasPublishedNotification) && notificationPlaying != isPlaying) {
-            publishNotification()
-        }
+        // Hand the live session to the foreground service (single active book per process).
+        SasayakiSessionRegistry.session = session
     }
 
     fun release() {
-        notificationManager.cancel(NotificationId)
+        if (SasayakiSessionRegistry.session === session) {
+            SasayakiSessionRegistry.session = null
+        }
         session.release()
     }
 
@@ -118,41 +95,6 @@ class SasayakiMediaSession(
         } else {
             player.replaceMediaItem(player.currentMediaItemIndex.coerceAtLeast(0), mediaItem)
         }
-    }
-
-    private fun ensureNotificationChannel() {
-        notificationManager.createNotificationChannel(
-            NotificationChannel(
-                ChannelId,
-                appContext.getString(R.string.sasayaki_playback),
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                setSound(null, null)
-                enableVibration(false)
-            },
-        )
-    }
-
-    @SuppressLint("NotificationPermission")
-    private fun publishNotification() {
-        val builder = NotificationCompat.Builder(appContext, ChannelId)
-            .setSmallIcon(R.drawable.ic_stat_hoshi)
-            .setContentTitle(title)
-            .setContentText(appContext.getString(R.string.sasayaki_title))
-            .setContentIntent(contentIntent())
-            .setCategory(Notification.CATEGORY_TRANSPORT)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setOngoing(isPlaying)
-            .setOnlyAlertOnce(true)
-            .setStyle(
-                MediaStyleNotificationHelper.MediaStyle(session)
-                    .setShowActionsInCompactView(0, 1),
-            )
-        artwork?.let { builder.setLargeIcon(artwork) }
-        val notification = builder.build()
-        notificationManager.notify(NotificationId, notification)
-        notificationPlaying = isPlaying
-        hasPublishedNotification = true
     }
 
     private fun contentIntent(): PendingIntent? =
@@ -271,8 +213,6 @@ class SasayakiMediaSession(
     }
 
     companion object {
-        private const val ChannelId = "sasayaki_playback"
-        private const val NotificationId = 2407
         private const val MaxArtworkDimensionPx = 900
 
         fun loadCoverArt(file: File?): Bitmap? {

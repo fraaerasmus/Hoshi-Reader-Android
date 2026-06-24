@@ -1,6 +1,8 @@
 package moe.antimony.hoshi.features.sasayaki
 
 import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
 import java.io.File
 
@@ -28,8 +30,9 @@ class AndroidSasayakiMediaSessionHandle(
     onSkipToNext: () -> Unit,
     onSeekTo: (Long) -> Unit,
 ) : SasayakiMediaSessionHandle {
+    private val appContext = context.applicationContext
     private val session = SasayakiMediaSession(
-        context = context,
+        context = appContext,
         player = player,
         title = title,
         artwork = SasayakiMediaSession.loadCoverArt(artworkFile),
@@ -41,7 +44,9 @@ class AndroidSasayakiMediaSessionHandle(
     )
 
     override fun activate() {
-        session.activate()
+        // Start (or re-foreground) the playback service; it hosts the session created above so
+        // audio + the media notification survive the reader Composition going away.
+        ContextCompat.startForegroundService(appContext, serviceIntent())
     }
 
     override fun update(
@@ -50,15 +55,14 @@ class AndroidSasayakiMediaSessionHandle(
         durationMs: Long,
         rate: Float,
     ) {
-        session.update(
-            isPlaying = isPlaying,
-            currentTimeMs = currentTimeMs,
-            durationMs = durationMs,
-            rate = rate,
-        )
+        // No-op: media3's notification provider observes the player directly.
     }
 
     override fun release() {
         session.release()
+        appContext.stopService(serviceIntent())
     }
+
+    private fun serviceIntent(): Intent =
+        Intent(appContext, SasayakiPlaybackService::class.java)
 }

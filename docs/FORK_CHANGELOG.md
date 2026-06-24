@@ -24,6 +24,7 @@ below is a single living summary of everything the fork adds, grouped Added / Fi
 - Hold the Sasayaki rewind or forward control to keep skipping until you let go, instead of tapping once per step. Works for the on-screen buttons and the hardware seek keys (J/L, the arrow keys, and the volume keys when set to seek); a quick tap still skips a single step.
 - Support headphone and Bluetooth rewind/forward gestures for Sasayaki: the forward gesture skips forward and the back gesture skips backward, matching the Skip Action setting (sentence cue or N seconds). Previously only play/pause responded to headphone controls.
 - Add edge-swipe brightness and volume controls: with "Edge Swipe Brightness & Volume" enabled in reader Behavior settings (off by default), drag vertically along the left edge to adjust screen brightness or the right edge to adjust media volume, with a brief on-screen level indicator. Brightness applies to the reader only and reverts to the system setting when you leave the reader. Available in Paginated and Visual Novel reading modes.
+- Keep Sasayaki audio playing in the background: it now continues when you leave the reader, switch apps, or lock the screen — with a media notification and lock-screen transport controls — instead of stopping after about a minute. Backed by a foreground media service; returning to the reader resyncs the highlight.
 
 ## Fixed
 

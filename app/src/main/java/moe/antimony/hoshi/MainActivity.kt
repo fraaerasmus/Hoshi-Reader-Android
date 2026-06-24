@@ -1,8 +1,10 @@
 package moe.antimony.hoshi
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -39,6 +41,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestNotificationPermissionIfNeeded()
         pendingImportUri = intent.importUri()
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -106,6 +109,14 @@ class MainActivity : ComponentActivity() {
             return true
         }
         return super.dispatchGenericMotionEvent(event)
+    }
+
+    // The Sasayaki foreground playback notification needs POST_NOTIFICATIONS on API 33+. Playback
+    // still runs if denied — only the notification is hidden.
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
     }
 
     override fun onNewIntent(intent: Intent) {
