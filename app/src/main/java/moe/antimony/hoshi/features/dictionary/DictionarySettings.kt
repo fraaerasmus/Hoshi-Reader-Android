@@ -462,6 +462,9 @@ class DictionarySettingsRepository(
 private data class ProfileDictionarySettings(
     val dictionaryTabDefault: Boolean = false,
     val scanNonJapaneseText: Boolean = true,
+    val scanMultiWordPhrases: Boolean = true,
+    val scanWithShiftKey: Boolean = true,
+    val mineNestedWithReadingContext: Boolean = true,
     val maxResults: Int = 16,
     val scanLength: Int = 16,
     val collapseMode: DictionaryCollapseMode = DictionaryCollapseMode.ExpandAll,
@@ -485,6 +488,9 @@ private fun DictionarySettings.toProfileDictionarySettings(): ProfileDictionaryS
         ProfileDictionarySettings(
             dictionaryTabDefault = settings.dictionaryTabDefault,
             scanNonJapaneseText = settings.scanNonJapaneseText,
+            scanMultiWordPhrases = settings.scanMultiWordPhrases,
+            scanWithShiftKey = settings.scanWithShiftKey,
+            mineNestedWithReadingContext = settings.mineNestedWithReadingContext,
             maxResults = settings.maxResults,
             scanLength = settings.scanLength,
             collapseMode = settings.collapseMode,
@@ -503,6 +509,9 @@ private fun DictionarySettings.withProfileDictionarySettings(profileSettings: Pr
     copy(
         dictionaryTabDefault = profileSettings.dictionaryTabDefault,
         scanNonJapaneseText = profileSettings.scanNonJapaneseText,
+        scanMultiWordPhrases = profileSettings.scanMultiWordPhrases,
+        scanWithShiftKey = profileSettings.scanWithShiftKey,
+        mineNestedWithReadingContext = profileSettings.mineNestedWithReadingContext,
         maxResults = profileSettings.maxResults,
         scanLength = profileSettings.scanLength,
         collapseMode = profileSettings.collapseMode,
