@@ -121,8 +121,11 @@ fun ReaderWebView(
     LaunchedEffect(bookRoot, bookRepository) {
         sasayakiMatchData = bookRoot?.let { bookRepository.loadSasayakiMatch(it) }
     }
+    // Default to empty (not null) so the WebView is created/painted immediately instead of waiting
+    // for the loadHighlights disk read; highlights aren't in loadKey, so they apply incrementally
+    // (no reload) when they land.
     var highlights by remember(bookRoot) {
-        mutableStateOf<List<ReaderHighlight>?>(if (bookRoot == null) emptyList() else null)
+        mutableStateOf<List<ReaderHighlight>?>(emptyList())
     }
     LaunchedEffect(bookRoot, bookRepository) {
         highlights = if (bookRoot != null) {

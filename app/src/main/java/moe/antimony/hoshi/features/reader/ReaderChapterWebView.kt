@@ -243,7 +243,7 @@ internal fun ChapterWebView(
             .background(Color(readerSettings.backgroundColor(systemDark))),
         factory = { context ->
             ReaderOpenTrace.markWebViewCreated()
-            HoshiReaderWebView(context).apply {
+            HoshiReaderWebView(context).also { ReaderOpenTrace.markWebViewBuilt() }.apply {
                 applyHoshiWebViewSecurityDefaults()
                 isVerticalScrollBarEnabled = false
                 isHorizontalScrollBarEnabled = false
