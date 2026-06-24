@@ -13,6 +13,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.di.FilesDir
 import moe.antimony.hoshi.di.IoDispatcher
@@ -238,6 +245,69 @@ class ProfileRepository internal constructor(
         }
     }
 
+    /**
+     * Captures the profile index plus each profile's owned JSON files (reader/dictionary/anki
+     * settings) for the settings backup. File contents are embedded as JSON strings so they
+     * round-trip through the existing string-typed backup handling.
+     */
+    suspend fun exportProfilesBackup(): JsonObject = withContext(ioDispatcher) {
+        synchronized(lock) {
+            buildJsonObject {
+                put(BACKUP_KEY_INDEX, json.encodeToString(StoredProfileIndex.serializer(), storedIndex.normalized()))
+                put(
+                    BACKUP_KEY_FILES,
+                    buildJsonObject {
+                        storedIndex.normalized().profiles.forEach { profile ->
+                            val files = buildJsonObject {
+                                ProfileOwnedFileNames.forEach { fileName ->
+                                    val source = profileDataFile(profile.id, fileName)
+                                    if (source.isFile) {
+                                        runCatching { source.readText() }.getOrNull()?.let { text ->
+                                            put(fileName, JsonPrimitive(text))
+                                        }
+                                    }
+                                }
+                            }
+                            if (files.isNotEmpty()) put(profile.id, files)
+                        }
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * Restores the profile index and per-profile owned files from a settings backup. Missing or
+     * partial sections import as a no-op; only known [ProfileOwnedFileNames] are written and
+     * profile ids are validated against path traversal via [safeProfileDir].
+     */
+    suspend fun importProfilesBackup(payload: JsonObject): Unit = withContext(ioDispatcher) {
+        synchronized(lock) {
+            profilesDir.mkdirs()
+            payload[BACKUP_KEY_INDEX]?.jsonPrimitive?.contentOrNull?.let { indexText ->
+                runCatching {
+                    val restored = json.decodeFromString(StoredProfileIndex.serializer(), indexText).normalized()
+                    writeIndex(restored)
+                }
+            }
+            payload[BACKUP_KEY_FILES]?.let { filesElement ->
+                runCatching { filesElement.jsonObject }.getOrNull()?.forEach { (profileId, profileFiles) ->
+                    val files = runCatching { profileFiles.jsonObject }.getOrNull() ?: return@forEach
+                    val targetDir = runCatching { safeProfileDir(profilesDir, profileId) }.getOrNull() ?: return@forEach
+                    files.forEach { (fileName, contentElement) ->
+                        if (fileName !in ProfileOwnedFileNames) return@forEach
+                        val text = runCatching { contentElement.jsonPrimitive.contentOrNull }.getOrNull() ?: return@forEach
+                        targetDir.mkdirs()
+                        targetDir.resolve(fileName).writeText(text)
+                    }
+                }
+            }
+            storedIndex = initializeIndex()
+            loadedProfileId = null
+            publishLocked()
+        }
+    }
+
     private fun initializeIndex(): StoredProfileIndex {
         profilesDir.mkdirs()
         val existing = runCatching {
@@ -386,6 +456,8 @@ class ProfileRepository internal constructor(
     companion object {
         const val DefaultProfileId = "default-ja"
         const val DictionaryBackupProfilesDirectoryName = ".hoshi-profiles"
+        private const val BACKUP_KEY_INDEX = "index"
+        private const val BACKUP_KEY_FILES = "files"
         private const val ProfilesDirectoryName = "Profiles"
         private const val IndexFileName = "profiles.json"
         private const val LegacyDictionaryConfigFileName = "config.json"

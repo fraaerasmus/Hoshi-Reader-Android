@@ -49,6 +49,7 @@ import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsRepository
 import moe.antimony.hoshi.features.sync.DeviceCodeDriveAuthorizer
 import moe.antimony.hoshi.features.sync.SyncSettingsRepository
 import moe.antimony.hoshi.features.update.UpdateSettingsRepository
+import moe.antimony.hoshi.profiles.ProfileRepository
 
 /**
  * Exports and restores app settings as a single JSON file. Settings live across several
@@ -68,6 +69,7 @@ class SettingsBackupRepository @Inject constructor(
     private val syncSettingsRepository: SyncSettingsRepository,
     private val updateSettingsRepository: UpdateSettingsRepository,
     private val driveAuthorizer: DeviceCodeDriveAuthorizer,
+    private val profileRepository: ProfileRepository,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     suspend fun exportSettings(contentResolver: ContentResolver, uri: Uri) {
@@ -100,6 +102,7 @@ class SettingsBackupRepository @Inject constructor(
         val sync = syncSettingsRepository.exportEntries()
         val update = updateSettingsRepository.exportEntries()
         val driveCredentials = driveAuthorizer.exportCredentials()
+        val profiles = profileRepository.exportProfilesBackup()
         return buildJsonObject {
             put(KEY_SCHEMA, SCHEMA)
             put(KEY_VERSION, VERSION)
@@ -124,6 +127,7 @@ class SettingsBackupRepository @Inject constructor(
                     put(CREDENTIAL_DRIVE, driveCredentials)
                 },
             )
+            put(KEY_PROFILES, profiles)
         }
     }
 
@@ -140,13 +144,15 @@ class SettingsBackupRepository @Inject constructor(
 
         envelope[KEY_CREDENTIALS]?.jsonObject?.store(CREDENTIAL_DRIVE)
             ?.let { driveAuthorizer.importCredentials(it) }
+
+        envelope[KEY_PROFILES]?.jsonObject?.let { profileRepository.importProfilesBackup(it) }
     }
 
     private fun JsonObject.store(name: String): JsonObject? = this[name]?.jsonObject
 
     private companion object {
         const val SCHEMA = "hoshi-settings"
-        const val VERSION = 1
+        const val VERSION = 2
 
         const val KEY_SCHEMA = "schema"
         const val KEY_VERSION = "version"
@@ -154,6 +160,7 @@ class SettingsBackupRepository @Inject constructor(
         const val KEY_EXPORTED_AT = "exportedAt"
         const val KEY_STORES = "stores"
         const val KEY_CREDENTIALS = "credentials"
+        const val KEY_PROFILES = "profiles"
 
         const val STORE_READER = "reader"
         const val STORE_DICTIONARY = "dictionary"
