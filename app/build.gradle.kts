@@ -105,7 +105,10 @@ android {
                 "\"https://api.github.com/repos/fraaerasmus/Hoshi-Reader-Android/releases/latest\"",
             )
             ndk {
-                abiFilters += listOf("arm64-v8a", "x86_64")
+                // Sideload targets physical devices (all arm64); dropping x86_64 removes a
+                // duplicate native-lib set and lets this variant reuse the arm64 --release
+                // Rust lib below. (Re-add "x86_64" only if testing on a desktop emulator.)
+                abiFilters += listOf("arm64-v8a")
             }
         }
         release {
@@ -155,7 +158,9 @@ android {
         }
     }
     sourceSets["main"].java.directories.add(uniffiOutDir.absolutePath)
-    sourceSets["debug"].jniLibs.directories.add(rustDebugJniLibsDir.absolutePath)
+    // Sideload build is non-debuggable and arm64-only, so reuse the optimized arm64
+    // --release Rust lib instead of the unoptimized dev-profile (smaller + faster).
+    sourceSets["debug"].jniLibs.directories.add(rustReleaseJniLibsDir.absolutePath)
     sourceSets["release"].jniLibs.directories.add(rustReleaseJniLibsDir.absolutePath)
 }
 
@@ -179,6 +184,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.webkit)
+    implementation(libs.androidx.profileinstaller)
     implementation(libs.androidx.media3.datasource)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
@@ -322,7 +328,7 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
 
 afterEvaluate {
     tasks.named("preDebugBuild") {
-        dependsOn(buildRustAndroidDebug)
+        dependsOn(buildRustAndroidRelease)
     }
     tasks.named("preReleaseBuild") {
         dependsOn(buildRustAndroidRelease)

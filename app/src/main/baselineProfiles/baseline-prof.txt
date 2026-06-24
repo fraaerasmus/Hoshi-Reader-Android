@@ -1,0 +1,25 @@
+# Hoshi Custom — hand-authored baseline profile (cold start + reader hot path).
+# Rules are expanded against the merged DEX at build time; lines that match
+# nothing are dropped, so broad wildcard rules are safe and refactor-resilient.
+# H=hot (AOT compile), S=startup (cold-start image), P=post-startup.
+
+# App code: startup, navigation, reader, dictionary popup, content/profiles.
+HSPLmoe/antimony/hoshi/**->**(**)**
+Lmoe/antimony/hoshi/**
+
+# Native dictionary bridge (18-lang seam; JNI/uniffi glue on first lookup).
+HSPLde/manhhao/hoshi/**->**(**)**
+Lde/manhhao/hoshi/**
+
+# Compose runtime + UI toolkit (composition / layout / draw on every frame).
+HSPLandroidx/compose/runtime/**->**(**)**
+HSPLandroidx/compose/ui/**->**(**)**
+HSPLandroidx/compose/foundation/**->**(**)**
+HSPLandroidx/compose/material3/**->**(**)**
+HSPLandroidx/compose/animation/**->**(**)**
+
+# DI graph + startup / navigation / lifecycle.
+HSPLdagger/hilt/**->**(**)**
+HSPLandroidx/navigation3/**->**(**)**
+HSPLandroidx/lifecycle/**->**(**)**
+HSPLandroidx/activity/**->**(**)**
