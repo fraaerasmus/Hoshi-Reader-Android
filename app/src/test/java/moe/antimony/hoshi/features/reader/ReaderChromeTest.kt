@@ -811,6 +811,7 @@ class ReaderChromeTest {
             ReaderSettings(
                 theme = ReaderTheme.Custom,
                 uiTheme = ReaderInterfaceTheme.Light,
+                colorPreset = ReaderColorPreset.Manual,
                 customInfoColor = 0xFF778899,
             ),
             systemDark = true,

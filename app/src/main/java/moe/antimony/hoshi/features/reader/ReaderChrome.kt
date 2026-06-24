@@ -493,7 +493,7 @@ fun readerChromeColors(settings: ReaderSettings, systemDark: Boolean): ReaderChr
         )
     }
     return if (!settings.eInkMode && settings.theme == ReaderTheme.Custom) {
-        colors.copy(infoText = settings.customInfoColor)
+        colors.copy(infoText = settings.infoColor(systemDark))
     } else {
         colors
     }

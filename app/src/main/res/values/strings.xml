@@ -307,6 +307,10 @@
     <string name="reader_appearance_use_sepia_light_theme">Use Sepia as Light Theme</string>
     <string name="reader_appearance_invert_sepia_dark">Invert in System Dark Theme</string>
     <string name="reader_appearance_interface">Interface</string>
+    <string name="reader_appearance_preset">Preset</string>
+    <string name="reader_appearance_preset_rose_pine">Rosé Pine</string>
+    <string name="reader_appearance_preset_gruvbox">Gruvbox</string>
+    <string name="reader_appearance_preset_everforest">Everforest</string>
     <string name="reader_appearance_background_color">Background Color</string>
     <string name="reader_appearance_text_color">Text Color</string>
     <string name="reader_appearance_info_color">Info Color</string>

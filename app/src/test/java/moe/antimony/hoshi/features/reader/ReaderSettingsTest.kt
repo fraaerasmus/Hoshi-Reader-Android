@@ -26,6 +26,7 @@ class ReaderSettingsTest {
         assertEquals(0xFFFFFFFFL, settings.customBackgroundColor)
         assertEquals(0xFF000000L, settings.customTextColor)
         assertEquals(0xFF999999L, settings.customInfoColor)
+        assertEquals(ReaderColorPreset.RosePine, settings.colorPreset)
         assertFalse(settings.continuousMode)
         assertFalse(settings.blurImages)
         assertFalse(settings.enableStatistics)
@@ -520,6 +521,7 @@ class ReaderSettingsTest {
         val settings = ReaderSettings(
             theme = ReaderTheme.Custom,
             uiTheme = ReaderInterfaceTheme.Dark,
+            colorPreset = ReaderColorPreset.Manual,
             customBackgroundColor = 0xFF112233,
             customTextColor = 0xFF445566,
         )
@@ -532,10 +534,35 @@ class ReaderSettingsTest {
     }
 
     @Test
+    fun customReaderThemePresetResolvesLightAndDarkVariantsFromInterfaceTheme() {
+        val default = ReaderSettings(theme = ReaderTheme.Custom)
+        assertEquals(ReaderColorPreset.RosePine, default.colorPreset)
+
+        val dark = default.copy(uiTheme = ReaderInterfaceTheme.Dark)
+        assertEquals(0xFF191724, dark.backgroundColor(systemDark = false))
+        assertEquals("#e0def4", dark.textColorCss(systemDark = false))
+        assertEquals(0xFF6E6A86, dark.infoColor(systemDark = false))
+
+        val light = default.copy(uiTheme = ReaderInterfaceTheme.Light)
+        assertEquals(0xFFFAF4ED, light.backgroundColor(systemDark = true))
+        assertEquals("#575279", light.textColorCss(systemDark = true))
+        assertEquals(0xFF9893A5, light.infoColor(systemDark = true))
+
+        // uiTheme System follows the OS, choosing the matching preset variant.
+        val gruvbox = default.copy(
+            colorPreset = ReaderColorPreset.Gruvbox,
+            uiTheme = ReaderInterfaceTheme.System,
+        )
+        assertEquals(0xFF282828, gruvbox.backgroundColor(systemDark = true))
+        assertEquals(0xFFF2E5BC, gruvbox.backgroundColor(systemDark = false))
+    }
+
+    @Test
     fun customReaderCssPreservesConfiguredColorAlpha() {
         val css = ReaderContentStyles.styleTag(
             settings = ReaderSettings(
                 theme = ReaderTheme.Custom,
+                colorPreset = ReaderColorPreset.Manual,
                 customBackgroundColor = 0x44112233,
                 customTextColor = 0x88445566,
             ),

@@ -49,6 +49,7 @@ data class ReaderSettings(
     val customBackgroundColor: Long = 0xFFFFFFFF,
     val customTextColor: Long = 0xFF000000,
     val customInfoColor: Long = 0xFF999999,
+    val colorPreset: ReaderColorPreset = ReaderColorPreset.RosePine,
     val verticalWriting: Boolean = true,
     val selectedFont: String = ReaderFontManager.defaultMinchoFont,
     val fontSize: Int = 22,
@@ -173,12 +174,22 @@ data class ReaderSettings(
             ReaderTheme.Dark -> 0xFF000000
             ReaderTheme.Sepia -> if (sepiaInvertInDark && systemDark) 0xFF17150F else 0xFFF2E2C9
             ReaderTheme.Light -> 0xFFFFFFFF
-            ReaderTheme.Custom -> customBackgroundColor
+            ReaderTheme.Custom -> activePresetPalette(systemDark)?.background ?: customBackgroundColor
         }
     }
 
     fun backgroundColorCss(systemDark: Boolean): String =
         backgroundColor(systemDark).toReaderCssColor(includeAlpha = !eInkMode && theme == ReaderTheme.Custom)
+
+    fun infoColor(systemDark: Boolean): Long =
+        activePresetPalette(systemDark)?.info ?: customInfoColor
+
+    private fun activePresetPalette(systemDark: Boolean): ReaderPresetPalette? =
+        if (theme == ReaderTheme.Custom && colorPreset != ReaderColorPreset.Manual) {
+            colorPreset.palette(usesDarkInterface(systemDark))
+        } else {
+            null
+        }
 
     fun textColorCss(systemDark: Boolean): String {
         if (eInkMode) {
@@ -189,7 +200,8 @@ data class ReaderSettings(
             ReaderTheme.Light -> "#000"
             ReaderTheme.Dark -> "#fff"
             ReaderTheme.Sepia -> if (sepiaInvertInDark && systemDark) "#F2E2C9" else "#332A1B"
-            ReaderTheme.Custom -> customTextColor.toReaderCssColor(includeAlpha = true)
+            ReaderTheme.Custom -> (activePresetPalette(systemDark)?.text ?: customTextColor)
+                .toReaderCssColor(includeAlpha = true)
         }
     }
 
@@ -212,6 +224,39 @@ enum class ReaderTheme(val label: String) {
     Dark("Dark"),
     Sepia("Sepia"),
     Custom("Custom"),
+}
+
+data class ReaderPresetPalette(val background: Long, val text: Long, val info: Long)
+
+/** Curated color palettes for the Custom theme; light/dark variant is chosen by [usesDarkInterface]. */
+enum class ReaderColorPreset(
+    val rawValue: String,
+    val light: ReaderPresetPalette?,
+    val dark: ReaderPresetPalette?,
+) {
+    Manual("manual", null, null),
+    RosePine(
+        "rosePine",
+        light = ReaderPresetPalette(0xFFFAF4ED, 0xFF575279, 0xFF9893A5),
+        dark = ReaderPresetPalette(0xFF191724, 0xFFE0DEF4, 0xFF6E6A86),
+    ),
+    Gruvbox(
+        "gruvbox",
+        light = ReaderPresetPalette(0xFFF2E5BC, 0xFF3C3836, 0xFF7C6F64),
+        dark = ReaderPresetPalette(0xFF282828, 0xFFEBDBB2, 0xFF928374),
+    ),
+    Everforest(
+        "everforest",
+        light = ReaderPresetPalette(0xFFF3EAD3, 0xFF5C6A72, 0xFF939F91),
+        dark = ReaderPresetPalette(0xFF2D353B, 0xFFD3C6AA, 0xFF859289),
+    );
+
+    fun palette(dark: Boolean): ReaderPresetPalette? = if (dark) this.dark else this.light
+
+    companion object {
+        fun fromStorage(value: String?): ReaderColorPreset =
+            entries.firstOrNull { it.rawValue == value || it.name == value } ?: RosePine
+    }
 }
 
 enum class ReaderInterfaceTheme(val label: String) {
@@ -310,6 +355,7 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
         customBackgroundColor = preferences.getLong("customBackgroundColor", 0xFFFFFFFF),
         customTextColor = preferences.getLong("customTextColor", 0xFF000000),
         customInfoColor = preferences.getLong("customInfoColor", 0xFF999999),
+        colorPreset = ReaderColorPreset.fromStorage(preferences.getString("colorPreset", null)),
         verticalWriting = preferences.getBoolean("verticalWriting", true),
         selectedFont = preferences.getString("selectedFont", null) ?: ReaderFontManager.defaultMinchoFont,
         fontSize = preferences.getInt("fontSize", 22),
@@ -385,6 +431,7 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             .putLong("customBackgroundColor", settings.customBackgroundColor)
             .putLong("customTextColor", settings.customTextColor)
             .putLong("customInfoColor", settings.customInfoColor)
+            .putString("colorPreset", settings.colorPreset.rawValue)
             .putBoolean("verticalWriting", settings.verticalWriting)
             .putString("selectedFont", settings.selectedFont)
             .putInt("fontSize", settings.fontSize)
@@ -535,6 +582,7 @@ class ReaderSettingsRepository(
             customBackgroundColor = this[KEY_CUSTOM_BACKGROUND_COLOR] ?: 0xFFFFFFFF,
             customTextColor = this[KEY_CUSTOM_TEXT_COLOR] ?: 0xFF000000,
             customInfoColor = this[KEY_CUSTOM_INFO_COLOR] ?: 0xFF999999,
+            colorPreset = ReaderColorPreset.fromStorage(this[KEY_COLOR_PRESET]),
             verticalWriting = this[KEY_VERTICAL_WRITING] ?: true,
             selectedFont = this[KEY_SELECTED_FONT] ?: ReaderFontManager.defaultMinchoFont,
             fontSize = this[KEY_FONT_SIZE] ?: 22,
@@ -604,6 +652,7 @@ class ReaderSettingsRepository(
         this[KEY_CUSTOM_BACKGROUND_COLOR] = settings.customBackgroundColor
         this[KEY_CUSTOM_TEXT_COLOR] = settings.customTextColor
         this[KEY_CUSTOM_INFO_COLOR] = settings.customInfoColor
+        this[KEY_COLOR_PRESET] = settings.colorPreset.rawValue
         this[KEY_VERTICAL_WRITING] = settings.verticalWriting
         this[KEY_SELECTED_FONT] = settings.selectedFont
         this[KEY_FONT_SIZE] = settings.fontSize
@@ -718,6 +767,7 @@ class ReaderSettingsRepository(
         private val KEY_CUSTOM_BACKGROUND_COLOR = longPreferencesKey("customBackgroundColor")
         private val KEY_CUSTOM_TEXT_COLOR = longPreferencesKey("customTextColor")
         private val KEY_CUSTOM_INFO_COLOR = longPreferencesKey("customInfoColor")
+        private val KEY_COLOR_PRESET = stringPreferencesKey("colorPreset")
         private val KEY_VERTICAL_WRITING = booleanPreferencesKey("verticalWriting")
         private val KEY_SELECTED_FONT = stringPreferencesKey("selectedFont")
         private val KEY_FONT_SIZE = intPreferencesKey("fontSize")
@@ -795,6 +845,7 @@ private data class ProfileReaderAppearanceSettings(
     val customBackgroundColor: Long = 0xFFFFFFFF,
     val customTextColor: Long = 0xFF000000,
     val customInfoColor: Long = 0xFF999999,
+    val colorPreset: ReaderColorPreset = ReaderColorPreset.RosePine,
     val verticalWriting: Boolean = true,
     val selectedFont: String = ReaderFontManager.defaultMinchoFont,
     val fontSize: Int = 22,
@@ -850,6 +901,7 @@ private fun ReaderSettings.toProfileAppearanceSettings(): ProfileReaderAppearanc
         customBackgroundColor = customBackgroundColor,
         customTextColor = customTextColor,
         customInfoColor = customInfoColor,
+        colorPreset = colorPreset,
         verticalWriting = verticalWriting,
         selectedFont = selectedFont,
         fontSize = fontSize,
@@ -905,6 +957,7 @@ private fun ReaderSettings.withProfileAppearance(appearance: ProfileReaderAppear
         customBackgroundColor = appearance.customBackgroundColor,
         customTextColor = appearance.customTextColor,
         customInfoColor = appearance.customInfoColor,
+        colorPreset = appearance.colorPreset,
         verticalWriting = appearance.verticalWriting,
         selectedFont = appearance.selectedFont,
         fontSize = appearance.fontSize,

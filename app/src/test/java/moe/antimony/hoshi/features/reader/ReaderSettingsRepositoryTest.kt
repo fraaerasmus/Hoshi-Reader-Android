@@ -172,6 +172,7 @@ class ReaderSettingsRepositoryTest {
                     customBackgroundColor = 0xFF102030,
                     customTextColor = 0xFF405060,
                     customInfoColor = 0xFF708090,
+                    colorPreset = ReaderColorPreset.Gruvbox,
                     verticalWriting = false,
                     selectedFont = ReaderFontManager.defaultGothicFont,
                     fontSize = 24,
@@ -231,6 +232,7 @@ class ReaderSettingsRepositoryTest {
             assertEquals(0xFF102030, saved.customBackgroundColor)
             assertEquals(0xFF405060, saved.customTextColor)
             assertEquals(0xFF708090, saved.customInfoColor)
+            assertEquals(ReaderColorPreset.Gruvbox, saved.colorPreset)
             assertFalse(saved.verticalWriting)
             assertEquals(ReaderFontManager.defaultGothicFont, saved.selectedFont)
             assertEquals(24, saved.fontSize)

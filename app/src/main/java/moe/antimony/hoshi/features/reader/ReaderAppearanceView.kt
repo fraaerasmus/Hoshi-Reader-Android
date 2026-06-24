@@ -164,6 +164,7 @@ private fun ReaderAppearanceContent(
     val scope = rememberCoroutineScope()
     var importedFonts by remember { mutableStateOf(fontManager.storedFonts()) }
     var fontMenuExpanded by remember { mutableStateOf(false) }
+    var presetMenuExpanded by remember { mutableStateOf(false) }
     var fontToDelete by remember { mutableStateOf<String?>(null) }
     var isImportingFont by remember { mutableStateOf(false) }
     var importingFontMessage by remember { mutableStateOf<String?>(null) }
@@ -267,6 +268,16 @@ private fun ReaderAppearanceContent(
                                 }
                             },
                             palette = palette,
+                        )
+                        AppearanceDivider(palette)
+                        ReaderColorPresetRow(
+                            selected = settings.colorPreset,
+                            expanded = presetMenuExpanded,
+                            onExpandedChange = { presetMenuExpanded = it },
+                            onSelected = {
+                                presetMenuExpanded = false
+                                onSettingsChange(settings.copy(colorPreset = it))
+                            },
                         )
                         readerAppearanceCustomColorRows(settings).forEach { row ->
                             AppearanceDivider(palette)
@@ -823,7 +834,7 @@ internal fun readerAppearanceShowsCustomInterfaceTheme(settings: ReaderSettings)
     settings.theme == ReaderTheme.Custom
 
 internal fun readerAppearanceCustomColorRows(settings: ReaderSettings): List<ReaderAppearanceCustomColorRow> =
-    if (settings.theme == ReaderTheme.Custom) {
+    if (settings.theme == ReaderTheme.Custom && settings.colorPreset == ReaderColorPreset.Manual) {
         ReaderAppearanceCustomColorRow.entries
     } else {
         emptyList()
@@ -898,6 +909,15 @@ private val ReaderInterfaceTheme.labelRes: Int
         ReaderInterfaceTheme.System -> R.string.reader_appearance_theme_system
         ReaderInterfaceTheme.Light -> R.string.reader_appearance_theme_light
         ReaderInterfaceTheme.Dark -> R.string.reader_appearance_theme_dark
+    }
+
+@get:StringRes
+private val ReaderColorPreset.labelRes: Int
+    get() = when (this) {
+        ReaderColorPreset.Manual -> R.string.reader_appearance_theme_custom
+        ReaderColorPreset.RosePine -> R.string.reader_appearance_preset_rose_pine
+        ReaderColorPreset.Gruvbox -> R.string.reader_appearance_preset_gruvbox
+        ReaderColorPreset.Everforest -> R.string.reader_appearance_preset_everforest
     }
 
 @Composable
@@ -1098,6 +1118,53 @@ private fun ReaderFontRow(
                 CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                     TextButton(onClick = onDeleteFont) {
                         Text(stringResource(R.string.action_delete))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReaderColorPresetRow(
+    selected: ReaderColorPreset,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onSelected: (ReaderColorPreset) -> Unit,
+) {
+    val metrics = readerSheetDensityMetrics()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = metrics.appearanceFontRowVerticalPaddingDp.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = stringResource(R.string.reader_appearance_preset),
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Box {
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                TextButton(onClick = { onExpandedChange(true) }) {
+                    Text(
+                        text = stringResource(selected.labelRes),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { onExpandedChange(false) },
+                ) {
+                    ReaderColorPreset.entries.forEach { preset ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(preset.labelRes)) },
+                            onClick = { onSelected(preset) },
+                        )
                     }
                 }
             }

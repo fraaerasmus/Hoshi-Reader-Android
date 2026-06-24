@@ -305,6 +305,10 @@
     <string name="reader_appearance_use_sepia_light_theme">浅色主题使用护眼色</string>
     <string name="reader_appearance_invert_sepia_dark">系统深色时反转护眼色</string>
     <string name="reader_appearance_interface">界面</string>
+    <string name="reader_appearance_preset">预设主题</string>
+    <string name="reader_appearance_preset_rose_pine">Rosé Pine</string>
+    <string name="reader_appearance_preset_gruvbox">Gruvbox</string>
+    <string name="reader_appearance_preset_everforest">Everforest</string>
     <string name="reader_appearance_background_color">背景颜色</string>
     <string name="reader_appearance_text_color">文字颜色</string>
     <string name="reader_appearance_info_color">信息颜色</string>

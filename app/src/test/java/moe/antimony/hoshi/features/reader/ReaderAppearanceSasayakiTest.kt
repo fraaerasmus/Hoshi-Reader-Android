@@ -79,8 +79,12 @@ class ReaderAppearanceSasayakiTest {
                 ReaderAppearanceCustomColorRow.Text,
                 ReaderAppearanceCustomColorRow.Info,
             ),
-            readerAppearanceCustomColorRows(ReaderSettings(theme = ReaderTheme.Custom)),
+            readerAppearanceCustomColorRows(
+                ReaderSettings(theme = ReaderTheme.Custom, colorPreset = ReaderColorPreset.Manual),
+            ),
         )
+        // A non-Manual preset drives the colors, so the manual rows are hidden.
+        assertTrue(readerAppearanceCustomColorRows(ReaderSettings(theme = ReaderTheme.Custom)).isEmpty())
         assertTrue(readerAppearanceCustomColorRows(ReaderSettings(theme = ReaderTheme.Light)).isEmpty())
     }
 }
