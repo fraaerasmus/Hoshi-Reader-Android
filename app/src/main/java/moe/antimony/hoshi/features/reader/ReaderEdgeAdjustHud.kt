@@ -19,8 +19,6 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.BrightnessHigh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -31,11 +29,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import moe.antimony.hoshi.R
-import kotlin.math.roundToInt
 
 /**
  * Transient centered overlay showing the current brightness/volume level during an edge-swipe
@@ -73,51 +74,51 @@ fun ReaderEdgeAdjustHud(
             .alpha(alpha),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-            tonalElevation = 3.dp,
-            shadowElevation = 3.dp,
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 24.dp, vertical = 20.dp)
-                    .width(120.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                val (icon, contentDescription) = when (state.kind) {
-                    ReaderEdgeAdjustKind.Brightness ->
-                        Icons.Rounded.BrightnessHigh to stringResource(R.string.reader_edge_hud_brightness)
-                    ReaderEdgeAdjustKind.Volume ->
-                        Icons.AutoMirrored.Rounded.VolumeUp to stringResource(R.string.reader_edge_hud_volume)
-                }
-                Icon(
-                    imageVector = icon,
-                    contentDescription = contentDescription,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(32.dp),
-                )
-                Spacer(Modifier.height(12.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(level)
-                            .fillMaxHeight()
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(MaterialTheme.colorScheme.primary),
+        // Soft radial scrim (no box) so the icon/bar stay legible on any reader background.
+        // surface is the inverse luminance of the onSurface-tinted icon, so it contrasts on
+        // both light and dark themes and fades to nothing when not needed.
+        val scrim = MaterialTheme.colorScheme.surface
+        Column(
+            modifier = Modifier
+                .drawBehind {
+                    drawRect(
+                        brush = Brush.radialGradient(
+                            colors = listOf(scrim.copy(alpha = 0.5f), Color.Transparent),
+                            center = Offset(size.width / 2f, size.height / 2f),
+                            radius = size.width * 0.7f,
+                        ),
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "${(level * 100f).roundToInt()}%",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .width(120.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            val (icon, contentDescription) = when (state.kind) {
+                ReaderEdgeAdjustKind.Brightness ->
+                    Icons.Rounded.BrightnessHigh to stringResource(R.string.reader_edge_hud_brightness)
+                ReaderEdgeAdjustKind.Volume ->
+                    Icons.AutoMirrored.Rounded.VolumeUp to stringResource(R.string.reader_edge_hud_volume)
+            }
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(32.dp),
+            )
+            Spacer(Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(level)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(MaterialTheme.colorScheme.primary),
                 )
             }
         }
