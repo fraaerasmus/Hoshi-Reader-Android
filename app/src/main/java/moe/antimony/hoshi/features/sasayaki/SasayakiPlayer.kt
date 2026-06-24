@@ -117,4 +117,8 @@ class SasayakiPlayer internal constructor(
     fun release() {
         controller.release()
     }
+
+    fun redisplayCue() {
+        controller.redisplayCue()
+    }
 }

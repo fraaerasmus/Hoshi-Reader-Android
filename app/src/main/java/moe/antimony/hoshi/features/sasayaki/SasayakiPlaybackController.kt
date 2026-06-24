@@ -40,6 +40,7 @@ internal interface SasayakiPlaybackControllerContract {
     fun playCue(cue: SasayakiMatch, stop: Boolean)
     fun exportCueAudio(cue: SasayakiMatch, sentence: String): File?
     fun release()
+    fun redisplayCue()
 }
 
 internal class SasayakiPlaybackController(
@@ -325,6 +326,10 @@ internal class SasayakiPlaybackController(
 
     override fun release() {
         teardownPlayer(clearCue = true)
+    }
+
+    override fun redisplayCue() {
+        updateCue(currentTime, forceDisplay = true)
     }
 
     private fun startPlayback() {

@@ -95,7 +95,10 @@ class Media3SasayakiPlaybackEngine private constructor(
             onSeekComplete: () -> Unit,
             onError: (PlaybackException) -> Unit,
         ): Media3SasayakiPlaybackEngine {
-            val player = ExoPlayer.Builder(context.applicationContext).build()
+            val player = ExoPlayer.Builder(context.applicationContext)
+                .setWakeMode(C.WAKE_MODE_LOCAL)
+                .setHandleAudioBecomingNoisy(true)
+                .build()
             val engine = Media3SasayakiPlaybackEngine(player, onSeekComplete)
             player.apply {
                 setAudioAttributes(audioAttributes(), true)
