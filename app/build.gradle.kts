@@ -97,6 +97,14 @@ android {
             // non-debuggable so ART applies normal JIT/AOT optimization (debuggable apps
             // run de-optimized). BuildConfig.DEBUG is unused, so this changes no behavior.
             isDebuggable = false
+            // Shrink the sideload like a release build (proguard-rules.pro keeps the
+            // JNI/uniffi/JNA/WebView-bridge seams). Experimental — test key flows.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "Hoshi Custom"
             buildConfigField(
