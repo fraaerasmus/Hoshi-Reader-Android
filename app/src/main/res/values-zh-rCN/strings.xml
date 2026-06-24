@@ -237,6 +237,9 @@
     <string name="reader_behavior_volume_keys_turn_pages">音量键翻页</string>
     <string name="reader_behavior_volume_keys_seek_sasayaki">音量键跳转有声书</string>
     <string name="reader_behavior_reverse_volume_key_direction">反转音量键方向</string>
+    <string name="reader_behavior_edge_swipe_controls">边缘滑动调节亮度和音量</string>
+    <string name="reader_edge_hud_brightness">亮度</string>
+    <string name="reader_edge_hud_volume">音量</string>
     <string name="reader_behavior_keep_screen_on">保持屏幕常亮</string>
     <string name="reader_behavior_lock_current_orientation">锁定当前屏幕方向</string>
     <string name="reader_behavior_open_last_read_book_on_launch">启动时打开最近阅读</string>
