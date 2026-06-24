@@ -93,6 +93,10 @@ android {
 
     buildTypes {
         debug {
+            // Sideload build: keep debug signing + the ".debug" identity, but ship it
+            // non-debuggable so ART applies normal JIT/AOT optimization (debuggable apps
+            // run de-optimized). BuildConfig.DEBUG is unused, so this changes no behavior.
+            isDebuggable = false
             applicationIdSuffix = ".debug"
             manifestPlaceholders["appLabel"] = "Hoshi Custom"
             buildConfigField(
