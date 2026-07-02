@@ -28,23 +28,25 @@ class SasayakiPlaybackLifecycleController(
     private val tickScheduler: SasayakiTickScheduler,
 ) {
     private var engine: SasayakiPlaybackEngine? = null
+    val hasEngine: Boolean
+        get() = engine != null
 
     fun attachEngine(engine: SasayakiPlaybackEngine) {
         this.engine = engine
     }
 
-    fun setRateIfPlaying(rate: Float) {
-        if (playbackState.isPlaying) {
-            engine?.setRate(rate)
-        }
+    fun setRate(rate: Float) {
+        engine?.setRate(rate)
     }
 
     fun start(
         rate: Float,
+        beforeStart: () -> Unit,
         markPlayedOnce: () -> Unit,
         afterMarkedPlaying: () -> Unit,
     ): Boolean {
         val engine = engine ?: return false
+        beforeStart()
         engine.start(rate)
         markPlayedOnce()
         playbackState.markPlaying()
@@ -55,13 +57,11 @@ class SasayakiPlaybackLifecycleController(
 
     fun pause(
         restoreTemporaryPosition: Boolean,
-        updateMediaSession: () -> Unit,
         restoreTemporaryPositionIfNeeded: () -> Unit,
     ) {
         engine?.pause()
         playbackState.markPaused()
         stopTicking()
-        updateMediaSession()
         if (restoreTemporaryPosition) {
             restoreTemporaryPositionIfNeeded()
         }
@@ -93,10 +93,39 @@ class SasayakiPlaybackLifecycleController(
         return true
     }
 
-    fun markCompleted(updateMediaSession: () -> Unit) {
+    fun markCompleted() {
         playbackState.markCompleted()
         stopTicking()
-        updateMediaSession()
+    }
+
+    fun syncPlayerPlaybackActive(
+        active: Boolean,
+        markPlayedOnce: () -> Unit,
+        afterMarkedPlaying: () -> Unit,
+        restoreTemporaryPositionIfNeeded: () -> Unit,
+    ) {
+        if (active) {
+            if (!playbackState.isPlaying) {
+                markPlayedOnce()
+                playbackState.markPlaying()
+                afterMarkedPlaying()
+            }
+            restartTicking()
+            return
+        }
+
+        if (!playbackState.isPlaying) return
+        playbackState.markPaused()
+        stopTicking()
+        restoreTemporaryPositionIfNeeded()
+    }
+
+    fun syncPlayerPosition(currentPositionMs: Int, durationMs: Int): Boolean {
+        if (playbackState.hasPendingSeek) return false
+        return playbackState.updatePlayerPosition(
+            currentPositionMs = currentPositionMs,
+            durationMs = durationMs,
+        )
     }
 
     fun updateTick(): SasayakiPlaybackTickUpdate? {

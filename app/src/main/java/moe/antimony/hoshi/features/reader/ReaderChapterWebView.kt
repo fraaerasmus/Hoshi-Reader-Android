@@ -100,6 +100,7 @@ internal fun ChapterWebView(
     onEdgeBrightnessDrag: (Float) -> Unit,
     onEdgeVolumeDrag: (Float) -> Unit,
     onEdgeDragEnd: () -> Unit,
+    onBeforeRestoreVisible: (WebView) -> ReaderRestoreBeforeVisibleAction? = { null },
     modifier: Modifier = Modifier,
 ) {
     val currentOnTextSelected = rememberUpdatedState(onTextSelected)
@@ -124,6 +125,7 @@ internal fun ChapterWebView(
     val currentOnEdgeBrightnessDrag = rememberUpdatedState(onEdgeBrightnessDrag)
     val currentOnEdgeVolumeDrag = rememberUpdatedState(onEdgeVolumeDrag)
     val currentOnEdgeDragEnd = rememberUpdatedState(onEdgeDragEnd)
+    val currentOnBeforeRestoreVisible = rememberUpdatedState(onBeforeRestoreVisible)
     val context = LocalContext.current
     val readerWebAssets = remember(context) { ReaderWebAssets.load(context) }
     val viewportDensity = context.resources.displayMetrics.density.coerceAtLeast(1f)
@@ -219,7 +221,7 @@ internal fun ChapterWebView(
             assets = readerWebAssets,
         )
     }
-    val currentOnRestoreAccepted = rememberUpdatedState<(WebView, String) -> (() -> Unit)?> { restoredWebView, reportedRestoreToken ->
+    val currentOnRestoreAccepted = rememberUpdatedState<(WebView, String) -> ReaderRestoreCompletionAction?> { restoredWebView, reportedRestoreToken ->
         if (reportedRestoreToken != restoreToken) return@rememberUpdatedState null
         readerRestoreCompletionAfterVisibleAction(
             chapterFragment = chapterFragment,
@@ -228,6 +230,7 @@ internal fun ChapterWebView(
             },
             onSaveProgress = currentOnSaveBookmark.value,
             onRestoreCompleted = currentOnRestoreCompleted.value,
+            beforeVisible = currentOnBeforeRestoreVisible.value(restoredWebView),
         )
     }
     LaunchedEffect(readerWebView, restoreToken, chapterSasayakiCuesJson, isWebViewRestoring) {
@@ -499,16 +502,29 @@ internal fun readerRestoreCompletionAfterVisibleAction(
     evaluateProgress: (((String?) -> Unit) -> Unit),
     onSaveProgress: (Double) -> Unit,
     onRestoreCompleted: () -> Unit,
-): () -> Unit = {
-    if (chapterFragment != null) {
-        evaluateProgress { progressResult ->
-            ReaderPaginationScripts.doubleResult(progressResult)?.let(onSaveProgress)
+    beforeVisible: ReaderRestoreBeforeVisibleAction? = null,
+): ReaderRestoreCompletionAction = { show ->
+    fun completeAfterVisible() {
+        if (chapterFragment != null) {
+            evaluateProgress { progressResult ->
+                ReaderPaginationScripts.doubleResult(progressResult)?.let(onSaveProgress)
+                onRestoreCompleted()
+            }
+        } else {
             onRestoreCompleted()
         }
-    } else {
-        onRestoreCompleted()
+    }
+
+    if (beforeVisible != null) {
+        beforeVisible(show, ::completeAfterVisible)
+    } else if (show()) {
+        completeAfterVisible()
     }
 }
+
+internal typealias ReaderRestoreShowAction = () -> Boolean
+internal typealias ReaderRestoreCompletionAction = (ReaderRestoreShowAction) -> Unit
+internal typealias ReaderRestoreBeforeVisibleAction = (ReaderRestoreShowAction, () -> Unit) -> Unit
 
 internal data class ReaderWebViewSetupReloadKey(
     val initialProgress: Double,
@@ -586,8 +602,7 @@ private val readerHeadOpenTagRegex = Regex("""(?is)<head\b[^>]*>""")
 internal fun readerShouldReserveSasayakiTopToggle(bookRoot: File?, settings: SasayakiSettings): Boolean =
     settings.enabled &&
         settings.showReaderToggle &&
-        bookRoot?.resolve(ReaderSasayakiMatchFileName)?.isFile == true &&
-        bookRoot.resolve(ReaderSasayakiPlaybackFileName).isFile
+        bookRoot?.resolve(ReaderSasayakiPlaybackFileName)?.isFile == true
 
 internal fun readerSelectionMaxLength(settings: DictionarySettings): Int =
     settings.normalized().scanLength
@@ -914,6 +929,7 @@ private fun readerSetupScript(
 
 internal data class ReaderViewportCssLayout(
     val pageHeightPx: Int,
+    val visibleHeightPx: Int,
     val pageWidthPx: Int,
     val verticalPaddingBlockPx: Double,
     val verticalPaddingGapPx: Double,
@@ -924,6 +940,7 @@ internal data class ReaderViewportCssLayout(
         """
         :root {
             --page-height: ${pageHeightPx}px;
+            --hoshi-reader-visible-height: ${visibleHeightPx}px;
             --page-width: ${pageWidthPx}px;
             --hoshi-vertical-padding-block: ${verticalPaddingBlockPx.cssNumber()}px;
             --hoshi-vertical-padding-gap: ${verticalPaddingGapPx.cssNumber()}px;
@@ -948,6 +965,7 @@ internal fun readerViewportCssLayout(
     )
     return ReaderViewportCssLayout(
         pageHeightPx = pageHeight,
+        visibleHeightPx = height,
         pageWidthPx = width,
         verticalPaddingBlockPx = height * (settings.verticalPadding / 200.0),
         verticalPaddingGapPx = height * (settings.verticalPadding / 100.0),
@@ -1297,13 +1315,13 @@ internal class ReaderContinuousScrollFocusTracker {
 
 private class ReaderRestoreBridge(
     private val webView: WebView,
-    private val onRestoreAccepted: (WebView, String) -> (() -> Unit)?,
+    private val onRestoreAccepted: (WebView, String) -> ReaderRestoreCompletionAction?,
 ) {
     @JavascriptInterface
     fun postMessage(message: String) {
         webView.post {
-            val afterVisible = onRestoreAccepted(webView, message) ?: return@post
-            webView.showAfterReaderRestore(afterVisible)
+            val restoreCompletion = onRestoreAccepted(webView, message) ?: return@post
+            webView.showAfterReaderRestore(restoreCompletion)
         }
     }
 }
@@ -1326,7 +1344,7 @@ private fun WebView.hideForReaderRestore() {
     alpha = 0f
 }
 
-private fun WebView.showAfterReaderRestore(onVisible: () -> Unit) {
+private fun WebView.showAfterReaderRestore(restoreCompletion: ReaderRestoreCompletionAction) {
     animate().cancel()
     val generation = readerRestoreGenerations[this] ?: 0L
     postVisualStateCallback(
@@ -1335,9 +1353,15 @@ private fun WebView.showAfterReaderRestore(onVisible: () -> Unit) {
             override fun onComplete(requestId: Long) {
                 post {
                     if (readerRestoreGenerations[this@showAfterReaderRestore] == generation) {
-                        animate().cancel()
-                        alpha = 1f
-                        onVisible()
+                        restoreCompletion {
+                            if (readerRestoreGenerations[this@showAfterReaderRestore] == generation) {
+                                animate().cancel()
+                                alpha = 1f
+                                true
+                            } else {
+                                false
+                            }
+                        }
                     }
                 }
             }

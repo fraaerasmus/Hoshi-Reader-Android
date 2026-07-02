@@ -28,7 +28,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
-import moe.antimony.hoshi.features.sasayaki.SasayakiMiniPlayer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -46,6 +45,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
+import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ArrowDownward
@@ -155,18 +155,12 @@ import moe.antimony.hoshi.ui.theme.LocalHoshiEInkMode
 import java.io.File
 import kotlin.math.max
 
-data class SasayakiMatchRequest(
-    val bookId: String,
-    val bookEntry: BookEntry,
-)
-
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun BookshelfView(
     pendingImportUri: Uri? = null,
     onPendingImportConsumed: () -> Unit = {},
     onOpenReader: (String) -> Unit,
-    onOpenSasayakiMatch: (SasayakiMatchRequest) -> Unit,
     refreshKey: Int = 0,
     layoutSpec: MainShellLayoutSpec,
     modifier: Modifier = Modifier,
@@ -262,10 +256,6 @@ fun BookshelfView(
         booksViewModel.rebuildLookupQuery()
     }
 
-    LaunchedEffect(sasayakiSettings.enabled) {
-        booksViewModel.setSasayakiEnabled(sasayakiSettings.enabled)
-    }
-
     LaunchedEffect(pendingImportUri) {
         val uri = pendingImportUri ?: return@LaunchedEffect
         onPendingImportConsumed()
@@ -340,10 +330,6 @@ fun BookshelfView(
         onMoveBook = booksViewModel::moveBook,
         profileState = profileState,
         onSetBookProfile = booksViewModel::setBookProfile,
-        sasayakiEnabled = uiState.sasayakiEnabled,
-        onMatchSasayaki = { entry ->
-            onOpenSasayakiMatch(SasayakiMatchRequest(entry.metadata.id, entry))
-        },
         syncSettings = syncSettings,
         driveAuthStatus = driveAuthStatus,
         onSyncBook = { entry, direction ->
@@ -533,7 +519,7 @@ fun BookshelfView(
 internal fun HoshiMainShell(
     selectedTab: MainTab,
     onSelectedTabChange: (MainTab) -> Unit,
-    onOpenReader: (String) -> Unit,
+    visibleTabs: List<MainTab> = MainTab.entries,
     modifier: Modifier = Modifier,
     content: @Composable (Modifier, MainShellLayoutSpec) -> Unit,
 ) {
@@ -546,14 +532,12 @@ internal fun HoshiMainShell(
                 contentColor = MaterialTheme.colorScheme.onBackground,
                 contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                 bottomBar = {
-                    Column {
-                        SasayakiMiniPlayer(onOpenReader = onOpenReader)
-                        HoshiCompactBottomNavigation(
-                            selectedTab = selectedTab,
-                            onSelectedTabChange = onSelectedTabChange,
-                            layoutSpec = layoutSpec,
-                        )
-                    }
+                    HoshiCompactBottomNavigation(
+                        selectedTab = selectedTab,
+                        onSelectedTabChange = onSelectedTabChange,
+                        visibleTabs = visibleTabs,
+                        layoutSpec = layoutSpec,
+                    )
                 },
             ) { innerPadding ->
                 Box(Modifier.fillMaxSize()) {
@@ -576,7 +560,7 @@ internal fun HoshiMainShell(
                 modifier = Modifier.fillMaxSize(),
                 layoutType = layoutSpec.toNavigationSuiteType(),
                 navigationSuiteItems = {
-                    MainTab.entries.forEach { tab ->
+                    visibleTabs.forEach { tab ->
                         item(
                             selected = tab == selectedTab,
                             onClick = { onSelectedTabChange(tab) },
@@ -588,12 +572,10 @@ internal fun HoshiMainShell(
                 containerColor = MaterialTheme.colorScheme.background,
                 contentColor = MaterialTheme.colorScheme.onBackground,
             ) {
-                Column(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight(1f).fillMaxWidth()) {
-                        content(Modifier.fillMaxSize(), layoutSpec)
-                    }
-                    SasayakiMiniPlayer(onOpenReader = onOpenReader)
-                }
+                content(
+                    Modifier.fillMaxSize(),
+                    layoutSpec,
+                )
             }
         }
     }
@@ -606,6 +588,7 @@ internal const val ShelfManagementShelfListTag = "shelf-management-shelf-list"
 private fun HoshiCompactBottomNavigation(
     selectedTab: MainTab,
     onSelectedTabChange: (MainTab) -> Unit,
+    visibleTabs: List<MainTab>,
     layoutSpec: MainShellLayoutSpec,
 ) {
     val containerColor = MaterialTheme.colorScheme.background
@@ -627,7 +610,7 @@ private fun HoshiCompactBottomNavigation(
                 tonalElevation = 0.dp,
                 windowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
             ) {
-                MainTab.entries.forEach { tab ->
+                visibleTabs.forEach { tab ->
                     NavigationBarItem(
                         selected = tab == selectedTab,
                         onClick = { onSelectedTabChange(tab) },
@@ -863,8 +846,6 @@ private fun BooksTab(
     onMoveBook: (BookEntry, String?) -> Unit,
     profileState: ProfileState,
     onSetBookProfile: (BookEntry, String?) -> Unit,
-    sasayakiEnabled: Boolean,
-    onMatchSasayaki: (BookEntry) -> Unit,
     syncSettings: SyncSettings,
     driveAuthStatus: DriveAuthStatus?,
     onSyncBook: (BookEntry, SyncDirection?) -> Unit,
@@ -1031,10 +1012,8 @@ private fun BooksTab(
                                             currentShelfName = section.shelfName,
                                             hideMove = section.isReading,
                                             expanded = isBookContextMenuExpanded(contextMenuTarget, section, entry),
-                                            sasayakiEnabled = sasayakiEnabled,
                                             onDismiss = { onContextMenuTargetChange(null) },
                                             onMoveBook = onMoveBook,
-                                            onMatchSasayaki = onMatchSasayaki,
                                             onMarkReadCandidate = onMarkReadCandidate,
                                             onRenameCandidate = onRenameCandidate,
                                             onDeleteCandidate = onDeleteCandidate,
@@ -1530,7 +1509,7 @@ private fun BookCoverCard(
     }
 }
 
-private object BookCoverBitmapCache {
+internal object BookCoverBitmapCache {
     private const val MaxCoverDimensionPx = 768
     private val cache = object : LruCache<String, Bitmap>(24 * 1024 * 1024) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
@@ -1588,7 +1567,7 @@ internal fun coverThumbnailSize(width: Int, height: Int, maxDimensionPx: Int): C
     )
 }
 
-private fun decodeSampledCoverBitmap(file: File, maxDimensionPx: Int): Bitmap? {
+internal fun decodeSampledCoverBitmap(file: File, maxDimensionPx: Int): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.absolutePath, bounds)
     val options = BitmapFactory.Options().apply {
@@ -1654,10 +1633,8 @@ private fun BookContextMenu(
     currentShelfName: String?,
     hideMove: Boolean,
     expanded: Boolean,
-    sasayakiEnabled: Boolean,
     onDismiss: () -> Unit,
     onMoveBook: (BookEntry, String?) -> Unit,
-    onMatchSasayaki: (BookEntry) -> Unit,
     onMarkReadCandidate: (BookEntry) -> Unit,
     onRenameCandidate: (BookEntry) -> Unit,
     onDeleteCandidate: (BookEntry) -> Unit,
@@ -1730,15 +1707,6 @@ private fun BookContextMenu(
             onClick = { profileMenuExpanded = true },
         )
         HorizontalDivider()
-        if (sasayakiEnabled) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.bookshelf_match_sasayaki)) },
-                onClick = {
-                    onMatchSasayaki(entry)
-                    onDismiss()
-                },
-            )
-        }
         DropdownMenuItem(
             text = { Text(stringResource(R.string.action_rename)) },
             onClick = {
@@ -2324,6 +2292,7 @@ private fun BottomTabGlyph(tab: MainTab, modifier: Modifier = Modifier) {
     val icon = when (tab) {
         MainTab.Books -> Icons.AutoMirrored.Rounded.MenuBook
         MainTab.Dictionary -> Icons.Rounded.Translate
+        MainTab.Statistics -> Icons.AutoMirrored.Rounded.ShowChart
         MainTab.Settings -> Icons.Rounded.Settings
     }
     Icon(

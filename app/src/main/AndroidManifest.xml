@@ -55,7 +55,6 @@
                 <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
             </intent-filter>
         </receiver>
-
         <service
             android:name=".features.sasayaki.SasayakiPlaybackService"
             android:exported="true"
@@ -92,6 +91,7 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <data android:mimeType="application/epub+zip" />
+                <data android:mimeType="application/epub" />
                 <data android:scheme="content" />
                 <data android:scheme="file" />
             </intent-filter>

@@ -16,10 +16,10 @@ class AppRouteTest {
             "MainRoute",
             "BooksRoute",
             "DictionaryRoute",
+            "StatisticsRoute",
             "SettingsRoute",
             "SettingsDetailRoute",
             "ReaderRoute",
-            "SasayakiMatchRoute",
         )
 
         assertTrue(navKeyClass.isAssignableFrom(routeClass))
@@ -34,7 +34,16 @@ class AppRouteTest {
     @Test
     fun readerRoutesCarryOnlyStableBookIds() {
         assertRouteConstructor("ReaderRoute", String::class.java)
-        assertRouteConstructor("SasayakiMatchRoute", String::class.java)
+    }
+
+    @Test
+    fun legacySasayakiMatchRouteIsRemoved() {
+        assertEquals(
+            false,
+            runCatching {
+                Class.forName("moe.antimony.hoshi.navigation.AppRoute\$SasayakiMatchRoute")
+            }.isSuccess,
+        )
     }
 
     @Test

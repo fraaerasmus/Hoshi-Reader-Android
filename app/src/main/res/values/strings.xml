@@ -46,7 +46,87 @@
     <string name="import_select_font">Select a .ttf, .otf, .woff, or .woff2 font file.</string>
     <string name="main_tab_books" comment="Main navigation tab label, intentionally matching the backup Books section.">Books</string>
     <string name="main_tab_dictionary">Dictionary</string>
+    <string name="main_tab_statistics" comment="Main navigation tab label, intentionally matching statistics page titles.">Statistics</string>
     <string name="main_tab_settings" comment="Main navigation tab label, intentionally matching settings page titles.">Settings</string>
+    <string name="statistics_title" comment="Statistics page title, intentionally matching the main tab label.">Statistics</string>
+    <string name="statistics_today" comment="Statistics dashboard section title, intentionally matching reader statistics today label.">Today</string>
+    <string name="statistics_this_week">This Week</string>
+    <string name="statistics_target_format">Goal: %1$s</string>
+    <string name="statistics_reading_duration" comment="Dashboard metric label, intentionally matching the duration legend and target type label.">Duration</string>
+    <string name="statistics_characters_read" comment="Dashboard metric label, intentionally matching the characters legend and target type label.">Characters</string>
+    <string name="statistics_average_speed" comment="Dashboard metric label, intentionally matching the Sasayaki speed setting noun.">Speed</string>
+    <string name="statistics_streak">Streak</string>
+    <string name="statistics_target_days">Days Met</string>
+    <string name="statistics_daily_average_characters">Avg Characters</string>
+    <string name="statistics_daily_average_duration">Avg Duration</string>
+    <string name="statistics_week_goal_days" comment="Weekly dashboard section label, intentionally matching the current-range goal progress metric.">Goal Progress</string>
+    <string name="statistics_week_status_format">%1$d/7 days</string>
+    <string name="statistics_reading_calendar">Calendar</string>
+    <string name="statistics_recent_year">Recent year</string>
+    <string name="statistics_range_year">Year</string>
+    <string name="statistics_range_month">Month</string>
+    <string name="statistics_range_week">Week</string>
+    <string name="statistics_range_day">Day</string>
+    <string name="statistics_selected_range_format">Selected: %1$s</string>
+    <string name="statistics_current_range">Selected Range</string>
+    <string name="statistics_tab_overview">Overview</string>
+    <string name="statistics_tab_trend">Trend</string>
+    <string name="statistics_tab_distribution">By Book</string>
+    <string name="statistics_target_progress" comment="Current-range metric label, intentionally matching the weekly dashboard goal progress label.">Goal Progress</string>
+    <string name="statistics_monthly_trend">Monthly Trend</string>
+    <string name="statistics_daily_trend">Daily Trend</string>
+    <string name="statistics_duration" comment="Trend legend label, intentionally matching duration target type label.">Duration</string>
+    <string name="statistics_characters" comment="Trend legend label, intentionally matching characters target type label.">Characters</string>
+    <string name="statistics_daily_target">Daily Goal</string>
+    <string name="statistics_current_target">Current Goal</string>
+    <string name="statistics_weekly_target">Weekly Goal</string>
+    <string name="statistics_week_status">Reading Days</string>
+    <string name="statistics_target_type_characters" comment="Daily target type option, intentionally matching statistics characters legend label.">Characters</string>
+    <string name="statistics_target_type_duration" comment="Daily target type option, intentionally matching statistics duration legend label.">Duration</string>
+    <string name="statistics_no_reading_records">No reading records</string>
+    <string name="statistics_no_trend_data">No trend data</string>
+    <string name="statistics_partial_unavailable">Some statistics are temporarily unavailable.</string>
+    <string name="statistics_target_met">Goal met</string>
+    <string name="statistics_target_not_met">Goal not met</string>
+    <string name="statistics_calendar_heatmap_semantics">Reading calendar heatmap</string>
+    <string name="statistics_empty_goal_value">-</string>
+    <string name="statistics_trend_legend_format">%1$s / %2$s</string>
+    <string name="statistics_character_target_format" comment="Daily character target value, intentionally matching generic statistics character value format.">%1$s chars</string>
+    <string name="statistics_duration_target_format">%1$s</string>
+    <string name="statistics_characters_value_format" comment="Generic character metric value, intentionally matching daily character target value.">%1$s chars</string>
+    <string name="statistics_speed_value_format">%1$s/h</string>
+    <string name="statistics_percent_format">%1$d%%</string>
+    <string name="statistics_duration_minutes_format">%1$dm</string>
+    <string name="statistics_duration_hours_format">%1$dh</string>
+    <string name="statistics_duration_hours_minutes_format">%1$dh %2$dm</string>
+    <string name="statistics_range_fixed_year_format">%1$d</string>
+    <string name="statistics_range_month_title_format">%1$d-%2$d</string>
+    <string name="statistics_range_week_title_format">%1$d/%2$d-%3$d/%4$d</string>
+    <string name="statistics_range_day_title_format">%1$d/%2$d %3$s</string>
+    <string name="statistics_distribution_meta_format">%1$s · %2$s</string>
+    <string name="statistics_distribution_cover_placeholder">Book cover placeholder</string>
+    <string name="statistics_weekday_monday_short">M</string>
+    <string name="statistics_weekday_tuesday_short" comment="Single-letter Tuesday label, intentionally matching Thursday in English.">T</string>
+    <string name="statistics_weekday_wednesday_short">W</string>
+    <string name="statistics_weekday_thursday_short" comment="Single-letter Thursday label, intentionally matching Tuesday in English.">T</string>
+    <string name="statistics_weekday_friday_short">F</string>
+    <string name="statistics_weekday_saturday_short" comment="Single-letter Saturday label, intentionally matching Sunday in English.">S</string>
+    <string name="statistics_weekday_sunday_short" comment="Single-letter Sunday label, intentionally matching Saturday in English.">S</string>
+    <string name="statistics_weekday_monday">Mon</string>
+    <string name="statistics_weekday_tuesday">Tue</string>
+    <string name="statistics_weekday_wednesday">Wed</string>
+    <string name="statistics_weekday_thursday">Thu</string>
+    <string name="statistics_weekday_friday">Fri</string>
+    <string name="statistics_weekday_saturday">Sat</string>
+    <string name="statistics_weekday_sunday">Sun</string>
+    <plurals name="statistics_days_value">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="statistics_weeks_value">
+        <item quantity="one">%1$d week</item>
+        <item quantity="other">%1$d weeks</item>
+    </plurals>
     <string name="settings_dictionaries" comment="Settings row label, intentionally matching the backup Dictionaries section.">Dictionaries</string>
     <string name="settings_anki">Anki</string>
     <string name="settings_profiles" comment="Settings row label, intentionally matching the Profiles screen title.">Profiles</string>
@@ -106,7 +186,6 @@
     <string name="bookshelf_import_epub">Import EPUB</string>
     <string name="bookshelf_sync">Sync</string>
     <string name="bookshelf_move">Move</string>
-    <string name="bookshelf_match_sasayaki">Match Sasayaki</string>
     <string name="bookshelf_mark_read">Mark Read</string>
     <string name="bookshelf_export_epub">Export EPUB</string>
     <string name="bookshelf_reading_shelf">Reading Shelf</string>
@@ -266,7 +345,7 @@
     <string name="reader_image_copied">Image copied.</string>
     <string name="reader_image_saved">Image saved.</string>
     <string name="reader_image_save_failed">Could not save image.</string>
-    <string name="reader_chapters">Chapters</string>
+    <string name="reader_chapters" comment="Reader chapter-list label; Sasayaki intentionally reuses the same visible label for audiobook chapters.">Chapters</string>
     <string name="reader_highlights">Highlights</string>
     <string name="reader_statistics" comment="Reader menu label, intentionally matching advanced statistics.">Statistics</string>
     <string name="reader_untitled_chapter">Untitled</string>
@@ -279,7 +358,7 @@
     <string name="reader_delete_highlight">Delete highlight</string>
     <string name="reader_highlight_action">Highlight</string>
     <string name="reader_statistics_session">Session</string>
-    <string name="reader_statistics_today">Today</string>
+    <string name="reader_statistics_today" comment="Reader statistics section title, intentionally matching dashboard today label.">Today</string>
     <string name="reader_statistics_all_time">All Time</string>
     <string name="reader_statistics_time_to_finish_book">Time to finish Book:</string>
     <string name="reader_statistics_time_to_finish_chapter">Time to finish Chapter:</string>
@@ -287,11 +366,14 @@
     <string name="reader_statistics_words_read">Words Read:</string>
     <string name="reader_statistics_reading_speed">Reading Speed:</string>
     <string name="reader_statistics_reading_time">Reading Time:</string>
+    <string name="reader_statistics_show_tab">Show Statistics tab</string>
     <string name="reader_statistics_autostart">Autostart</string>
-    <string name="reader_statistics_autostart_off">Off</string>
+    <string name="reader_statistics_autostart_off" comment="Reader statistics autostart setting value; intentionally matches other off labels.">Off</string>
     <string name="reader_statistics_autostart_page_turn">Page Turn</string>
     <string name="reader_statistics_autostart_on">On</string>
     <string name="reader_statistics_sync_behaviour">Sync Behaviour</string>
+    <string name="reader_statistics_sync_mode_merge">Merge</string>
+    <string name="reader_statistics_sync_mode_replace">Replace</string>
     <string name="reader_statistics_settings_hint">Statistics can be accessed from the Reader\'s context menu.</string>
     <string name="reader_appearance_theme">Theme</string>
     <string name="reader_appearance_text">Text</string>
@@ -346,6 +428,7 @@
     <string name="reader_appearance_chapter_swipe_distance">Chapter Swipe Distance</string>
     <string name="reader_appearance_horizontal_padding">Horizontal Padding</string>
     <string name="reader_appearance_vertical_padding">Vertical Padding</string>
+    <string name="reader_appearance_bottom_safe_area">Bottom Safe Area</string>
     <string name="reader_appearance_avoid_page_break">Avoid Page Break</string>
     <string name="reader_appearance_justify_text">Justify Text</string>
     <string name="reader_appearance_blur_images">Blur Images</string>
@@ -598,7 +681,7 @@
     <string name="sasayaki_copy_audiobook_to_storage">Copy Audiobook to App Storage</string>
     <string name="sasayaki_copy_audiobook_to_storage_help">Keep a private copy instead of linking to the selected external media file</string>
     <string name="sasayaki_delay">Delay</string>
-    <string name="sasayaki_speed">Speed</string>
+    <string name="sasayaki_speed" comment="Sasayaki setting label, intentionally matching the statistics speed metric noun.">Speed</string>
     <string name="sasayaki_sleep_timer">Sleep timer</string>
     <string name="sasayaki_sleep_timer_off">Off</string>
     <string name="sasayaki_sleep_timer_minutes">%1$d min</string>
@@ -613,16 +696,29 @@
     <string name="sasayaki_light_theme">Light Theme</string>
     <string name="sasayaki_dark_theme">Dark Theme</string>
     <string name="sasayaki_auto_scroll">Auto-Scroll</string>
+    <string name="sasayaki_image_hold">Image Hold</string>
+    <string name="sasayaki_image_hold_help">Pause on illustrated pages during Sasayaki auto-scroll. Set to 0s to skip image holds.</string>
+    <string name="sasayaki_image_hold_off" comment="Sasayaki image hold slider value for zero seconds; intentionally matches other off labels.">Off</string>
+    <string name="sasayaki_seconds_decimal_format">%1$.1fs</string>
     <string name="sasayaki_auto_pause_on_lookup">Auto-Pause on Lookup</string>
     <string name="sasayaki_importing_audio">Importing audio...</string>
-    <string name="sasayaki_load_audio">Load Audio</string>
+    <string name="sasayaki_tab_resources">Resources</string>
+    <string name="sasayaki_tab_chapters" comment="Sasayaki audiobook chapter-list tab label; intentionally matches the Reader chapters label.">Chapters</string>
+    <string name="sasayaki_tab_settings" comment="Sasayaki sheet tab label, intentionally matching settings page titles.">Settings</string>
+    <string name="sasayaki_audiobook_resource">Audiobook</string>
+    <string name="sasayaki_audiobook_cover">Audiobook cover</string>
     <string name="sasayaki_remove_audio">Remove</string>
     <string name="sasayaki_storage_copied">Copied to app storage. The original audiobook file can be deleted.</string>
     <string name="sasayaki_storage_linked">Linked to the external audiobook file. Keep the original file available.</string>
     <string name="sasayaki_storage_select_audio">Select an .mp3 or .m4b audiobook</string>
+    <string name="sasayaki_subtitle_match">Subtitle Match</string>
+    <string name="sasayaki_no_subtitle_match">No match</string>
+    <string name="sasayaki_no_chapters">No chapters found in this audiobook.</string>
+    <string name="sasayaki_unknown_chapter">Chapter</string>
+    <string name="sasayaki_current_chapter">Current chapter</string>
     <string name="sasayaki_skip_cue">1 sentence</string>
     <string name="sasayaki_skip_seconds_format">%1$d seconds</string>
-    <string name="sasayaki_settings_description">Sasayaki syncs an audiobook with reader text. Long press a book and choose Match Sasayaki, select the matching .srt file, then open the reader and load an .mp3 or .m4b audiobook.</string>
+    <string name="sasayaki_settings_description">Open the Reader Sasayaki menu to load an .mp3 or .m4b audiobook. Subtitle matching is available from the Resources tab when you have a matching .srt file.</string>
     <string name="sasayaki_select_srt_file">Select an .srt subtitle file.</string>
     <string name="sasayaki_selected_srt">Selected SRT</string>
     <string name="sasayaki_open_srt_failed">Unable to open selected SRT.</string>
@@ -632,6 +728,4 @@
     <string name="sasayaki_no_file_selected">No file selected</string>
     <string name="sasayaki_search_window">Search Window</string>
     <string name="sasayaki_matching">Matching...</string>
-    <string name="sasayaki_current_match">Current Match</string>
-    <string name="sasayaki_match_rate">Match Rate</string>
 </resources>

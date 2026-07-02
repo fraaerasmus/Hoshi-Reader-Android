@@ -6,8 +6,10 @@ import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -17,9 +19,14 @@ class SasayakiPlaybackPersistenceState(
     private val audioSourceRepository: SasayakiAudioRepository,
     initialPlayback: SasayakiPlaybackData?,
     private val persistenceScope: CoroutineScope,
+    private val persistenceDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     var playback by mutableStateOf(initialPlayback ?: SasayakiPlaybackData(lastPosition = 0.0))
         private set
+
+    private val saveLock = Any()
+    private var pendingSave: SasayakiPlaybackData? = null
+    private var saveWorkerRunning = false
 
     val delay: Double get() = playback.delay
     val rate: Float get() = playback.rate
@@ -56,11 +63,50 @@ class SasayakiPlaybackPersistenceState(
     }
 
     private fun save() {
-        val snapshot = playback
-        persistenceScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            withContext(NonCancellable) {
-                playbackRepository.save(snapshot)
+        var shouldStartWorker = false
+        synchronized(saveLock) {
+            pendingSave = playback
+            if (!saveWorkerRunning) {
+                saveWorkerRunning = true
+                shouldStartWorker = true
             }
+        }
+        if (shouldStartWorker) {
+            persistenceScope.launch(start = CoroutineStart.UNDISPATCHED) {
+                drainSaves()
+            }
+        }
+    }
+
+    private suspend fun drainSaves() {
+        try {
+            while (true) {
+                val snapshot = synchronized(saveLock) {
+                    pendingSave.also {
+                        pendingSave = null
+                    }
+                }
+                if (snapshot == null) {
+                    val shouldContinue = synchronized(saveLock) {
+                        if (pendingSave == null) {
+                            saveWorkerRunning = false
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                    if (!shouldContinue) return
+                    continue
+                }
+                withContext(NonCancellable + persistenceDispatcher) {
+                    playbackRepository.save(snapshot)
+                }
+            }
+        } catch (error: Throwable) {
+            synchronized(saveLock) {
+                saveWorkerRunning = false
+            }
+            throw error
         }
     }
 }

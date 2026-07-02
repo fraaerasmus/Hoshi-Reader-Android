@@ -35,6 +35,20 @@ class AppRouteBackStackTest {
     }
 
     @Test
+    fun removingReaderRoutesKeepsStatisticsTopLevelRoute() {
+        val backStack = mutableListOf<NavKey>(
+            AppRoute.StatisticsRoute,
+            AppRoute.ReaderRoute("book-a"),
+        )
+        var readerRouteRemoved = false
+
+        backStack.removeReaderRoutes(onReaderRouteRemoved = { readerRouteRemoved = true })
+
+        assertEquals(listOf(AppRoute.StatisticsRoute), backStack)
+        assertEquals(true, readerRouteRemoved)
+    }
+
+    @Test
     fun backPopClearsReaderProfileWhenReaderRouteIsRemoved() {
         val backStack = mutableListOf<NavKey>(
             AppRoute.BooksRoute,
@@ -55,7 +69,19 @@ class AppRouteBackStackTest {
             AppRoute.ReaderRoute("book-a"),
         )
 
-        backStack.returnFromMediaSession()
+        backStack.returnFromMediaSession("book-a")
+
+        assertEquals(
+            listOf(AppRoute.BooksRoute, AppRoute.ReaderRoute("book-a")),
+            backStack,
+        )
+    }
+
+    @Test
+    fun mediaSessionReturnOpensActiveBookReaderFromBookshelf() {
+        val backStack = mutableListOf<NavKey>(AppRoute.BooksRoute)
+
+        backStack.returnFromMediaSession("book-a")
 
         assertEquals(
             listOf(AppRoute.BooksRoute, AppRoute.ReaderRoute("book-a")),

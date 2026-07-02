@@ -2,6 +2,7 @@ package moe.antimony.hoshi.features.sasayaki
 
 import android.content.Context
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.toArgb
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
+import kotlin.math.roundToInt
 import kotlinx.serialization.json.JsonObject
 import moe.antimony.hoshi.features.backup.PreferencesBackup
 
@@ -43,6 +45,7 @@ data class SasayakiSettings(
     val copyAudiobookToPrivateStorage: Boolean = false,
     val autoScroll: Boolean = true,
     val autoPause: Boolean = true,
+    val imageHoldSeconds: Float = SasayakiImageHoldDefaultSeconds,
     val lightTextColor: Long = 0xFF000000,
     val lightBackgroundColor: Long = 0x6687CEEB,
     val darkTextColor: Long = 0xFFFFFFFF,
@@ -54,6 +57,20 @@ data class SasayakiSettings(
     fun backgroundColor(dark: Boolean): Long =
         if (dark) darkBackgroundColor else lightBackgroundColor
 }
+
+const val SasayakiImageHoldDefaultSeconds = 1f
+const val SasayakiImageHoldMinSeconds = 0f
+const val SasayakiImageHoldMaxSeconds = 5f
+const val SasayakiImageHoldStepSeconds = 0.5f
+const val SasayakiImageHoldSliderSteps = 9
+
+fun normalizeSasayakiImageHoldSeconds(value: Float): Float {
+    val bounded = value.coerceIn(SasayakiImageHoldMinSeconds, SasayakiImageHoldMaxSeconds)
+    return (bounded / SasayakiImageHoldStepSeconds).roundToInt() * SasayakiImageHoldStepSeconds
+}
+
+fun sasayakiImageHoldMillis(seconds: Float): Long =
+    (normalizeSasayakiImageHoldSeconds(seconds) * 1_000f).roundToInt().toLong()
 
 interface SasayakiSettingsLegacySource {
     fun load(): SasayakiSettings
@@ -75,6 +92,9 @@ class SasayakiSettingsStore(context: Context) : SasayakiSettingsLegacySource {
             copyAudiobookToPrivateStorage = preferences.getBoolean(KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE, false),
             autoScroll = preferences.getBoolean(KEY_AUTO_SCROLL, true),
             autoPause = preferences.getBoolean(KEY_AUTO_PAUSE, true),
+            imageHoldSeconds = normalizeSasayakiImageHoldSeconds(
+                preferences.getFloat(KEY_IMAGE_HOLD_SECONDS, SasayakiImageHoldDefaultSeconds),
+            ),
             lightTextColor = preferences.getLong(KEY_LIGHT_TEXT_COLOR, 0xFF000000),
             lightBackgroundColor = preferences.getLong(KEY_LIGHT_BACKGROUND_COLOR, 0x6687CEEB),
             darkTextColor = preferences.getLong(KEY_DARK_TEXT_COLOR, 0xFFFFFFFF),
@@ -92,6 +112,7 @@ class SasayakiSettingsStore(context: Context) : SasayakiSettingsLegacySource {
             .putBoolean(KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE, settings.copyAudiobookToPrivateStorage)
             .putBoolean(KEY_AUTO_SCROLL, settings.autoScroll)
             .putBoolean(KEY_AUTO_PAUSE, settings.autoPause)
+            .putFloat(KEY_IMAGE_HOLD_SECONDS, normalizeSasayakiImageHoldSeconds(settings.imageHoldSeconds))
             .putLong(KEY_LIGHT_TEXT_COLOR, settings.lightTextColor)
             .putLong(KEY_LIGHT_BACKGROUND_COLOR, settings.lightBackgroundColor)
             .putLong(KEY_DARK_TEXT_COLOR, settings.darkTextColor)
@@ -109,6 +130,7 @@ class SasayakiSettingsStore(context: Context) : SasayakiSettingsLegacySource {
         const val KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE = "sasayakiCopyAudiobookToPrivateStorage"
         const val KEY_AUTO_SCROLL = "sasayakiAutoScroll"
         const val KEY_AUTO_PAUSE = "sasayakiAutoPause"
+        const val KEY_IMAGE_HOLD_SECONDS = "sasayakiImageHoldSeconds"
         const val KEY_LIGHT_TEXT_COLOR = "sasayakiTextColor"
         const val KEY_LIGHT_BACKGROUND_COLOR = "sasayakiBackgroundColor"
         const val KEY_DARK_TEXT_COLOR = "sasayakiDarkTextColor"
@@ -166,6 +188,9 @@ class SasayakiSettingsRepository(
             copyAudiobookToPrivateStorage = this[KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE] ?: false,
             autoScroll = this[KEY_AUTO_SCROLL] ?: true,
             autoPause = this[KEY_AUTO_PAUSE] ?: true,
+            imageHoldSeconds = normalizeSasayakiImageHoldSeconds(
+                this[KEY_IMAGE_HOLD_SECONDS] ?: SasayakiImageHoldDefaultSeconds,
+            ),
             lightTextColor = this[KEY_LIGHT_TEXT_COLOR] ?: 0xFF000000,
             lightBackgroundColor = this[KEY_LIGHT_BACKGROUND_COLOR] ?: 0x6687CEEB,
             darkTextColor = this[KEY_DARK_TEXT_COLOR] ?: 0xFFFFFFFF,
@@ -182,6 +207,7 @@ class SasayakiSettingsRepository(
         this[KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE] = settings.copyAudiobookToPrivateStorage
         this[KEY_AUTO_SCROLL] = settings.autoScroll
         this[KEY_AUTO_PAUSE] = settings.autoPause
+        this[KEY_IMAGE_HOLD_SECONDS] = normalizeSasayakiImageHoldSeconds(settings.imageHoldSeconds)
         this[KEY_LIGHT_TEXT_COLOR] = settings.lightTextColor
         this[KEY_LIGHT_BACKGROUND_COLOR] = settings.lightBackgroundColor
         this[KEY_DARK_TEXT_COLOR] = settings.darkTextColor
@@ -205,6 +231,7 @@ class SasayakiSettingsRepository(
             booleanPreferencesKey("sasayakiCopyAudiobookToPrivateStorage")
         private val KEY_AUTO_SCROLL = booleanPreferencesKey("sasayakiAutoScroll")
         private val KEY_AUTO_PAUSE = booleanPreferencesKey("sasayakiAutoPause")
+        private val KEY_IMAGE_HOLD_SECONDS = floatPreferencesKey("sasayakiImageHoldSeconds")
         private val KEY_LIGHT_TEXT_COLOR = longPreferencesKey("sasayakiTextColor")
         private val KEY_LIGHT_BACKGROUND_COLOR = longPreferencesKey("sasayakiBackgroundColor")
         private val KEY_DARK_TEXT_COLOR = longPreferencesKey("sasayakiDarkTextColor")

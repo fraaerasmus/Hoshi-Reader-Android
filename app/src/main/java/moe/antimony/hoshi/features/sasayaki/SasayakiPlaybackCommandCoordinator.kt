@@ -17,24 +17,23 @@ class SasayakiPlaybackCommandCoordinator(
 
     fun start(
         rate: Float,
+        beforeStart: () -> Unit,
         markPlayedOnce: () -> Unit,
         afterMarkedPlaying: () -> Unit,
-    ) {
+    ): Boolean =
         playbackLifecycle.start(
             rate = rate,
+            beforeStart = beforeStart,
             markPlayedOnce = markPlayedOnce,
             afterMarkedPlaying = afterMarkedPlaying,
         )
-    }
 
     fun pause(
         restoreTemporaryPosition: Boolean,
-        updateMediaSession: () -> Unit,
         restoreTemporaryPositionIfNeeded: () -> Unit,
     ) {
         playbackLifecycle.pause(
             restoreTemporaryPosition = restoreTemporaryPosition,
-            updateMediaSession = updateMediaSession,
             restoreTemporaryPositionIfNeeded = restoreTemporaryPositionIfNeeded,
         )
     }
@@ -43,26 +42,26 @@ class SasayakiPlaybackCommandCoordinator(
         currentTime: Double,
         delay: Double,
         isPlaying: Boolean,
-    ) {
+    ): Boolean {
         val next = cueNavigation.nextCueSeekTime(
             currentTime = currentTime,
             delay = delay,
-        ) ?: return
+        ) ?: return false
         playbackState.clearStopPlaybackTime()
-        seek(next, startPlayback = isPlaying, revealCue = true)
+        return seek(next, startPlayback = isPlaying, revealCue = true)
     }
 
     fun previousCue(
         currentTime: Double,
         delay: Double,
         isPlaying: Boolean,
-    ) {
+    ): Boolean {
         val previous = cueNavigation.previousCueSeekTime(
             currentTime = currentTime,
             delay = delay,
         )
         playbackState.clearStopPlaybackTime()
-        seek(previous, startPlayback = isPlaying, revealCue = true)
+        return seek(previous, startPlayback = isPlaying, revealCue = true)
     }
 
     fun skipForward(
@@ -70,23 +69,27 @@ class SasayakiPlaybackCommandCoordinator(
         duration: Double,
         seconds: Int,
         isPlaying: Boolean,
-    ) {
+    ): Boolean {
         playbackState.clearStopPlaybackTime()
         val target = if (duration > 0.0) {
             (currentTime + seconds).coerceAtMost(duration)
         } else {
             currentTime + seconds
         }
-        seek(target, startPlayback = isPlaying, revealCue = true)
+        return seek(target, startPlayback = isPlaying, revealCue = true)
     }
 
     fun skipBackward(
         currentTime: Double,
         seconds: Int,
         isPlaying: Boolean,
-    ) {
+    ): Boolean {
         playbackState.clearStopPlaybackTime()
-        seek((currentTime - seconds).coerceAtLeast(0.0), startPlayback = isPlaying, revealCue = true)
+        return seek(
+            (currentTime - seconds).coerceAtLeast(0.0),
+            startPlayback = isPlaying,
+            revealCue = true,
+        )
     }
 
     fun playCue(
@@ -110,12 +113,18 @@ class SasayakiPlaybackCommandCoordinator(
         )
     }
 
-    fun mediaSessionSeek(
-        positionMs: Long,
+    fun seekTo(
+        seconds: Double,
+        duration: Double,
         isPlaying: Boolean,
-    ) {
+    ): Boolean {
         playbackState.clearStopPlaybackTime()
-        seek(positionMs.toDouble() / 1000.0, startPlayback = isPlaying)
+        val target = if (duration > 0.0) {
+            seconds.coerceIn(0.0, duration)
+        } else {
+            seconds.coerceAtLeast(0.0)
+        }
+        return seek(target, startPlayback = isPlaying, revealCue = true)
     }
 
     fun seek(
@@ -125,7 +134,7 @@ class SasayakiPlaybackCommandCoordinator(
         savePosition: Boolean = true,
         displayCue: SasayakiMatch? = null,
         revealCue: Boolean = false,
-    ) {
+    ): Boolean =
         playbackLifecycle.beginSeek(
             seconds = seconds,
             startPlayback = startPlayback,
@@ -134,5 +143,4 @@ class SasayakiPlaybackCommandCoordinator(
             displayCue = displayCue,
             revealCue = revealCue,
         )
-    }
 }

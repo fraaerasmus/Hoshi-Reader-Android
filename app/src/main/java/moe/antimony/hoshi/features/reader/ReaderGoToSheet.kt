@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -49,6 +51,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -71,10 +74,14 @@ import moe.antimony.hoshi.ui.hoshiTextFieldCursorBrush
 import moe.antimony.hoshi.ui.rememberSyncedTextFieldState
 
 internal enum class ReaderGoToTab {
-    Search,
     Chapters,
     Highlights,
+    Search,
 }
+
+internal val ReaderGoToTabRole = Role.Tab
+
+internal fun readerGoToDefaultTab(): ReaderGoToTab = ReaderGoToTab.Chapters
 
 @Composable
 internal fun ReaderGoToSheet(
@@ -89,7 +96,7 @@ internal fun ReaderGoToSheet(
     onHighlightDelete: (ReaderHighlight) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var selectedTab by remember { mutableStateOf(ReaderGoToTab.Search) }
+    var selectedTab by remember { mutableStateOf(readerGoToDefaultTab()) }
     var showJumpDialog by remember { mutableStateOf(false) }
     val coverBitmap = remember(book) { book.decodeCoverImageBitmap() }
     val searchState = remember(book) { ReaderSearchSheetState() }
@@ -138,13 +145,6 @@ internal fun ReaderGoToSheet(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 10.dp),
         )
         when (selectedTab) {
-            ReaderGoToTab.Search -> ReaderSearchTab(
-                searchState = searchState,
-                progressDisplay = progressDisplay,
-                totalCharacters = book.bookInfo.characterCount,
-                onJump = onSearchResultJump,
-                modifier = Modifier.weight(1f),
-            )
             ReaderGoToTab.Chapters -> ReaderGoToChaptersTab(
                 book = book,
                 currentPosition = currentPosition,
@@ -157,6 +157,13 @@ internal fun ReaderGoToSheet(
                 highlights = highlights,
                 onJump = onHighlightJump,
                 onDelete = onHighlightDelete,
+                modifier = Modifier.weight(1f),
+            )
+            ReaderGoToTab.Search -> ReaderSearchTab(
+                searchState = searchState,
+                progressDisplay = progressDisplay,
+                totalCharacters = book.bookInfo.characterCount,
+                onJump = onSearchResultJump,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -217,6 +224,7 @@ private fun ReaderGoToTabs(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .selectableGroup()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
             .padding(3.dp),
         horizontalArrangement = Arrangement.spacedBy(3.dp),
@@ -235,7 +243,11 @@ private fun ReaderGoToTabs(
                         color = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
                         shape = RoundedCornerShape(10.dp),
                     )
-                    .clickable { onSelectedTabChange(tab) }
+                    .selectable(
+                        selected = selected,
+                        role = ReaderGoToTabRole,
+                        onClick = { onSelectedTabChange(tab) },
+                    )
                     .padding(vertical = 7.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -261,6 +273,13 @@ private fun ReaderSearchTab(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(Unit) {
+        readerSearchTabActivationAction(
+            requestFocus = { focusRequester.requestFocus() },
+            showKeyboard = { keyboardController?.show() },
+        )
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         ReaderCompactSearchField(
@@ -626,6 +645,14 @@ internal fun readerSearchImeAction(
     onSearch()
     clearFocus()
     hideKeyboard()
+}
+
+internal fun readerSearchTabActivationAction(
+    requestFocus: () -> Unit,
+    showKeyboard: () -> Unit,
+) {
+    requestFocus()
+    showKeyboard()
 }
 
 internal fun readerJumpImeAction(

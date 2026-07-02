@@ -9,9 +9,8 @@ class SasayakiCueDisplayActionDispatcherTest {
     private val cue = SasayakiMatch("a", 10.0, 12.0, "a", 1, 2, 3)
     private val events = mutableListOf<String>()
     private val dispatcher = SasayakiCueDisplayActionDispatcher(
-        onCue = { cue, reveal -> events += "cue:${cue.id}:$reveal" },
+        onCue = { cue, reveal, source -> events += "cue:${cue.id}:$reveal:$source" },
         onClearCue = { events += "clear" },
-        onLoadChapter = { chapterIndex -> events += "load:$chapterIndex" },
     )
 
     @Test
@@ -30,15 +29,27 @@ class SasayakiCueDisplayActionDispatcherTest {
 
     @Test
     fun displayDispatchesCueAndRevealFlag() {
-        dispatcher.apply(SasayakiCueDisplayAction.Display(cue, reveal = true))
+        dispatcher.apply(
+            SasayakiCueDisplayAction.Display(
+                cue = cue,
+                reveal = true,
+                source = SasayakiCueRevealSource.NaturalPlayback,
+            ),
+        )
 
-        assertEquals(listOf("cue:a:true"), events)
+        assertEquals(listOf("cue:a:true:NaturalPlayback"), events)
     }
 
     @Test
-    fun clearAndLoadChapterClearsCueBeforeLoadingChapter() {
-        dispatcher.apply(SasayakiCueDisplayAction.ClearAndLoadChapter(chapterIndex = 7))
+    fun clearAndDisplayClearsCueBeforeDispatchingCue() {
+        dispatcher.apply(
+            SasayakiCueDisplayAction.ClearAndDisplay(
+                cue = cue,
+                reveal = true,
+                source = SasayakiCueRevealSource.NaturalPlayback,
+            ),
+        )
 
-        assertEquals(listOf("clear", "load:7"), events)
+        assertEquals(listOf("clear", "cue:a:true:NaturalPlayback"), events)
     }
 }

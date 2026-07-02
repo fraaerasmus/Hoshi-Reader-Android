@@ -22,6 +22,8 @@ class SasayakiSettingsRepositoryTest {
     @Test
     fun emitsDefaultSettingsWhenThereIsNoLegacyStore() = runBlocking {
         repository().use { repository ->
+            val settings = repository.settings.first()
+
             assertEquals(
                 SasayakiSettings(
                     enabled = true,
@@ -31,9 +33,11 @@ class SasayakiSettingsRepositoryTest {
                     reverseVerticalReaderSkipButtons = false,
                     autoScroll = true,
                     autoPause = true,
+                    imageHoldSeconds = 1f,
                 ),
-                repository.settings.first(),
+                settings,
             )
+            assertEquals(1f, settings.imageHoldSeconds, 0f)
         }
     }
 
@@ -48,6 +52,7 @@ class SasayakiSettingsRepositoryTest {
             copyAudiobookToPrivateStorage = true,
             autoScroll = false,
             autoPause = false,
+            imageHoldSeconds = 2.5f,
             lightTextColor = 0xFF111111,
             lightBackgroundColor = 0x22123456,
             darkTextColor = 0xFFEEEEEE,
@@ -78,6 +83,7 @@ class SasayakiSettingsRepositoryTest {
             copyAudiobookToPrivateStorage = true,
             autoScroll = false,
             autoPause = false,
+            imageHoldSeconds = 4.5f,
             lightTextColor = 0xFF010203,
             lightBackgroundColor = 0x44040506,
             darkTextColor = 0xFF070809,
@@ -88,6 +94,33 @@ class SasayakiSettingsRepositoryTest {
             repository.update { next }
 
             assertEquals(next, repository.settings.first())
+        }
+    }
+
+    @Test
+    fun imageHoldSecondsUseHalfSecondRangeAndMillis() {
+        assertEquals(9, SasayakiImageHoldSliderSteps)
+        assertEquals(0f, normalizeSasayakiImageHoldSeconds(-0.1f), 0f)
+        assertEquals(0f, normalizeSasayakiImageHoldSeconds(0.24f), 0f)
+        assertEquals(0.5f, normalizeSasayakiImageHoldSeconds(0.25f), 0f)
+        assertEquals(2.5f, normalizeSasayakiImageHoldSeconds(2.49f), 0f)
+        assertEquals(5f, normalizeSasayakiImageHoldSeconds(5.9f), 0f)
+        assertEquals(0L, sasayakiImageHoldMillis(0f))
+        assertEquals(500L, sasayakiImageHoldMillis(0.5f))
+        assertEquals(1500L, sasayakiImageHoldMillis(1.5f))
+        assertEquals(5000L, sasayakiImageHoldMillis(5f))
+    }
+
+    @Test
+    fun updateNormalizesImageHoldSecondsBeforePersisting() = runBlocking {
+        repository().use { repository ->
+            repository.update { it.copy(imageHoldSeconds = 6.2f) }
+
+            assertEquals(5f, repository.settings.first().imageHoldSeconds, 0f)
+
+            repository.update { it.copy(imageHoldSeconds = 3.26f) }
+
+            assertEquals(3.5f, repository.settings.first().imageHoldSeconds, 0f)
         }
     }
 

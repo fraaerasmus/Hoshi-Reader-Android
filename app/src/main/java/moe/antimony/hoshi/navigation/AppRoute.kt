@@ -15,6 +15,9 @@ sealed interface AppRoute : NavKey {
     data object DictionaryRoute : AppRoute
 
     @Serializable
+    data object StatisticsRoute : AppRoute
+
+    @Serializable
     data object SettingsRoute : AppRoute
 
     @Serializable
@@ -24,11 +27,6 @@ sealed interface AppRoute : NavKey {
 
     @Serializable
     data class ReaderRoute(
-        val bookId: String,
-    ) : AppRoute
-
-    @Serializable
-    data class SasayakiMatchRoute(
         val bookId: String,
     ) : AppRoute
 }

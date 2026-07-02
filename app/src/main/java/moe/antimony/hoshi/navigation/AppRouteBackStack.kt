@@ -30,15 +30,12 @@ internal fun MutableList<NavKey>.openReaderRoute(bookId: String) {
     add(AppRoute.ReaderRoute(bookId))
 }
 
-internal fun MutableList<NavKey>.openSasayakiMatchRoute(
-    bookId: String,
+internal fun MutableList<NavKey>.removeReaderRoutes(
     onReaderRouteRemoved: () -> Unit = {},
 ) {
-    replaceWithTopLevelRoute(
-        route = AppRoute.BooksRoute,
-        onReaderRouteRemoved = onReaderRouteRemoved,
-    )
-    add(AppRoute.SasayakiMatchRoute(bookId))
+    val hadReaderRoute = containsReaderRoute()
+    removeAll { route -> route is AppRoute.ReaderRoute }
+    notifyReaderRouteRemoved(hadReaderRoute, onReaderRouteRemoved)
 }
 
 internal fun MutableList<NavKey>.routeExternalBookImport(
@@ -50,7 +47,19 @@ internal fun MutableList<NavKey>.routeExternalBookImport(
     )
 }
 
-internal fun MutableList<NavKey>.returnFromMediaSession() = Unit
+internal fun MutableList<NavKey>.returnFromMediaSession(
+    bookId: String,
+    onReaderRouteRemoved: () -> Unit = {},
+) {
+    if (lastOrNull() == AppRoute.ReaderRoute(bookId)) {
+        return
+    }
+    replaceWithTopLevelRoute(
+        route = AppRoute.BooksRoute,
+        onReaderRouteRemoved = onReaderRouteRemoved,
+    )
+    add(AppRoute.ReaderRoute(bookId))
+}
 
 private fun List<NavKey>.containsReaderRoute(): Boolean =
     any { route -> route is AppRoute.ReaderRoute }

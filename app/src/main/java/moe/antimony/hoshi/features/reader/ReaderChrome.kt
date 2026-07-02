@@ -242,7 +242,7 @@ fun readerContentChromeInsets(
 ): ReaderContentChromeInsets =
     ReaderContentChromeInsets(
         topDp = ReaderContentTopReservedSpaceDp + ReaderWebViewTopPaddingDp,
-        bottomDp = ReaderBottomGestureSafeAreaDp,
+        bottomDp = (settings?.bottomSafeAreaDp ?: ReaderBottomSafeAreaDefaultDp).coerceReaderBottomSafeAreaDp(),
     )
 
 fun readerTopInfoOverlayPaddingDp(
@@ -295,7 +295,9 @@ fun readerChromeVisibility(
         showForwardJump = focusMode && hasForwardJump,
     )
 
-fun readerBottomChromeMetrics(): ReaderBottomChromeMetrics =
+fun readerBottomChromeMetrics(
+    bottomSafeAreaDp: Int = ReaderBottomSafeAreaDefaultDp,
+): ReaderBottomChromeMetrics =
     ReaderBottomChromeMetrics(
         buttonSizeDp = ReaderBottomChromeButtonSizeDp,
         topSasayakiButtonSizeDp = ReaderTopButtonSizeDp,
@@ -308,7 +310,7 @@ fun readerBottomChromeMetrics(): ReaderBottomChromeMetrics =
         topStatisticsIconSizeDp = ReaderTopButtonIconSizeDp,
         horizontalPaddingDp = 22,
         bottomPaddingDp = 2,
-        bottomSafeAreaDp = ReaderBottomGestureSafeAreaDp,
+        bottomSafeAreaDp = bottomSafeAreaDp.coerceReaderBottomSafeAreaDp(),
         menuButtonGapDp = ReaderMenuButtonGapDp,
         trailingButtonSpacingDp = 8,
         menuWidthDp = 204,
@@ -341,11 +343,17 @@ fun readerSasayakiBottomPlaybackControls(
         visible = settings.enabled && settings.showReaderBottomPlaybackControls && hasAudio,
         centered = centered,
         rowHeightDp = scale(metrics.bottomSafeAreaDp),
-        buttonWidthDp = scale(40),
-        iconSizeDp = scale(14),
+        buttonWidthDp = scale(readerSasayakiBottomPlaybackButtonWidthDp(metrics.bottomSafeAreaDp)),
+        iconSizeDp = scale(readerSasayakiBottomPlaybackIconSizeDp(metrics.bottomSafeAreaDp)),
         horizontalPaddingDp = 18,
     )
 }
+
+private fun readerSasayakiBottomPlaybackButtonWidthDp(bottomSafeAreaDp: Int): Int =
+    (bottomSafeAreaDp + 12).coerceIn(40, 72)
+
+private fun readerSasayakiBottomPlaybackIconSizeDp(bottomSafeAreaDp: Int): Int =
+    (bottomSafeAreaDp / 3 + 7).coerceIn(14, 28)
 
 fun readerSasayakiBottomSkipButtonActions(
     verticalWriting: Boolean,
@@ -507,7 +515,6 @@ private fun ReaderStatisticsChromeState.readingTimeText(): String {
 }
 
 private const val ReaderBottomChromeButtonSizeDp = 44
-private const val ReaderBottomGestureSafeAreaDp = 18
 private const val ReaderMenuButtonGapDp = 8
 private const val ReaderContentTopReservedSpaceDp = 30
 private const val ReaderTopInfoFallbackPaddingDp = 52

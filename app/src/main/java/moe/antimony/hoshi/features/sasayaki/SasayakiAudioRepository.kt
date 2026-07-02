@@ -3,12 +3,19 @@ package moe.antimony.hoshi.features.sasayaki
 import moe.antimony.hoshi.epub.SasayakiPlaybackData
 
 import android.content.ContentResolver
+import android.content.Context
 import android.content.Intent
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import moe.antimony.hoshi.importing.ImportFileType
 import moe.antimony.hoshi.importing.validateImportFile
 import java.io.File
+import java.io.FileInputStream
+import java.nio.ByteBuffer
+import java.nio.channels.NonWritableChannelException
+import java.nio.channels.SeekableByteChannel
 
 class SasayakiAudioRepository(private val bookRoot: File) {
     fun importedPlayback(
@@ -24,6 +31,68 @@ class SasayakiAudioRepository(private val bookRoot: File) {
     fun playbackSource(playback: SasayakiPlaybackData): SasayakiPlaybackSource? {
         playback.audioUri?.let { return SasayakiPlaybackSource.ExternalUri(Uri.parse(it)) }
         return audioFile(playback)?.let { SasayakiPlaybackSource.PrivateFile(it) }
+    }
+
+    internal fun audiobookChapters(
+        playback: SasayakiPlaybackData,
+        contentResolver: ContentResolver,
+    ): List<SasayakiAudiobookChapter> =
+        audiobookChapters(
+            playback = playback,
+            openExternalAudio = { uriString -> contentResolver.openSeekableAudioChannel(Uri.parse(uriString)) },
+        )
+
+    internal fun audiobookChapters(
+        playback: SasayakiPlaybackData,
+        openExternalAudio: (String) -> SeekableByteChannel? = { null },
+    ): List<SasayakiAudiobookChapter> =
+        try {
+            playback.audioUri?.let { uriString ->
+                openExternalAudio(uriString)?.use { channel ->
+                    return SasayakiAudiobookChapters.parse(channel)
+                }
+            }
+            audioFile(playback)?.let(SasayakiAudiobookChapters::parse).orEmpty()
+        } catch (_: Exception) {
+            emptyList()
+        }
+
+    internal fun audiobookMetadata(
+        playback: SasayakiPlaybackData,
+        context: Context,
+    ): SasayakiAudiobookMetadata =
+        readAudiobookMetadata(
+            playback = playback,
+            readMetadata = { source -> AndroidSasayakiAudiobookMetadataReader.read(context, source) },
+            readFallbackMetadata = { source -> readMp4Metadata(source, context.contentResolver) },
+        )
+
+    internal fun audiobookMetadata(
+        playback: SasayakiPlaybackData,
+        readMetadata: (SasayakiPlaybackSource) -> SasayakiAudiobookMetadata,
+    ): SasayakiAudiobookMetadata =
+        readAudiobookMetadata(
+            playback = playback,
+            readMetadata = readMetadata,
+            readFallbackMetadata = { source -> readMp4Metadata(source) },
+        )
+
+    private fun readAudiobookMetadata(
+        playback: SasayakiPlaybackData,
+        readMetadata: (SasayakiPlaybackSource) -> SasayakiAudiobookMetadata,
+        readFallbackMetadata: (SasayakiPlaybackSource) -> SasayakiAudiobookMetadata,
+    ): SasayakiAudiobookMetadata {
+        val source = runCatching { playbackSource(playback) }.getOrNull()
+            ?: return SasayakiAudiobookMetadata.Empty
+        val metadata = runCatching { readMetadata(source) }
+            .getOrDefault(SasayakiAudiobookMetadata.Empty)
+        val normalized = metadata.normalized()
+        if (normalized.title != null && normalized.artist != null && normalized.artworkData != null) {
+            return normalized
+        }
+        val fallbackMetadata = runCatching { readFallbackMetadata(source) }
+            .getOrDefault(SasayakiAudiobookMetadata.Empty)
+        return normalized.mergedWith(fallbackMetadata.normalized()).normalized()
     }
 
     fun clearAudioSource(playback: SasayakiPlaybackData, contentResolver: ContentResolver) {
@@ -76,6 +145,75 @@ class SasayakiAudioRepository(private val bookRoot: File) {
         bookRoot.resolve("Sasayaki").also { it.mkdirs() }
 }
 
+internal data class SasayakiAudiobookMetadata(
+    val title: String? = null,
+    val artist: String? = null,
+    val albumArtist: String? = null,
+    val author: String? = null,
+    val artworkData: ByteArray? = null,
+) {
+    fun normalized(): SasayakiAudiobookMetadata =
+        SasayakiAudiobookMetadata(
+            title = title.normalizedMetadataText(),
+            artist = firstNonBlankMetadataText(artist, albumArtist, author),
+            artworkData = artworkData,
+        )
+
+    companion object {
+        val Empty = SasayakiAudiobookMetadata()
+    }
+}
+
+private fun SasayakiAudiobookMetadata.mergedWith(
+    fallback: SasayakiAudiobookMetadata,
+): SasayakiAudiobookMetadata =
+    SasayakiAudiobookMetadata(
+        title = title ?: fallback.title,
+        artist = artist ?: fallback.artist,
+        albumArtist = albumArtist ?: fallback.albumArtist,
+        author = author ?: fallback.author,
+        artworkData = artworkData ?: fallback.artworkData,
+    )
+
+private fun readMp4Metadata(
+    source: SasayakiPlaybackSource,
+    contentResolver: ContentResolver? = null,
+): SasayakiAudiobookMetadata =
+    when (source) {
+        is SasayakiPlaybackSource.PrivateFile -> SasayakiAudiobookMp4Metadata.parse(source.file)
+        is SasayakiPlaybackSource.ExternalUri -> contentResolver
+            ?.openSeekableAudioChannel(source.uri)
+            ?.use(SasayakiAudiobookMp4Metadata::parse)
+            ?: SasayakiAudiobookMetadata.Empty
+    }
+
+private object AndroidSasayakiAudiobookMetadataReader {
+    fun read(context: Context, source: SasayakiPlaybackSource): SasayakiAudiobookMetadata {
+        val retriever = MediaMetadataRetriever()
+        try {
+            when (source) {
+                is SasayakiPlaybackSource.ExternalUri -> retriever.setDataSource(context, source.uri)
+                is SasayakiPlaybackSource.PrivateFile -> retriever.setDataSource(source.file.absolutePath)
+            }
+            return SasayakiAudiobookMetadata(
+                title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE),
+                artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),
+                albumArtist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST),
+                author = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_AUTHOR),
+                artworkData = retriever.embeddedPicture,
+            )
+        } finally {
+            runCatching { retriever.release() }
+        }
+    }
+}
+
+private fun firstNonBlankMetadataText(vararg values: String?): String? =
+    values.firstNotNullOfOrNull(String?::normalizedMetadataText)
+
+private fun String?.normalizedMetadataText(): String? =
+    this?.trim()?.takeIf { it.isNotBlank() }
+
 private fun ContentResolver.displayName(uri: Uri): String =
     query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
         if (cursor.moveToFirst()) {
@@ -84,3 +222,40 @@ private fun ContentResolver.displayName(uri: Uri): String =
             null
         }
     } ?: uri.lastPathSegment.orEmpty()
+
+private fun ContentResolver.openSeekableAudioChannel(uri: Uri): SeekableByteChannel? {
+    val descriptor = openFileDescriptor(uri, "r") ?: return null
+    return ParcelFileDescriptorSeekableByteChannel(descriptor)
+}
+
+private class ParcelFileDescriptorSeekableByteChannel(
+    private val descriptor: ParcelFileDescriptor,
+) : SeekableByteChannel {
+    private val channel = FileInputStream(descriptor.fileDescriptor).channel
+
+    override fun read(dst: ByteBuffer): Int = channel.read(dst)
+
+    override fun write(src: ByteBuffer): Int {
+        throw NonWritableChannelException()
+    }
+
+    override fun position(): Long = channel.position()
+
+    override fun position(newPosition: Long): SeekableByteChannel {
+        channel.position(newPosition)
+        return this
+    }
+
+    override fun size(): Long = channel.size()
+
+    override fun truncate(size: Long): SeekableByteChannel {
+        throw NonWritableChannelException()
+    }
+
+    override fun isOpen(): Boolean = channel.isOpen
+
+    override fun close() {
+        runCatching { channel.close() }
+        descriptor.close()
+    }
+}

@@ -23,6 +23,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -201,6 +202,13 @@ fun SasayakiSettingsView(
                             },
                         )
                         SettingsDivider()
+                        SasayakiImageHoldSettingsRow(
+                            settings = loadedSettings,
+                            onValueChange = { seconds ->
+                                save(loadedSettings.copy(imageHoldSeconds = seconds))
+                            },
+                        )
+                        SettingsDivider()
                         ListItem(
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             headlineContent = { Text(stringResource(R.string.sasayaki_auto_pause_on_lookup)) },
@@ -248,6 +256,36 @@ fun SasayakiSettingsView(
                 colorDialogRow = null
             },
             onDismiss = { colorDialogRow = null },
+        )
+    }
+}
+
+@Composable
+private fun SasayakiImageHoldSettingsRow(
+    settings: SasayakiSettings,
+    onValueChange: (Float) -> Unit,
+) {
+    val seconds = normalizeSasayakiImageHoldSeconds(settings.imageHoldSeconds)
+    Column {
+        ListItem(
+            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+            headlineContent = { Text(stringResource(R.string.sasayaki_image_hold)) },
+            supportingContent = { Text(stringResource(R.string.sasayaki_image_hold_help)) },
+            trailingContent = {
+                Text(
+                    text = sasayakiImageHoldText(seconds),
+                    fontWeight = FontWeight.SemiBold,
+                )
+            },
+        )
+        Slider(
+            value = seconds,
+            onValueChange = { onValueChange(normalizeSasayakiImageHoldSeconds(it)) },
+            valueRange = SasayakiImageHoldMinSeconds..SasayakiImageHoldMaxSeconds,
+            steps = SasayakiImageHoldSliderSteps,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
         )
     }
 }

@@ -3,12 +3,17 @@ package moe.antimony.hoshi.features.sasayaki
 import moe.antimony.hoshi.epub.SasayakiPlaybackData
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import java.nio.file.Files
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
 
 class SasayakiPlaybackPersistenceStateTest {
     @Test
@@ -25,6 +30,7 @@ class SasayakiPlaybackPersistenceStateTest {
             audioSourceRepository = SasayakiAudioRepository(File("book-root")),
             initialPlayback = initial,
             persistenceScope = CoroutineScope(Dispatchers.Unconfined),
+            persistenceDispatcher = Dispatchers.Unconfined,
         )
 
         assertEquals(initial, state.playback)
@@ -64,6 +70,7 @@ class SasayakiPlaybackPersistenceStateTest {
             audioSourceRepository = SasayakiAudioRepository(bookRoot),
             initialPlayback = repository.initial,
             persistenceScope = CoroutineScope(Dispatchers.Unconfined),
+            persistenceDispatcher = Dispatchers.Unconfined,
         )
 
         assertEquals("Copied to app storage. The original audiobook file can be deleted.", state.audioStorageSummary)
@@ -80,6 +87,51 @@ class SasayakiPlaybackPersistenceStateTest {
         assertTrue(copiedAudio.exists())
     }
 
+    @Test
+    fun savesLatestPendingSnapshotAfterInFlightSaveCompletes() {
+        val repository = BlockingPlaybackRepository()
+        val state = SasayakiPlaybackPersistenceState(
+            playbackRepository = repository,
+            audioSourceRepository = SasayakiAudioRepository(File("book-root")),
+            initialPlayback = SasayakiPlaybackData(lastPosition = 0.0),
+            persistenceScope = CoroutineScope(Dispatchers.Unconfined),
+            persistenceDispatcher = Dispatchers.Unconfined,
+        )
+
+        state.savePosition(1.0)
+        state.savePosition(2.0)
+        state.savePosition(3.0)
+
+        assertEquals(listOf(1.0), repository.saved.map { it.lastPosition })
+
+        repository.completeFirstSave()
+
+        assertEquals(listOf(1.0, 3.0), repository.saved.map { it.lastPosition })
+    }
+
+    @Test
+    fun startsNewWorkerAfterSaveFailure() {
+        val repository = FailingOncePlaybackRepository()
+        val errors = mutableListOf<Throwable>()
+        val state = SasayakiPlaybackPersistenceState(
+            playbackRepository = repository,
+            audioSourceRepository = SasayakiAudioRepository(File("book-root")),
+            initialPlayback = SasayakiPlaybackData(lastPosition = 0.0),
+            persistenceScope = CoroutineScope(
+                SupervisorJob() +
+                    Dispatchers.Unconfined +
+                    CoroutineExceptionHandler { _, error -> errors += error },
+            ),
+            persistenceDispatcher = Dispatchers.Unconfined,
+        )
+
+        state.savePosition(1.0)
+        state.savePosition(2.0)
+
+        assertEquals(listOf(1.0, 2.0), repository.attempted.map { it.lastPosition })
+        assertEquals(1, errors.size)
+    }
+
     private class FakePlaybackRepository(
         val initial: SasayakiPlaybackData?,
     ) : SasayakiPlaybackRepository {
@@ -89,6 +141,40 @@ class SasayakiPlaybackPersistenceStateTest {
 
         override suspend fun save(playback: SasayakiPlaybackData) {
             saved += playback
+        }
+    }
+
+    private class BlockingPlaybackRepository : SasayakiPlaybackRepository {
+        val saved = mutableListOf<SasayakiPlaybackData>()
+        private var firstSaveContinuation: Continuation<Unit>? = null
+
+        override suspend fun load(): SasayakiPlaybackData? = null
+
+        override suspend fun save(playback: SasayakiPlaybackData) {
+            saved += playback
+            if (saved.size == 1) {
+                suspendCoroutine { continuation ->
+                    firstSaveContinuation = continuation
+                }
+            }
+        }
+
+        fun completeFirstSave() {
+            firstSaveContinuation?.resume(Unit)
+            firstSaveContinuation = null
+        }
+    }
+
+    private class FailingOncePlaybackRepository : SasayakiPlaybackRepository {
+        val attempted = mutableListOf<SasayakiPlaybackData>()
+
+        override suspend fun load(): SasayakiPlaybackData? = null
+
+        override suspend fun save(playback: SasayakiPlaybackData) {
+            attempted += playback
+            if (attempted.size == 1) {
+                error("first save fails")
+            }
         }
     }
 }

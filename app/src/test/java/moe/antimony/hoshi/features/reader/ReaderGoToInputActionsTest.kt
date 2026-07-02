@@ -1,11 +1,37 @@
 package moe.antimony.hoshi.features.reader
 
+import androidx.compose.ui.semantics.Role
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReaderGoToInputActionsTest {
+    @Test
+    fun tabsUseTabSelectionSemantics() {
+        assertEquals(Role.Tab, ReaderGoToTabRole)
+    }
+
+    @Test
+    fun goToTabsUseChapterHighlightSearchOrder() {
+        assertEquals(
+            listOf(ReaderGoToTab.Chapters, ReaderGoToTab.Highlights, ReaderGoToTab.Search),
+            ReaderGoToTab.entries.toList(),
+        )
+    }
+
+    @Test
+    fun goToSheetDefaultsToChapters() {
+        assertEquals(ReaderGoToTab.Chapters, readerGoToDefaultTab())
+    }
+
+    @Test
+    fun bookHeaderCoverUsesSquareArtworkFrame() {
+        val metrics = readerSheetDensityMetrics()
+
+        assertEquals(metrics.chapterHeaderCoverWidthDp, metrics.chapterHeaderCoverHeightDp)
+    }
+
     @Test
     fun searchImeActionSubmitsAndDismissesKeyboard() {
         val events = mutableListOf<String>()
@@ -17,6 +43,18 @@ class ReaderGoToInputActionsTest {
         )
 
         assertEquals(listOf("search", "clearFocus", "hideKeyboard"), events)
+    }
+
+    @Test
+    fun searchTabActivationFocusesInputAndShowsKeyboard() {
+        val events = mutableListOf<String>()
+
+        readerSearchTabActivationAction(
+            requestFocus = { events += "requestFocus" },
+            showKeyboard = { events += "showKeyboard" },
+        )
+
+        assertEquals(listOf("requestFocus", "showKeyboard"), events)
     }
 
     @Test

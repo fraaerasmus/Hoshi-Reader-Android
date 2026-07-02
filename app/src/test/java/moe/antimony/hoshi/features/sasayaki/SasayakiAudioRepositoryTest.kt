@@ -3,12 +3,14 @@ package moe.antimony.hoshi.features.sasayaki
 import moe.antimony.hoshi.epub.SasayakiPlaybackData
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.nio.file.Files
 
 class SasayakiAudioRepositoryTest {
     @get:Rule
@@ -58,6 +60,124 @@ class SasayakiAudioRepositoryTest {
         assertEquals(
             "Select an .mp3 or .m4b audiobook",
             repository.storageSummary(playback()),
+        )
+    }
+
+    @Test
+    fun audiobookChaptersReadsPrivateCopiedAudio() {
+        val bookRoot = temporaryFolder.newFolder("chapters-book")
+        val repository = SasayakiAudioRepository(bookRoot)
+        val audioFile = bookRoot.resolve("Sasayaki/sasayaki_audio.m4b")
+        audioFile.parentFile!!.mkdirs()
+        audioFile.writeBytes(
+            minimalMp4WithChpl(
+                durationSeconds = 20.0,
+                chapters = listOf(
+                    SasayakiChapterFixture(startSeconds = 0.0, title = "Opening"),
+                    SasayakiChapterFixture(startSeconds = 10.0, title = "Ending"),
+                ),
+            ),
+        )
+
+        val chapters = repository.audiobookChapters(playback(audioFileName = "sasayaki_audio.m4b"))
+
+        assertEquals(listOf("Opening", "Ending"), chapters.map { it.title })
+    }
+
+    @Test
+    fun audiobookChaptersReadsExternalUriThroughChannelProvider() {
+        val repository = SasayakiAudioRepository(temporaryFolder.newFolder("external-chapters-book"))
+        val externalFile = temporaryFolder.newFile("external.m4b").also { file ->
+            file.writeBytes(
+                minimalMp4WithChpl(
+                    durationSeconds = 20.0,
+                    chapters = listOf(
+                        SasayakiChapterFixture(startSeconds = 0.0, title = "External Opening"),
+                    ),
+                ),
+            )
+        }
+
+        var openedUri: String? = null
+        val chapters = repository.audiobookChapters(
+            playback(audioUri = "content://audio/external.m4b"),
+            openExternalAudio = { uriString ->
+                openedUri = uriString
+                Files.newByteChannel(externalFile.toPath())
+            },
+        )
+
+        assertEquals("content://audio/external.m4b", openedUri)
+        assertEquals(listOf("External Opening"), chapters.map { it.title })
+    }
+
+    @Test
+    fun audiobookMetadataUsesResolvedSourceAndNormalizesMetadata() {
+        val bookRoot = temporaryFolder.newFolder("metadata-book")
+        val repository = SasayakiAudioRepository(bookRoot)
+        val audioFile = bookRoot.resolve("Sasayaki/sasayaki_audio.m4b")
+        audioFile.parentFile!!.mkdirs()
+        audioFile.writeText("audio")
+        val artwork = byteArrayOf(1, 2, 3)
+        var sourceRead: SasayakiPlaybackSource? = null
+
+        val metadata = repository.audiobookMetadata(playback(audioFileName = "sasayaki_audio.m4b")) { source ->
+            sourceRead = source
+            SasayakiAudiobookMetadata(
+                title = "  Recorded Book  ",
+                artist = "",
+                albumArtist = " Narrator ",
+                author = "Author",
+                artworkData = artwork,
+            )
+        }
+
+        assertEquals(SasayakiPlaybackSource.PrivateFile(audioFile.canonicalFile), sourceRead)
+        assertEquals("Recorded Book", metadata.title)
+        assertEquals("Narrator", metadata.artist)
+        assertArrayEquals(artwork, metadata.artworkData)
+    }
+
+    @Test
+    fun audiobookMetadataFallsBackToMp4AtomsWhenPlatformReaderReturnsEmpty() {
+        val bookRoot = temporaryFolder.newFolder("mp4-metadata-book")
+        val repository = SasayakiAudioRepository(bookRoot)
+        val audioFile = bookRoot.resolve("Sasayaki/sasayaki_audio.m4b")
+        val artwork = byteArrayOf(0xff.toByte(), 0xd8.toByte(), 0xff.toByte(), 0xd9.toByte())
+        audioFile.parentFile!!.mkdirs()
+        audioFile.writeBytes(
+            minimalMp4WithMetadata(
+                title = "MP4 Title",
+                artist = "Author",
+                albumArtist = "Narrator",
+                artworkData = artwork,
+            ),
+        )
+
+        val metadata = repository.audiobookMetadata(playback(audioFileName = "sasayaki_audio.m4b")) {
+            SasayakiAudiobookMetadata(title = " ", artist = "")
+        }
+
+        assertEquals("MP4 Title", metadata.title)
+        assertEquals("Author", metadata.artist)
+        assertArrayEquals(artwork, metadata.artworkData)
+    }
+
+    @Test
+    fun audiobookMetadataReturnsEmptyWhenAudioMissingOrReaderFails() {
+        val repository = SasayakiAudioRepository(temporaryFolder.newFolder("missing-metadata-book"))
+
+        assertEquals(
+            SasayakiAudiobookMetadata.Empty,
+            repository.audiobookMetadata(playback()) {
+                error("Should not read metadata without an audio source.")
+            },
+        )
+        assertEquals(
+            SasayakiAudiobookMetadata.Empty,
+            repository.audiobookMetadata(playback(audioUri = "content://audio/book.m4b")) {
+                error("Metadata read failed.")
+            },
         )
     }
 

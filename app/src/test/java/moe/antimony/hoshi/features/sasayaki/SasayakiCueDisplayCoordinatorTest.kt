@@ -61,7 +61,7 @@ class SasayakiCueDisplayCoordinatorTest {
     }
 
     @Test
-    fun requestsClearAndChapterLoadForCrossChapterAutoScrollAfterPlaybackStarted() {
+    fun requestsClearAndDisplayForCrossChapterAutoScrollAfterPlaybackStarted() {
         val coordinator = SasayakiCueDisplayCoordinator()
         coordinator.update(cueA, currentChapterIndex = 0, autoScroll = true, hasPlayedOnce = true)
 
@@ -72,8 +72,10 @@ class SasayakiCueDisplayCoordinatorTest {
             hasPlayedOnce = true,
         )
 
-        assertTrue(action is SasayakiCueDisplayAction.ClearAndLoadChapter)
-        assertEquals(1, (action as SasayakiCueDisplayAction.ClearAndLoadChapter).chapterIndex)
+        assertTrue(action is SasayakiCueDisplayAction.ClearAndDisplay)
+        action as SasayakiCueDisplayAction.ClearAndDisplay
+        assertSame(otherChapterCue, action.cue)
+        assertEquals(true, action.reveal)
         assertNull(coordinator.currentCueStartTime)
     }
 
