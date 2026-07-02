@@ -172,7 +172,10 @@ window.hoshiReader = {
   },
   initialize: function() {
     if (this.readyPromise) return this.readyPromise;
-    this.readyPromise = Promise.resolve(document.fonts && document.fonts.ready)
+    this.readyPromise = Promise.race([
+      Promise.resolve(document.fonts && document.fonts.ready),
+      new Promise(function (r) { setTimeout(r, 120); }),
+    ])
       .then(() => {
         this.detachChapterSource();
         return this.waitForImages();

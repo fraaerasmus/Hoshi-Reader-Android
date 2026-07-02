@@ -75,6 +75,9 @@ import moe.antimony.hoshi.epub.SasayakiPlaybackData
 import moe.antimony.hoshi.features.reader.ReaderBottomPanel
 import moe.antimony.hoshi.features.reader.ReaderColorPickerDialog
 import moe.antimony.hoshi.features.reader.ReaderColorSettingRow
+import android.text.format.DateUtils
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.features.reader.readerSheetDensityMetrics
 import moe.antimony.hoshi.features.reader.readerSheetStyle
 import moe.antimony.hoshi.importing.ImportFileType
@@ -219,6 +222,7 @@ internal fun SasayakiSheet(
                     SasayakiSheetTab.Settings -> SasayakiSettingsTab(
                         player = player,
                         settings = settings,
+                        chapters = chapters,
                         skipActionMenuExpanded = skipActionMenuExpanded,
                         onSkipActionMenuExpandedChange = { skipActionMenuExpanded = it },
                         onSettingsChange = onSettingsChange,
@@ -698,6 +702,7 @@ private fun SasayakiChapterRow(
 private fun SasayakiSettingsTab(
     player: SasayakiPlayer,
     settings: SasayakiSettings,
+    chapters: List<SasayakiAudiobookChapter>,
     skipActionMenuExpanded: Boolean,
     onSkipActionMenuExpandedChange: (Boolean) -> Unit,
     onSettingsChange: (SasayakiSettings) -> Unit,
@@ -784,6 +789,7 @@ private fun SasayakiSettingsTab(
             checked = settings.autoPause,
             onCheckedChange = { onSettingsChange(settings.copy(autoPause = it)) },
         )
+        SasayakiSleepTimerRow(player = player, chapters = chapters)
         HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp))
         SasayakiColorSheetSection(
             title = stringResource(R.string.sasayaki_light_theme),
@@ -955,6 +961,61 @@ private fun SasayakiSettingsSwitchRow(
 }
 
 @Composable
+private fun SasayakiSleepTimerRow(
+    player: SasayakiPlayer,
+    chapters: List<SasayakiAudiobookChapter>,
+) {
+    val runtime = LocalHoshiUiDependencies.current.sasayakiPlaybackServiceRuntime
+    val state by runtime.sleepTimer.collectAsStateWithLifecycle()
+    var expanded by remember { mutableStateOf(false) }
+    val metrics = readerSheetDensityMetrics()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = metrics.sasayakiRowVerticalPaddingDp.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.sasayaki_sleep_timer), style = MaterialTheme.typography.bodyLarge)
+        Box {
+            TextButton(onClick = { expanded = true }) {
+                Text(sleepTimerValueText(state))
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                SasayakiSleepTimerOption.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(sleepTimerOptionLabel(option)) },
+                        onClick = {
+                            expanded = false
+                            val endOfChapterSeconds = if (option == SasayakiSleepTimerOption.EndOfChapter) {
+                                SasayakiAudiobookChapters.currentChapterAt(chapters, player.currentTime)?.endSeconds
+                            } else {
+                                null
+                            }
+                            runtime.setSleepTimer(option, endOfChapterSeconds)
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun sleepTimerValueText(state: SasayakiSleepTimerState): String = when (state.option) {
+    SasayakiSleepTimerOption.Off -> stringResource(R.string.sasayaki_sleep_timer_off)
+    SasayakiSleepTimerOption.EndOfChapter -> stringResource(R.string.sasayaki_sleep_timer_end_of_chapter)
+    else -> DateUtils.formatElapsedTime(state.remainingSeconds.toLong().coerceAtLeast(0L))
+}
+
+@Composable
+private fun sleepTimerOptionLabel(option: SasayakiSleepTimerOption): String = when (option) {
+    SasayakiSleepTimerOption.Off -> stringResource(R.string.sasayaki_sleep_timer_off)
+    SasayakiSleepTimerOption.EndOfChapter -> stringResource(R.string.sasayaki_sleep_timer_end_of_chapter)
+    else -> stringResource(R.string.sasayaki_sleep_timer_minutes, option.minutes ?: 0)
+}
+
+@Composable
 private fun SasayakiErrorMessage(message: String) {
     Text(
         text = message,
@@ -1032,7 +1093,7 @@ private fun String.audioSourceNameTitle(): String? {
 
 private const val SasayakiCoverMaxDimensionPx = 512
 
-private fun decodeSampledSasayakiCoverBitmap(file: File): Bitmap? {
+internal fun decodeSampledSasayakiCoverBitmap(file: File): Bitmap? {
     if (!file.isFile) return null
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeFile(file.absolutePath, bounds)

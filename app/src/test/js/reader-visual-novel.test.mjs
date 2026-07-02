@@ -1599,8 +1599,9 @@ test('visual novel reveal speed progressively reveals characters faster at highe
     const slow = await initializeReader(bodyWith(p('一二三。')), { revealSpeed: 45 });
     const fast = await initializeReader(bodyWith(p('一二三。')), { revealSpeed: 120 });
 
-    assert.equal(slow.timers[0].delay > fast.timers[0].delay, true);
-    slow.timers[0].callback();
+    // timers[0] is the reader-open font-ready fallback (setTimeout 120); reveal timers follow it.
+    assert.equal(slow.timers[1].delay > fast.timers[1].delay, true);
+    slow.timers[1].callback();
 
     const textNodes = collectTextNodes(currentScreen(slow.reader));
     assert.equal(textNodes[0].textContent, '一');
@@ -1611,13 +1612,14 @@ test('visual novel reveal speed progressively reveals characters faster at highe
 test('visual novel reveal speed updates active reveal without reloading the screen', async () => {
     const { reader, timers } = await initializeReader(bodyWith(p('一二三。')), { revealSpeed: 10 });
 
-    assert.equal(timers[0].delay, 100);
+    // timers[0] is the reader-open font-ready fallback (setTimeout 120); the reveal timer follows it.
+    assert.equal(timers[1].delay, 100);
 
     reader.setRevealSpeed(50);
 
     assert.equal(reader.revealSpeed, 50);
-    assert.equal(timers[0], null);
-    assert.equal(timers[1].delay, 20);
+    assert.equal(timers[1], null);
+    assert.equal(timers[2].delay, 20);
     assert.equal(currentScreen(reader).textContent, '一二三。');
 });
 

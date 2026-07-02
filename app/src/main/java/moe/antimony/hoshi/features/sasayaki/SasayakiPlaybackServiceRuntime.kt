@@ -24,6 +24,12 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import moe.antimony.hoshi.di.ApplicationScope
 import moe.antimony.hoshi.di.IoDispatcher
 import moe.antimony.hoshi.MainActivity
@@ -77,6 +83,19 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
     private val readerAttachment = SasayakiReaderAttachment()
     private val mainHandler = Handler(Looper.getMainLooper())
     private val mainExecutor = Executor { command -> mainHandler.post(command) }
+
+    // App-scoped playback hub for the cross-tab mini-player + sleep timer. Identity is captured on
+    // load(); nowPlaying stays null until the first playing snapshot so the bar hides for books you
+    // only open to read.
+    private var pendingIdentity: SasayakiNowPlaying? = null
+    private var sleepTimerJob: Job? = null
+    private var sleepTargetSeconds: Double? = null
+    private val _nowPlaying = MutableStateFlow<SasayakiNowPlaying?>(null)
+    val nowPlaying: StateFlow<SasayakiNowPlaying?> = _nowPlaying.asStateFlow()
+    private val _snapshot = MutableStateFlow(SasayakiPlaybackSnapshot())
+    val snapshot: StateFlow<SasayakiPlaybackSnapshot> = _snapshot.asStateFlow()
+    private val _sleepTimer = MutableStateFlow(SasayakiSleepTimerState())
+    val sleepTimer: StateFlow<SasayakiSleepTimerState> = _sleepTimer.asStateFlow()
 
     fun createServiceSession(serviceContext: Context): MediaSession {
         session?.let { return it }
@@ -158,6 +177,11 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
             onClearCue = onClearCue,
         )
         activeBookId = request.bookId
+        pendingIdentity = SasayakiNowPlaying(
+            bookId = request.bookId,
+            title = request.bookTitle ?: request.bookRoot.name,
+            coverFile = request.bookCoverFile,
+        )
         session?.setSessionActivity(sasayakiPlaybackReturnPendingIntent(appContext, request.bookId))
         val controller = SasayakiPlaybackController(
             context = appContext,
@@ -177,6 +201,7 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
             ),
             onPlaybackStartRequested = ::ensurePlaybackServiceReady,
             onForegroundPlaybackRequestedChanged = ::setForegroundPlaybackRequested,
+            onPlaybackSnapshot = ::handleSnapshot,
             restoreAudioOnCreate = false,
         )
         activeKey = requestedKey
@@ -219,6 +244,73 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
 
     fun seekToFromSession(positionMs: Long) {
         activeController?.seekTo(positionMs.coerceAtLeast(0L) / 1000.0)
+    }
+
+    // Mini-player transport.
+    fun togglePlayback() {
+        activeController?.togglePlayback()
+    }
+
+    fun skipForward() {
+        activeController?.nextCue()
+    }
+
+    fun skipBackward() {
+        activeController?.previousCue()
+    }
+
+    /**
+     * Arm the sleep timer. [endOfChapterSeconds] is the audio position (seconds) at which the current
+     * chapter ends, supplied by the sheet for [SasayakiSleepTimerOption.EndOfChapter]; minute options
+     * count down on [appScope] and pause when they elapse.
+     */
+    fun setSleepTimer(option: SasayakiSleepTimerOption, endOfChapterSeconds: Double? = null) {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        sleepTargetSeconds = null
+        when {
+            option == SasayakiSleepTimerOption.Off -> {
+                _sleepTimer.value = SasayakiSleepTimerState()
+            }
+            option == SasayakiSleepTimerOption.EndOfChapter -> {
+                sleepTargetSeconds = endOfChapterSeconds
+                _sleepTimer.value = SasayakiSleepTimerState(option = SasayakiSleepTimerOption.EndOfChapter)
+            }
+            option.minutes != null -> {
+                val totalSeconds = option.minutes * 60
+                _sleepTimer.value = SasayakiSleepTimerState(option = option, remainingSeconds = totalSeconds)
+                sleepTimerJob = appScope.launch {
+                    var remaining = totalSeconds
+                    while (remaining > 0) {
+                        delay(1000L)
+                        remaining -= 1
+                        _sleepTimer.value = SasayakiSleepTimerState(option = option, remainingSeconds = remaining)
+                    }
+                    activeController?.pausePlayback(restoreTemporaryPosition = true)
+                    _sleepTimer.value = SasayakiSleepTimerState()
+                }
+            }
+        }
+    }
+
+    private fun cancelSleepTimer() {
+        sleepTimerJob?.cancel()
+        sleepTimerJob = null
+        sleepTargetSeconds = null
+        _sleepTimer.value = SasayakiSleepTimerState()
+    }
+
+    private fun handleSnapshot(snapshot: SasayakiPlaybackSnapshot) {
+        _snapshot.value = snapshot
+        if (_nowPlaying.value == null && snapshot.isPlaying) {
+            _nowPlaying.value = pendingIdentity
+        }
+        val target = sleepTargetSeconds
+        if (target != null && snapshot.isPlaying && snapshot.positionMs / 1000.0 >= target) {
+            sleepTargetSeconds = null
+            activeController?.pausePlayback(restoreTemporaryPosition = true)
+            _sleepTimer.value = SasayakiSleepTimerState()
+        }
     }
 
     fun release() {
@@ -275,6 +367,10 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
         activeController?.release()
         activeController = null
         activeKey = null
+        cancelSleepTimer()
+        _nowPlaying.value = null
+        _snapshot.value = SasayakiPlaybackSnapshot()
+        pendingIdentity = null
         if (clearBookId) {
             activeBookId = null
         }

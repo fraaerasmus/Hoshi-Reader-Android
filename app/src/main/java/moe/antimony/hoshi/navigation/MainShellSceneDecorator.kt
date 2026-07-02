@@ -50,12 +50,14 @@ internal fun rememberMainShellSceneDecoratorStrategy(
     selectedTab: MainTab,
     visibleTabs: List<MainTab>,
     onSelectedTabChange: (MainTab) -> Unit,
+    onOpenReader: (String) -> Unit,
 ): SceneDecoratorStrategy<NavKey> {
     val currentShellState = rememberUpdatedState(
         MainShellSceneState(
             selectedTab = selectedTab,
             visibleTabs = visibleTabs,
             onSelectedTabChange = onSelectedTabChange,
+            onOpenReader = onOpenReader,
         ),
     )
     return remember {
@@ -74,6 +76,7 @@ private data class MainShellSceneState(
     val selectedTab: MainTab,
     val visibleTabs: List<MainTab>,
     val onSelectedTabChange: (MainTab) -> Unit,
+    val onOpenReader: (String) -> Unit,
 )
 
 private data class MainShellSceneKey(
@@ -105,6 +108,7 @@ private class MainShellScene(
         HoshiMainShell(
             selectedTab = shellState.selectedTab,
             onSelectedTabChange = shellState.onSelectedTabChange,
+            onOpenReader = shellState.onOpenReader,
             visibleTabs = shellState.visibleTabs,
             modifier = Modifier.fillMaxSize(),
         ) { contentModifier, layoutSpec ->

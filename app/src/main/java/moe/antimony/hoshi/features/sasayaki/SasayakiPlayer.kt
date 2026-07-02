@@ -184,12 +184,4 @@ class SasayakiPlayer private constructor(
             )
         }
     }
-
-    fun redisplayCue() {
-        controller.redisplayCue()
-    }
-
-    fun cycleSpeed() {
-        controller.cycleSpeed()
-    }
 }

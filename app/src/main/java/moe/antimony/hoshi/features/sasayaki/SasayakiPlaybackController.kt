@@ -63,6 +63,7 @@ internal class SasayakiPlaybackController(
     persistenceDispatcher: CoroutineDispatcher,
     private val onPlaybackStartRequested: (() -> Unit) -> Unit = { onReady -> onReady() },
     private val onForegroundPlaybackRequestedChanged: (Boolean) -> Unit = {},
+    private val onPlaybackSnapshot: (SasayakiPlaybackSnapshot) -> Unit = {},
     restoreAudioOnCreate: Boolean = true,
     tickScheduler: SasayakiTickScheduler? = null,
 ) : SasayakiPlaybackControllerContract {
@@ -464,6 +465,18 @@ internal class SasayakiPlaybackController(
             source = SasayakiCueRevealSource.NaturalPlayback,
             applyCueDisplayAction = ::applyCueDisplayAction,
         )
+        publishSnapshot()
+    }
+
+    private fun publishSnapshot() {
+        onPlaybackSnapshot(
+            SasayakiPlaybackSnapshot(
+                isPlaying = playbackState.isPlaying,
+                positionMs = (playbackState.currentTime * 1000).toLong(),
+                durationMs = (playbackState.duration * 1000).toLong(),
+                speed = playback.rate,
+            ),
+        )
     }
 
     private fun handlePlaybackActiveChanged(active: Boolean) {
@@ -475,6 +488,7 @@ internal class SasayakiPlaybackController(
             },
             restoreTemporaryPositionIfNeeded = ::restoreTemporaryPlaybackPositionIfNeeded,
         )
+        publishSnapshot()
     }
 
     private fun handlePlayerPositionChanged(positionMs: Int, durationMs: Int) {
@@ -486,6 +500,7 @@ internal class SasayakiPlaybackController(
             playbackPersistence.savePosition(currentTime)
         }
         updateCue(currentTime, forceDisplay = true)
+        publishSnapshot()
     }
 
     private fun updateCue(time: Double, forceDisplay: Boolean = false) {

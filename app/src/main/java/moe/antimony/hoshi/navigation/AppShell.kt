@@ -351,6 +351,7 @@ fun AppShell(
         selectedTab = effectiveSelectedTab,
         visibleTabs = visibleMainTabs,
         onSelectedTabChange = ::selectMainTab,
+        onOpenReader = ::openReader,
     )
     val booksEntries = rememberDecoratedNavEntries(
         backStack = booksBackStack,
@@ -446,7 +447,6 @@ private fun TopLevelRouteContent(
             layoutSpec = layoutSpec,
             onDestination = onSettingsDestination,
         )
-    }
     }
 }
 

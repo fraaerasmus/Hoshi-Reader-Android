@@ -361,7 +361,7 @@ __HOSHI_READER_SASAYAKI_SCRIPT__
     return totalChars > 0 ? exploredChars / totalChars : 0;
   },
   restoreProgress: async function(progress) {
-    await document.fonts.ready;
+    await Promise.race([document.fonts.ready, new Promise(function (r) { setTimeout(r, 120); })]);
     if (progress <= 0) {
       this.scrollToChapterStart();
       requestAnimationFrame(() => {
@@ -430,7 +430,7 @@ __HOSHI_READER_SASAYAKI_SCRIPT__
     });
   },
   jumpToFragment: async function(fragment) {
-    await document.fonts.ready;
+    await Promise.race([document.fonts.ready, new Promise(function (r) { setTimeout(r, 120); })]);
     var rawFragment = (fragment || '').trim();
     var target = rawFragment && (document.getElementById(rawFragment) || document.getElementsByName(rawFragment)[0]);
     if (!target) {

@@ -95,6 +95,7 @@ class MainShellAdaptiveUiTest {
                     HoshiMainShell(
                         selectedTab = MainTab.Books,
                         onSelectedTabChange = {},
+                        onOpenReader = {},
                         modifier = Modifier.fillMaxSize(),
                     ) { modifier, layoutSpec ->
                         Box(modifier = modifier.testTag(ContentTag)) {

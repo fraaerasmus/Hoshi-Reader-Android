@@ -40,6 +40,8 @@ function readerSource(url, options = {}) {
         .replaceAll('__HOSHI_BLUR_IMAGES__', 'false')
         .replaceAll('__HOSHI_TRAILING_SPACER_HEIGHT_LITERAL__', JSON.stringify('0px'))
         .replaceAll('__HOSHI_TRAILING_SPACER_WIDTH_LITERAL__', JSON.stringify('0px'))
+        .replaceAll('__HOSHI_INITIAL_PROGRESS__', String(options.initialProgress ?? 0))
+        .replaceAll('__HOSHI_INITIAL_FRAGMENT_LITERAL__', JSON.stringify(options.initialFragment ?? null))
         .replaceAll('__HOSHI_RESTORE_SCRIPTS__', options.restoreScripts ?? '');
 }
 
@@ -717,10 +719,13 @@ test('reader initialization waits for image setup before offsets and restore scr
           };
         `;
         const restoreScripts = "window.__events.push('restore'); window.hoshiReader.restoreProgress(0);";
+        // Mid-chapter open (progress > 0) exercises the image-wait path; the reveal-before-decode
+        // fast-path only applies to chapter-start opens.
         const { reader, window } = loadReader(body, sourceUrl, {
             mediaSemanticsScript,
             restoreScripts,
             restoreMessages: [],
+            initialProgress: 0.5,
         });
         window.__events = events;
         reader.buildNodeOffsets = () => {

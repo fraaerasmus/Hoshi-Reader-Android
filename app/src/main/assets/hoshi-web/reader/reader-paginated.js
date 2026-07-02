@@ -510,15 +510,19 @@ __HOSHI_READER_SASAYAKI_SCRIPT__
     return totalChars > 0 ? exploredChars / totalChars : 0;
   },
   restoreProgress: async function(progress) {
-    await document.fonts.ready;
-    var context = this.getScrollContext();
-    if (context.pageSize <= 0) {
+    if (progress <= 0) {
+      var startContext = this.getScrollContext();
+      if (startContext.pageSize > 0) {
+        this.setPagePosition(startContext, 0);
+      }
       this.registerSnapScroll(0);
       this.notifyRestoreComplete();
       return;
     }
-    if (progress <= 0) {
-      this.setPagePosition(context, 0);
+    // Reveal in a fallback face within ~120ms instead of blocking on multi-MB web fonts.
+    await Promise.race([document.fonts.ready, new Promise(function (r) { setTimeout(r, 120); })]);
+    var context = this.getScrollContext();
+    if (context.pageSize <= 0) {
       this.registerSnapScroll(0);
       this.notifyRestoreComplete();
       return;
@@ -579,7 +583,7 @@ __HOSHI_READER_SASAYAKI_SCRIPT__
     });
   },
   jumpToFragment: async function(fragment) {
-    await document.fonts.ready;
+    await Promise.race([document.fonts.ready, new Promise(function (r) { setTimeout(r, 120); })]);
     var context = this.getScrollContext();
     var rawFragment = (fragment || '').trim();
     var target = rawFragment && (document.getElementById(rawFragment) || document.getElementsByName(rawFragment)[0]);
@@ -663,6 +667,14 @@ window.hoshiReader.initialize = function() {
   document.body.appendChild(spacer);
   window.hoshiReader.normalizeRubyTextNodes();
   window.hoshiReader.stabilizeRubyAdjacentTextNodes();
+  // Reveal chapter-start opens after first paint; don't wait on image decode.
+  if (__HOSHI_INITIAL_FRAGMENT_LITERAL__ === null && __HOSHI_INITIAL_PROGRESS__ <= 0) {
+    requestAnimationFrame(function() {
+      window.hoshiReader.buildNodeOffsets();
+      __HOSHI_RESTORE_SCRIPTS__
+    });
+    return;
+  }
   imageSetupPromise.then(function() {
     if (!images.length) return;
     return new Promise(function(resolve) { setTimeout(resolve, 50); });
