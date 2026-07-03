@@ -21,9 +21,18 @@ class SasayakiPlaybackService : MediaSessionService() {
             context = this,
             contentIntent = runtime::playbackReturnPendingIntent,
             isPlaybackOngoing = runtime::isForegroundPlaybackRequested,
+            currentSpeed = { runtime.snapshot.value.speed },
         )
         setMediaNotificationProvider(notificationProvider)
         addSession(runtime.createServiceSession(this))
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == SasayakiCycleSpeedAction) {
+            runtime.cycleSpeed()
+            return START_STICKY
+        }
+        return super.onStartCommand(intent, flags, startId)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =

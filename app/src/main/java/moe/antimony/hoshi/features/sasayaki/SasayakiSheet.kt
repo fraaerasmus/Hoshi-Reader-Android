@@ -87,8 +87,8 @@ import moe.antimony.hoshi.importing.validateImportFile
 import moe.antimony.hoshi.ui.HoshiBlockingProgressOverlay
 import moe.antimony.hoshi.ui.asString
 
-internal val SasayakiSpeedSliderRange = 0.5f..2.0f
-internal const val SasayakiSpeedSliderSteps = 29
+internal val SasayakiSpeedSliderRange = 0.5f..3.0f
+internal const val SasayakiSpeedSliderSteps = 49
 internal const val SasayakiAudiobookCoverWidthDp = 68
 internal const val SasayakiAudiobookCoverHeightDp = 68
 internal val SasayakiSheetTabRole = Role.Tab

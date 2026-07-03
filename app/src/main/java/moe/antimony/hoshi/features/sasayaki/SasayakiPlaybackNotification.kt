@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.graphics.BitmapFactory
 import android.graphics.drawable.Icon
 import android.os.Bundle
@@ -21,6 +22,7 @@ import androidx.media3.session.R as Media3R
 
 internal const val SasayakiPlaybackNotificationId = 1001
 internal const val SasayakiPlaybackNotificationChannelId = "hoshi_sasayaki_playback"
+internal const val SasayakiCycleSpeedRequestCode = 1002
 
 internal data class SasayakiPlaybackNotificationActionSpec(
     val playerCommand: Int,
@@ -54,11 +56,23 @@ internal fun sasayakiPlaybackNotificationActionSpecs(
         ),
     )
 
+/** Speed glyph for the notification action (media3 ships glyphs up to 2.0x; generic above). */
+@OptIn(UnstableApi::class)
+internal fun sasayakiSpeedNotificationIconRes(rate: Float): Int = when {
+    rate < 1.1f -> Media3R.drawable.media3_icon_playback_speed_1_0
+    rate < 1.35f -> Media3R.drawable.media3_icon_playback_speed_1_2
+    rate < 1.65f -> Media3R.drawable.media3_icon_playback_speed_1_5
+    rate < 1.9f -> Media3R.drawable.media3_icon_playback_speed_1_8
+    rate < 2.25f -> Media3R.drawable.media3_icon_playback_speed_2_0
+    else -> Media3R.drawable.media3_icon_playback_speed
+}
+
 @OptIn(UnstableApi::class)
 internal class SasayakiPlaybackNotificationProvider(
     private val context: Context,
     private val contentIntent: () -> PendingIntent,
     private val isPlaybackOngoing: () -> Boolean = { false },
+    private val currentSpeed: () -> Float = { 1f },
 ) : MediaNotification.Provider {
     private val notificationManager = context.getSystemService(NotificationManager::class.java)
 
@@ -121,6 +135,14 @@ internal class SasayakiPlaybackNotificationProvider(
                 ).build(),
             )
         }
+        // Fork: cycle-speed action (expanded view only; compact stays rewind/play/forward).
+        builder.addAction(
+            Notification.Action.Builder(
+                Icon.createWithResource(context, sasayakiSpeedNotificationIconRes(currentSpeed())),
+                context.getString(R.string.sasayaki_speed),
+                cycleSpeedIntent(),
+            ).build(),
+        )
         return builder.build()
     }
 
@@ -133,6 +155,14 @@ internal class SasayakiPlaybackNotificationProvider(
         )
             .setSessionId(SasayakiPlaybackService.SessionId)
             .build()
+
+    private fun cycleSpeedIntent(): PendingIntent =
+        PendingIntent.getService(
+            context,
+            SasayakiCycleSpeedRequestCode,
+            Intent(context, SasayakiPlaybackService::class.java).setAction(SasayakiCycleSpeedAction),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
     private fun ensureChannel() {
         val channel = NotificationChannel(

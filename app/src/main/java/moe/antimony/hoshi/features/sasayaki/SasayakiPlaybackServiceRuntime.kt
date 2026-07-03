@@ -4,9 +4,12 @@ import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.KeyEvent
 import androidx.annotation.OptIn
+import androidx.core.content.IntentCompat
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
@@ -16,6 +19,8 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import androidx.media3.session.SessionCommand
+import androidx.media3.session.SessionResult
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -42,6 +47,30 @@ import java.util.concurrent.Executor
 
 internal const val SasayakiPlaybackReturnAction = "moe.antimony.hoshi.action.RETURN_TO_SASAYAKI_READER"
 internal const val SasayakiPlaybackReturnBookIdExtra = "moe.antimony.hoshi.extra.SASAYAKI_BOOK_ID"
+internal const val SasayakiCycleSpeedAction = "moe.antimony.hoshi.sasayaki.CYCLE_SPEED"
+
+internal val sasayakiCycleSpeedCommand: SessionCommand
+    get() = SessionCommand(SasayakiCycleSpeedAction, Bundle.EMPTY)
+
+/** Discrete speed steps for the cycle button (notification/lock screen + mini-player chip). */
+internal fun sasayakiNextCycleSpeed(rate: Float): Float {
+    val speeds = listOf(1.0f, 1.25f, 1.5f, 1.75f, 2.0f, 2.5f, 3.0f)
+    return speeds.firstOrNull { it > rate + 0.01f } ?: speeds.first()
+}
+
+/**
+ * Media3 speed glyph for the current rate (glyphs exist up to 2.0x; above that
+ * falls back to the generic speed icon).
+ */
+@OptIn(UnstableApi::class)
+internal fun sasayakiSpeedButtonIconFor(rate: Float): Int = when {
+    rate < 1.1f -> CommandButton.ICON_PLAYBACK_SPEED_1_0
+    rate < 1.35f -> CommandButton.ICON_PLAYBACK_SPEED_1_2
+    rate < 1.65f -> CommandButton.ICON_PLAYBACK_SPEED_1_5
+    rate < 1.9f -> CommandButton.ICON_PLAYBACK_SPEED_1_8
+    rate < 2.25f -> CommandButton.ICON_PLAYBACK_SPEED_2_0
+    else -> CommandButton.ICON_PLAYBACK_SPEED
+}
 
 internal data class SasayakiPlaybackRuntimeLoadRequest(
     val bookId: String,
@@ -90,6 +119,7 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
     private var pendingIdentity: SasayakiNowPlaying? = null
     private var sleepTimerJob: Job? = null
     private var sleepTargetSeconds: Double? = null
+    private var currentSpeedIcon = CommandButton.ICON_PLAYBACK_SPEED_1_0
     private val _nowPlaying = MutableStateFlow<SasayakiNowPlaying?>(null)
     val nowPlaying: StateFlow<SasayakiNowPlaying?> = _nowPlaying.asStateFlow()
     private val _snapshot = MutableStateFlow(SasayakiPlaybackSnapshot())
@@ -107,7 +137,6 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
         ).apply {
             setAudioAttributes(sasayakiMedia3AudioAttributes(), true)
         }
-        val mediaButtons = sasayakiServiceMediaButtons(appContext)
         val sessionPlayer = SasayakiServiceSessionPlayer(
             player = createdPlayer.player,
             onPlay = ::playFromSession,
@@ -118,9 +147,9 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
         )
         val createdSession = MediaSession.Builder(serviceContext, sessionPlayer)
             .setId(SasayakiPlaybackService.SessionId)
-            .setMediaButtonPreferences(mediaButtons)
+            .setMediaButtonPreferences(currentMediaButtons())
             .setSessionActivity(sasayakiPlaybackReturnPendingIntent(appContext, activeBookId))
-            .setCallback(SasayakiPlaybackServiceSessionCallback(runtime = this, mediaButtons = mediaButtons))
+            .setCallback(SasayakiPlaybackServiceSessionCallback(runtime = this))
             .build()
 
         player = createdPlayer
@@ -259,6 +288,15 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
         activeController?.previousCue()
     }
 
+    /** Steps the playback rate through the discrete cycle (1.0 -> ... -> 3.0 -> 1.0). */
+    fun cycleSpeed() {
+        val controller = activeController ?: return
+        controller.setRate(sasayakiNextCycleSpeed(controller.rate))
+    }
+
+    internal fun currentMediaButtons(): List<CommandButton> =
+        sasayakiServiceMediaButtons(appContext, currentSpeedIcon)
+
     /**
      * Arm the sleep timer. [endOfChapterSeconds] is the audio position (seconds) at which the current
      * chapter ends, supplied by the sheet for [SasayakiSleepTimerOption.EndOfChapter]; minute options
@@ -304,6 +342,11 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
         _snapshot.value = snapshot
         if (_nowPlaying.value == null && snapshot.isPlaying) {
             _nowPlaying.value = pendingIdentity
+        }
+        val speedIcon = sasayakiSpeedButtonIconFor(snapshot.speed)
+        if (speedIcon != currentSpeedIcon) {
+            currentSpeedIcon = speedIcon
+            session?.setMediaButtonPreferences(currentMediaButtons())
         }
         val target = sleepTargetSeconds
         if (target != null && snapshot.isPlaying && snapshot.positionMs / 1000.0 >= target) {
@@ -387,7 +430,6 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
 @OptIn(UnstableApi::class)
 private class SasayakiPlaybackServiceSessionCallback(
     private val runtime: SasayakiPlaybackServiceRuntime,
-    private val mediaButtons: List<CommandButton>,
 ) : MediaSession.Callback {
     override fun onConnect(
         session: MediaSession,
@@ -398,6 +440,10 @@ private class SasayakiPlaybackServiceSessionCallback(
             .add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
             .add(Player.COMMAND_SEEK_BACK)
             .add(Player.COMMAND_SEEK_FORWARD)
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            .add(Player.COMMAND_SEEK_TO_NEXT)
+            .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
             .add(Player.COMMAND_GET_CURRENT_MEDIA_ITEM)
             .add(Player.COMMAND_GET_TIMELINE)
             .add(Player.COMMAND_GET_METADATA)
@@ -406,8 +452,56 @@ private class SasayakiPlaybackServiceSessionCallback(
             .build()
         return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
             .setAvailablePlayerCommands(playerCommands)
-            .setMediaButtonPreferences(mediaButtons)
+            .setAvailableSessionCommands(
+                MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                    .add(sasayakiCycleSpeedCommand)
+                    .build(),
+            )
+            .setMediaButtonPreferences(runtime.currentMediaButtons())
             .build()
+    }
+
+    override fun onCustomCommand(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo,
+        customCommand: SessionCommand,
+        args: Bundle,
+    ): ListenableFuture<SessionResult> {
+        if (customCommand.customAction == SasayakiCycleSpeedAction) {
+            runtime.cycleSpeed()
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+        }
+        return super.onCustomCommand(session, controller, customCommand, args)
+    }
+
+    // A single-item player doesn't advertise SEEK_TO_NEXT/PREVIOUS, so the default
+    // routing drops headset next/previous keys. Intercept the transport keys here
+    // (before that gate) and reuse the skip callbacks, which honor Skip Action.
+    override fun onMediaButtonEvent(
+        session: MediaSession,
+        controllerInfo: MediaSession.ControllerInfo,
+        intent: Intent,
+    ): Boolean {
+        val keyEvent = IntentCompat.getParcelableExtra(intent, Intent.EXTRA_KEY_EVENT, KeyEvent::class.java)
+            ?: return false
+        val isDown = keyEvent.action == KeyEvent.ACTION_DOWN
+        return when (keyEvent.keyCode) {
+            KeyEvent.KEYCODE_MEDIA_NEXT,
+            KeyEvent.KEYCODE_MEDIA_FAST_FORWARD,
+            -> {
+                if (isDown) runtime.nextFromSession()
+                true
+            }
+
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS,
+            KeyEvent.KEYCODE_MEDIA_REWIND,
+            -> {
+                if (isDown) runtime.previousFromSession()
+                true
+            }
+
+            else -> false
+        }
     }
 }
 
@@ -441,6 +535,22 @@ private class SasayakiServiceSessionPlayer(
     }
 
     override fun seekForward() {
+        onSkipToNext()
+    }
+
+    override fun seekToPrevious() {
+        onSkipToPrevious()
+    }
+
+    override fun seekToPreviousMediaItem() {
+        onSkipToPrevious()
+    }
+
+    override fun seekToNext() {
+        onSkipToNext()
+    }
+
+    override fun seekToNextMediaItem() {
         onSkipToNext()
     }
 
@@ -478,14 +588,20 @@ internal fun sasayakiServiceMediaButtonSpecs(): List<SasayakiServiceMediaButtonS
     )
 
 @OptIn(UnstableApi::class)
-internal fun sasayakiServiceMediaButtons(context: Context): List<CommandButton> =
+internal fun sasayakiServiceMediaButtons(
+    context: Context,
+    speedIcon: Int = CommandButton.ICON_PLAYBACK_SPEED_1_0,
+): List<CommandButton> =
     sasayakiServiceMediaButtonSpecs().map { spec ->
         CommandButton.Builder(spec.icon)
             .setDisplayName(context.getString(spec.displayNameResId))
             .setPlayerCommand(spec.playerCommand)
             .setSlots(spec.slot)
             .build()
-    }
+    } + CommandButton.Builder(speedIcon)
+        .setDisplayName(context.getString(R.string.sasayaki_speed))
+        .setSessionCommand(sasayakiCycleSpeedCommand)
+        .build()
 
 internal fun sasayakiPlaybackReturnActivityFlags(): Int =
     Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT

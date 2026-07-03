@@ -24,6 +24,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -36,6 +37,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.LocalHoshiUiDependencies
@@ -100,6 +102,9 @@ internal fun SasayakiMiniPlayer(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                TextButton(onClick = { runtime.cycleSpeed() }) {
+                    Text(formatSpeed(snapshot.speed))
+                }
                 IconButton(onClick = { runtime.skipBackward() }) {
                     Icon(Icons.Rounded.FastRewind, contentDescription = stringResource(R.string.sasayaki_previous_cue))
                 }
@@ -125,4 +130,13 @@ internal fun SasayakiMiniPlayer(
             }
         }
     }
+}
+
+private fun formatSpeed(speed: Float): String {
+    val text = if (speed % 1f == 0f) {
+        speed.toInt().toString()
+    } else {
+        String.format(Locale.US, "%.2f", speed).trimEnd('0').trimEnd('.')
+    }
+    return "$text×"
 }
