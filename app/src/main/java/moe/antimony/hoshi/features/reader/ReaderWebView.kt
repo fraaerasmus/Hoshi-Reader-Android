@@ -554,7 +554,9 @@ fun ReaderWebView(
             onFlushAutoSyncExport()
         }
         cancelSasayakiAutoPage()
-        sasayakiPlayer?.stopPlayback()
+        // Fork: closing the reader detaches but keeps audio playing; the cross-tab
+        // mini-player takes over playback control (upstream stops playback here).
+        sasayakiPlayer?.release()
         sasayakiPlayer = null
         onClose()
     }
