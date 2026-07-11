@@ -58,10 +58,33 @@
         },
     };
 
+    const FrenchElisionClitics = ['l', 'd', 'j', 'n', 's', 't', 'c', 'm', 'qu'];
+
+    function isFrenchElisionApostrophe(text, offset) {
+        const char = window.hoshiSelection?.codePointAt(text, offset) ?? text[offset];
+        if (char !== '\'' && char !== '’') return false;
+        if (!isEnglishWordChar(text[offset - 1]) || !isEnglishWordChar(text[offset + 1])) return false;
+        let start = offset;
+        while (start > 0 && isEnglishWordChar(text[start - 1])) start--;
+        return FrenchElisionClitics.includes(text.slice(start, offset).toLowerCase());
+    }
+
+    const FrenchSelectionLanguage = {
+        ...EnglishSelectionLanguage,
+
+        // Word starts break after l'/d'/qu'… so tapping "homme" in "l'homme" scans "homme";
+        // forward scans keep the apostrophe word-internal (aujourd'hui, and taps on the clitic).
+        isWordStartBoundaryAt(text, offset, selection) {
+            return EnglishSelectionLanguage.isHitBoundaryAt.call(this, text, offset, selection) ||
+                isFrenchElisionApostrophe(text, offset);
+        },
+    };
+
     // Default for any space-delimited language (this file is loaded for all non-Japanese profiles).
     window.hoshiSelectionLanguagePolicies = {
         ...window.hoshiSelectionLanguagePolicies,
         en: EnglishSelectionLanguage,
+        fr: FrenchSelectionLanguage,
         default: EnglishSelectionLanguage,
     };
 })();

@@ -262,6 +262,43 @@ test('non-English space-delimited selection scans from the beginning of a tapped
     );
 });
 
+test('french selection starts after an elision apostrophe when tapping the content word', () => {
+    assert.equal(
+        scanTextFromOffset("l'homme", 3, { language: 'fr' }),
+        'homme',
+    );
+    assert.equal(
+        scanTextFromOffset('l’homme', 3, { language: 'fr' }),
+        'homme',
+    );
+    assert.equal(
+        scanTextFromOffset("L'homme dort.", 3, { language: 'fr' }),
+        'homme dort',
+    );
+    assert.equal(
+        scanTextFromOffset("Qu'il", 3, { language: 'fr' }),
+        'il',
+    );
+});
+
+test('french selection keeps non-elision apostrophes word-internal', () => {
+    assert.equal(
+        scanTextFromOffset("aujourd'hui", 9, { language: 'fr' }),
+        "aujourd'hui",
+    );
+    assert.equal(
+        scanTextFromOffset("l'homme", 0, { language: 'fr' }),
+        "l'homme",
+    );
+});
+
+test('english selection keeps elision-like apostrophes word-internal', () => {
+    assert.equal(
+        scanTextFromOffset("l'homme", 3, { language: 'en' }),
+        "l'homme",
+    );
+});
+
 test('english reader selection keeps spaces while scanning for phrase lookups', () => {
     assert.equal(
         scanTextFromOffset('New York style pizza.', 0, { language: 'en' }),
