@@ -493,6 +493,62 @@ test('shared ruby geometry does not cascade a vertical single-character base rec
     assert.equal(rubyAware.height, 21);
 });
 
+test('shared selection clips vertical ruby annotation rects to partial base selections', () => {
+    const { document, selection, textNode, window } = loadSelection('小型誘導弾');
+    window.getComputedStyle = () => ({ writingMode: 'vertical-rl' });
+    selection.configure({ rubyAwareRects: true });
+
+    const rect = (x, y, width, height) => ({
+        x,
+        y,
+        width,
+        height,
+        left: x,
+        top: y,
+        right: x + width,
+        bottom: y + height,
+    });
+    const ruby = {
+        querySelectorAll(selector) {
+            return selector === 'rt' ? [{ getClientRects: () => [rect(130, 0, 10, 100)] }] : [];
+        },
+    };
+    textNode.parentElement = {
+        closest(selector) {
+            return selector === 'ruby' ? ruby : null;
+        },
+    };
+    document.createRange = () => ({
+        startContainer: null,
+        startOffset: 0,
+        endOffset: 0,
+        setStart(node, offset) {
+            this.startContainer = node;
+            this.startOffset = offset;
+        },
+        setEnd(_node, offset) {
+            this.endOffset = offset;
+        },
+        getClientRects() {
+            return [rect(100, this.startOffset * 20, 30, (this.endOffset - this.startOffset) * 20)];
+        },
+        getBoundingClientRect() {
+            return rect(100, this.startOffset * 20, 30, (this.endOffset - this.startOffset) * 20);
+        },
+    });
+    selection.selection = {
+        ranges: [{ node: textNode, start: 2, end: 5 }],
+        text: '誘導弾',
+    };
+
+    const rects = selection.selectionRects(3);
+
+    assert.equal(
+        JSON.stringify(rects),
+        JSON.stringify([{ x: 100, y: 40, width: 40, height: 60 }]),
+    );
+});
+
 test('shared selection keeps vertical lookup rects split when adjacent ruby-aware columns barely overlap', () => {
     const { selection, window } = loadSelection('信憑性がある');
     window.getComputedStyle = () => ({ writingMode: 'vertical-rl' });

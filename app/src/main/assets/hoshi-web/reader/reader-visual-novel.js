@@ -99,6 +99,9 @@ window.hoshiReader = {
   isMatchableChar: function(char) {
     return this.textSemantics().isMatchableChar(char);
   },
+  isJapaneseBreakCharacter: function(char) {
+    return this.textSemantics().isJapaneseBreakCharacter(char);
+  },
   textOffsetForCharCount: function(node, targetCount) {
     var text = node.textContent || '';
     var count = 0;
@@ -1419,7 +1422,69 @@ window.hoshiReader = {
     for (var i = 0; i < children.length; i++) {
       clone.appendChild(this.cloneSourceNodeWithOffsets(children[i]));
     }
+    this.stabilizeVerticalRubyAdjacentCloneTextNodes(clone);
     return clone;
+  },
+  stabilizeVerticalRubyAdjacentCloneTextNodes: function(root) {
+    if (!root || !this.isVertical()) return root;
+    var rubies = [];
+    if (root.nodeType === Node.ELEMENT_NODE && String(root.tagName || '').toLowerCase() === 'ruby') {
+      rubies.push(root);
+    }
+    if (root.querySelectorAll) {
+      rubies = rubies.concat(Array.from(root.querySelectorAll('ruby')));
+    }
+    rubies.forEach((ruby) => {
+      if (ruby.closest && ruby.closest('rt, rp')) return;
+      var node = ruby.nextSibling;
+      while (node && node.nodeType === Node.TEXT_NODE && !node.nodeValue.trim()) {
+        node = node.nextSibling;
+      }
+      if (!node || node.nodeType !== Node.TEXT_NODE || !node.nodeValue) return;
+      this.splitVerticalRubyAdjacentCloneTextNode(node);
+    });
+    return root;
+  },
+  splitVerticalRubyAdjacentCloneTextNode: function(node) {
+    var chars = Array.from(node.nodeValue || '');
+    if (chars.length <= 1 || !node.parentNode) return false;
+    var splitLimit = 64;
+    var splitCount = 0;
+    var fragment = document.createDocumentFragment();
+    var pending = '';
+    var mappedCharOffset = this.rangeMap ? this.rangeMap.cloneTextOffsetForNode(node) : undefined;
+    var mappedRawOffset = this.rangeMap ? this.rangeMap.cloneTextRawOffsetForNode(node) : undefined;
+    var nextCharOffset = mappedCharOffset;
+    var nextRawOffset = mappedRawOffset;
+    var appendText = (text) => {
+      if (!text) return;
+      var split = document.createTextNode(text);
+      if (this.rangeMap && (mappedCharOffset !== undefined || mappedRawOffset !== undefined)) {
+        this.rangeMap.registerCloneTextOffset(split, nextCharOffset, nextRawOffset);
+      }
+      fragment.appendChild(split);
+      if (nextCharOffset !== undefined) nextCharOffset += this.countChars(text);
+      if (nextRawOffset !== undefined) nextRawOffset += this.countRawChars(text);
+    };
+    var flush = () => {
+      appendText(pending);
+      pending = '';
+    };
+    chars.forEach((char) => {
+      if (splitCount < splitLimit && this.isJapaneseBreakCharacter(char)) {
+        flush();
+        appendText(char);
+        splitCount += 1;
+      } else {
+        pending += char;
+      }
+    });
+    if (splitCount === 0) return false;
+    flush();
+    var parent = node.parentNode;
+    parent.insertBefore(fragment, node);
+    parent.removeChild(node);
+    return true;
   },
   sourceTextOffsetForNode: function(node) {
     if (!this.contentStream || !this.contentStream.sourceTextOffsets) return undefined;
@@ -1600,6 +1665,7 @@ window.hoshiReader = {
         appendCloneInSourceOrder(ensureElementClone(parent), cloneText, this.sourcePreorderForNode(range.node));
       }
     }
+    this.stabilizeVerticalRubyAdjacentCloneTextNodes(fragment);
     boundsByRoot.forEach((bounds) => {
       if (Number.isFinite(bounds.min) && Number.isFinite(bounds.max)) {
         appendInlineMediaForBounds(bounds);

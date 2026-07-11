@@ -2,7 +2,9 @@ package moe.antimony.hoshi.features.reader
 
 import android.view.KeyEvent
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReaderHardwareKeyNavigationTest {
@@ -267,8 +269,8 @@ class ReaderHardwareKeyNavigationTest {
     }
 
     @Test
-    fun keyUpAndRepeatedNonSeekKeyDownEventsAreIgnored() {
-        val settings = ReaderSettings(volumeKeysTurnPages = true, volumeKeysSeekSasayaki = false)
+    fun pageKeysIgnoreKeyUpAndRepeatedKeyDownEvents() {
+        val settings = ReaderSettings(volumeKeysTurnPages = true, volumeKeysSeekSasayaki = true)
 
         assertNull(
             readerNavigationDirectionForKeyEvent(
@@ -278,7 +280,6 @@ class ReaderHardwareKeyNavigationTest {
                 settings = settings,
             ),
         )
-        // Page turns must not auto-repeat while a key is held.
         assertNull(
             readerNavigationDirectionForKeyEvent(
                 keyCode = KeyEvent.KEYCODE_PAGE_DOWN,
@@ -287,31 +288,55 @@ class ReaderHardwareKeyNavigationTest {
                 settings = settings,
             ),
         )
-        assertNull(
+    }
+
+    @Test
+    fun enabledVolumePageTurnKeysRepeatReaderNavigation() {
+        val settings = ReaderSettings(volumeKeysTurnPages = true)
+
+        assertEquals(
+            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward),
             readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_UP,
-                repeatCount = 0,
+                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
+                action = KeyEvent.ACTION_DOWN,
+                repeatCount = 3,
                 settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
+                sasayakiEnabled = false,
+                hasSasayakiAudio = false,
             ),
         )
-        // Volume keys mapped to page turns must not auto-repeat either.
-        assertNull(
+        assertEquals(
+            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Backward),
             readerHardwareKeyActionForKeyEvent(
                 keyCode = KeyEvent.KEYCODE_VOLUME_UP,
                 action = KeyEvent.ACTION_DOWN,
-                repeatCount = 1,
+                repeatCount = 2,
+                settings = settings,
+                sasayakiEnabled = false,
+                hasSasayakiAudio = false,
+            ),
+        )
+    }
+
+    @Test
+    fun enabledSasayakiVolumeSeekKeysRepeatSeekActions() {
+        val settings = ReaderSettings(volumeKeysSeekSasayaki = true)
+
+        assertEquals(
+            ReaderHardwareKeyAction.SasayakiSeekBackward,
+            readerHardwareKeyActionForKeyEvent(
+                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
+                action = KeyEvent.ACTION_DOWN,
+                repeatCount = 4,
                 settings = settings,
                 sasayakiEnabled = true,
                 hasSasayakiAudio = true,
             ),
         )
-        // Play/pause toggle must not auto-repeat while held.
-        assertNull(
+        assertEquals(
+            ReaderHardwareKeyAction.SasayakiSeekForward,
             readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_SPACE,
+                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
                 action = KeyEvent.ACTION_DOWN,
                 repeatCount = 1,
                 settings = settings,
@@ -449,6 +474,57 @@ class ReaderHardwareKeyNavigationTest {
                 hasSasayakiAudio = true,
             ),
         )
+    }
+
+    @Test
+    fun enabledVolumeKeysConsumeKeyUpWithoutAction() {
+        val settings = ReaderSettings(volumeKeysTurnPages = true)
+
+        val result = readerHardwareKeyEventForKeyEvent(
+            keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
+            action = KeyEvent.ACTION_UP,
+            repeatCount = 0,
+            settings = settings,
+            sasayakiEnabled = false,
+            hasSasayakiAudio = false,
+        )
+
+        assertTrue(result.consumed)
+        assertNull(result.action)
+    }
+
+    @Test
+    fun disabledVolumeKeysAreNotConsumed() {
+        val settings = ReaderSettings(volumeKeysTurnPages = false, volumeKeysSeekSasayaki = false)
+
+        val result = readerHardwareKeyEventForKeyEvent(
+            keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
+            action = KeyEvent.ACTION_DOWN,
+            repeatCount = 1,
+            settings = settings,
+            sasayakiEnabled = true,
+            hasSasayakiAudio = true,
+        )
+
+        assertFalse(result.consumed)
+        assertNull(result.action)
+    }
+
+    @Test
+    fun enabledSasayakiVolumeKeysConsumeKeyUpWithoutAction() {
+        val settings = ReaderSettings(volumeKeysSeekSasayaki = true)
+
+        val result = readerHardwareKeyEventForKeyEvent(
+            keyCode = KeyEvent.KEYCODE_VOLUME_UP,
+            action = KeyEvent.ACTION_UP,
+            repeatCount = 0,
+            settings = settings,
+            sasayakiEnabled = true,
+            hasSasayakiAudio = true,
+        )
+
+        assertTrue(result.consumed)
+        assertNull(result.action)
     }
 
     private fun sasayakiKeyboardKeyCodes() = listOf(

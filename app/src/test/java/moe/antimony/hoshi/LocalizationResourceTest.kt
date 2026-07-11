@@ -91,6 +91,7 @@ class LocalizationResourceTest {
 
     @Test
     fun simplifiedChineseUsesRequestedTerminology() {
+        val defaultResources = readStringResources(File(resDir, "values/strings.xml"))
         val zhResources = readStringResources(File(resDir, "values-zh-rCN/strings.xml"))
         val forbiddenTerms = listOf("音高", "音高重音", "词典")
         val forbiddenUsages = zhResources.strings
@@ -116,6 +117,8 @@ class LocalizationResourceTest {
         assertEquals("复制", zhResources.strings.getValue("action_copy").value)
         assertEquals("分享", zhResources.strings.getValue("action_share").value)
         assertEquals("将使用 %1\$s", zhResources.strings.getValue("bookshelf_profile_automatic_uses_format").value)
+        assertEquals("Top Safe Area", defaultResources.strings.getValue("reader_appearance_top_safe_area").value)
+        assertEquals("顶部安全区", zhResources.strings.getValue("reader_appearance_top_safe_area").value)
         assertEquals("段落间距", zhResources.strings.getValue("reader_appearance_paragraph_spacing").value)
         assertEquals("Profile", zhResources.strings.getValue("settings_profiles").value)
         assertEquals("Profile", zhResources.strings.getValue("profiles_title").value)

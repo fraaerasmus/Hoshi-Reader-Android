@@ -86,6 +86,38 @@ window.hoshiRubyGeometry = window.hoshiRubyGeometry || {
         return this.rangeOverlapAmount(baseRect.left, baseRect.right, ruby.left, ruby.right) > minimumOverlap;
     },
 
+    clippedRubyRectForBase(baseRect, rubyRect) {
+        const ruby = this.rectWithBounds(rubyRect);
+        if (this.isVertical()) {
+            const top = Math.max(baseRect.top, ruby.top);
+            const bottom = Math.min(baseRect.bottom, ruby.bottom);
+            if (bottom <= top) return null;
+            return {
+                x: ruby.left,
+                y: top,
+                width: ruby.right - ruby.left,
+                height: bottom - top,
+                left: ruby.left,
+                top,
+                right: ruby.right,
+                bottom,
+            };
+        }
+        const left = Math.max(baseRect.left, ruby.left);
+        const right = Math.min(baseRect.right, ruby.right);
+        if (right <= left) return null;
+        return {
+            x: left,
+            y: ruby.top,
+            width: right - left,
+            height: ruby.bottom - ruby.top,
+            left,
+            top: ruby.top,
+            right,
+            bottom: ruby.bottom,
+        };
+    },
+
     rubyAwareRect(rect, node) {
         const rubyRects = this.rubyTextRects(node);
         if (!rubyRects.length) return this.rectObject(rect);
@@ -93,7 +125,10 @@ window.hoshiRubyGeometry = window.hoshiRubyGeometry || {
         let result = base;
         rubyRects.forEach((rubyRect) => {
             if (this.rubyRectMatchesBase(base, rubyRect)) {
-                result = this.unionRect(result, this.rectWithBounds(rubyRect));
+                const clipped = this.clippedRubyRectForBase(base, rubyRect);
+                if (clipped) {
+                    result = this.unionRect(result, clipped);
+                }
             }
         });
         return this.rectObject(result);

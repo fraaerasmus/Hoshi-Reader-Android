@@ -17,6 +17,7 @@ class ReaderSettingsTest {
         assertEquals(22, settings.fontSize)
         assertEquals(5, settings.horizontalPadding)
         assertEquals(0, settings.verticalPadding)
+        assertEquals(30, settings.topSafeAreaDp)
         assertEquals(18, settings.bottomSafeAreaDp)
         assertEquals(1.65, settings.lineHeight, 0.0)
         assertEquals(0.0, settings.paragraphSpacing, 0.0)
@@ -40,6 +41,15 @@ class ReaderSettingsTest {
         assertTrue(settings.popupSwipeToDismiss)
         assertEquals(30, settings.popupSwipeThreshold)
         assertFalse(settings.openLastReadBookOnLaunch)
+    }
+
+    @Test
+    fun topSafeAreaCoercesToConfiguredRangeAndStep() {
+        assertEquals(30, 29.coerceReaderTopSafeAreaDp())
+        assertEquals(30, 30.coerceReaderTopSafeAreaDp())
+        assertEquals(32, 31.coerceReaderTopSafeAreaDp())
+        assertEquals(40, 39.coerceReaderTopSafeAreaDp())
+        assertEquals(72, 73.coerceReaderTopSafeAreaDp())
     }
 
     @Test

@@ -8,14 +8,29 @@ fork adds on top of upstream live in [FORK_CHANGELOG.md](FORK_CHANGELOG.md).
 
 ## [Unreleased]
 
+## [v1.3.1] - 2026-07-11
+
+### Added
+
+- Add a Reader Appearance setting for top safe area height.
+
 ### Changed
 
+- Improve dictionary lookup and import behavior by honoring Yomitan term scores
+  and normalizing Japanese iteration marks, full-width numbers, and emphatic
+  sequences.
 - Raise Statistics daily goal limits to 200,000 characters and 12 hours.
 
 ### Fixed
 
 - Keep the Statistics tab visible after enabling it and switching away from Settings.
 - Refresh Statistics by-book covers when changing calendar ranges.
+- Keep Reader lookup highlights from expanding to an entire ruby annotation when
+  selecting a shorter word inside it.
+- Keep VN vertical text from jumping to a new column immediately after a ruby
+  annotation.
+- Keep long-pressed Reader volume keys paging or seeking Sasayaki instead of
+  falling back to system volume changes after the first press.
 
 ## [v1.3.0] - 2026-07-01
 

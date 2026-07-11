@@ -633,6 +633,14 @@ class ReaderWebViewStateHolderTest {
     }
 
     @Test
+    fun readerContentReloadKeyIgnoresChromeSafeAreaSettings() {
+        val base = ReaderSettings(viewMode = ReaderViewMode.Continuous)
+
+        assertEquals(base.readerContentReloadKey(), base.copy(topSafeAreaDp = 72).readerContentReloadKey())
+        assertEquals(base.readerContentReloadKey(), base.copy(bottomSafeAreaDp = 72).readerContentReloadKey())
+    }
+
+    @Test
     fun readerContentReloadKeyChangesForContentSettings() {
         val base = ReaderSettings()
 

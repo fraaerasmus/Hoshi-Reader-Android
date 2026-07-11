@@ -1461,7 +1461,7 @@ fun ReaderWebView(
             closeLookupPopupsAndSelection()
             return@rememberUpdatedState true
         }
-        val action = readerHardwareKeyActionForKeyEvent(
+        val keyEvent = readerHardwareKeyEventForKeyEvent(
             keyCode = event.keyCode,
             action = event.action,
             repeatCount = event.repeatCount,
@@ -1469,22 +1469,22 @@ fun ReaderWebView(
             sasayakiEnabled = sasayakiSettings.enabled,
             hasSasayakiAudio = sasayakiPlayer?.hasAudio == true,
             textEditorFocused = textEditorFocused,
-        ) ?: return@rememberUpdatedState false
-        when (action) {
+        )
+        if (!keyEvent.consumed) return@rememberUpdatedState false
+        when (val action = keyEvent.action) {
             is ReaderHardwareKeyAction.ReaderNavigation -> navigateReaderPage(action.direction)
             ReaderHardwareKeyAction.SasayakiTogglePlayback -> {
                 sasayakiPlayer?.togglePlayback()
-                true
             }
             ReaderHardwareKeyAction.SasayakiSeekBackward -> {
                 sasayakiPlayer?.previousCue()
-                true
             }
             ReaderHardwareKeyAction.SasayakiSeekForward -> {
                 sasayakiPlayer?.nextCue()
-                true
             }
+            null -> Unit
         }
+        true
     }
     DisposableEffect(onReaderKeyEventHandlerChange) {
         onReaderKeyEventHandlerChange { event -> currentReaderKeyHandler.value(event) }
@@ -1637,6 +1637,7 @@ fun ReaderWebView(
         }
     }
 
+    val topChromeMetrics = readerTopChromeMetrics(effectiveSettings.topSafeAreaDp)
     val bottomChromeMetrics = readerBottomChromeMetrics(effectiveSettings.bottomSafeAreaDp)
     val currentStatusBarPadding = rememberCurrentStatusBarPadding()
     val stableStatusBarPadding = rememberStableStatusBarPadding()
@@ -1679,6 +1680,7 @@ fun ReaderWebView(
     val topInfoPadding = readerTopInfoOverlayPaddingDp(
         topSystemInsetDp = currentStatusBarPaddingDp,
         focusMode = focusMode,
+        settings = effectiveSettings,
     ).dp
     val onSasayakiTopToggle = sasayakiPlayer
         ?.takeIf { showSasayakiTopToggle && it.hasAudio }
@@ -1916,7 +1918,7 @@ fun ReaderWebView(
             onSasayakiToggle = onSasayakiTopToggle,
             sasayakiPlaying = sasayakiPlayer?.isPlaying == true || sasayakiWasPausedByLookup,
             visibility = topInfoVisibility,
-            metrics = bottomChromeMetrics,
+            metrics = topChromeMetrics,
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .padding(top = topInfoPadding)

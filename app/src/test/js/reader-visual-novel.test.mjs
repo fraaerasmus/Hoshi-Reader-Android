@@ -959,6 +959,28 @@ test('block mode preserves ruby annotations while indexing only base text', asyn
     assert.equal(reader.nodeStartOffsets.get(rubyTextNodes.find((node) => node.textContent === 'ほし')), undefined);
 });
 
+test('block mode splits vertical ruby-adjacent clone text and preserves offsets', async () => {
+    const body = bodyWith(paragraphWith('「', rubyText('貴女', 'あなた'), 'も、この学園'));
+    const { reader } = await initializeReader(body, {
+        mode: 'block',
+        revealSpeed: 0,
+        bodyWritingMode: 'vertical-rl',
+        vnWritingMode: 'vertical-rl',
+    });
+    const ruby = currentScreen(reader).querySelector('ruby');
+    const followingTextNodes = Array.from(ruby.parentNode.childNodes)
+        .slice(Array.from(ruby.parentNode.childNodes).indexOf(ruby) + 1)
+        .filter((node) => node.nodeType === 3 && node.textContent);
+
+    assert.deepEqual(followingTextNodes.map((node) => node.textContent), ['も', '、', 'こ', 'の', '学', '園']);
+    assert.equal(reader.nodeStartOffsets.get(followingTextNodes[0]), 2);
+    assert.equal(reader.nodeStartRawOffsets.get(followingTextNodes[0]), 3);
+    assert.equal(reader.nodeStartOffsets.get(followingTextNodes[1]), 3);
+    assert.equal(reader.nodeStartRawOffsets.get(followingTextNodes[1]), 4);
+    assert.equal(reader.nodeStartOffsets.get(followingTextNodes[2]), 3);
+    assert.equal(reader.nodeStartRawOffsets.get(followingTextNodes[2]), 5);
+});
+
 test('block mode builds source positions without scanning every text entry for every block', async () => {
     const paragraphs = Array.from({ length: 40 }, (_, index) => p(`段落${index}。`));
     const { reader } = loadReader(bodyWith(...paragraphs), {

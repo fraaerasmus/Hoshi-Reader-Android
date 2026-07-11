@@ -9,20 +9,25 @@ internal sealed interface ReaderHardwareKeyAction {
     data object SasayakiSeekBackward : ReaderHardwareKeyAction
 }
 
+internal data class ReaderHardwareKeyEventResult(
+    val consumed: Boolean,
+    val action: ReaderHardwareKeyAction? = null,
+)
+
 internal fun readerNavigationDirectionForKeyEvent(
     keyCode: Int,
     action: Int,
     repeatCount: Int,
     settings: ReaderSettings,
 ): ReaderNavigationDirection? =
-    (readerHardwareKeyActionForKeyEvent(
+    (readerHardwareKeyEventForKeyEvent(
         keyCode = keyCode,
         action = action,
         repeatCount = repeatCount,
         settings = settings,
         sasayakiEnabled = false,
         hasSasayakiAudio = false,
-    ) as? ReaderHardwareKeyAction.ReaderNavigation)?.direction
+    ).action as? ReaderHardwareKeyAction.ReaderNavigation)?.direction
 
 internal fun readerHardwareKeyActionForKeyEvent(
     keyCode: Int,
@@ -32,15 +37,42 @@ internal fun readerHardwareKeyActionForKeyEvent(
     sasayakiEnabled: Boolean,
     hasSasayakiAudio: Boolean,
     textEditorFocused: Boolean = false,
-): ReaderHardwareKeyAction? {
-    if (action != KeyEvent.ACTION_DOWN) return null
-    val resolved = when (keyCode) {
-        KeyEvent.KEYCODE_PAGE_DOWN -> ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward)
-        KeyEvent.KEYCODE_PAGE_UP -> ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Backward)
+): ReaderHardwareKeyAction? =
+    readerHardwareKeyEventForKeyEvent(
+        keyCode = keyCode,
+        action = action,
+        repeatCount = repeatCount,
+        settings = settings,
+        sasayakiEnabled = sasayakiEnabled,
+        hasSasayakiAudio = hasSasayakiAudio,
+        textEditorFocused = textEditorFocused,
+    ).action
+
+internal fun readerHardwareKeyEventForKeyEvent(
+    keyCode: Int,
+    action: Int,
+    repeatCount: Int,
+    settings: ReaderSettings,
+    sasayakiEnabled: Boolean,
+    hasSasayakiAudio: Boolean,
+    textEditorFocused: Boolean = false,
+): ReaderHardwareKeyEventResult {
+    return when (keyCode) {
+        KeyEvent.KEYCODE_PAGE_DOWN -> pageKeyResult(
+            action = action,
+            repeatCount = repeatCount,
+            direction = ReaderNavigationDirection.Forward,
+        )
+        KeyEvent.KEYCODE_PAGE_UP -> pageKeyResult(
+            action = action,
+            repeatCount = repeatCount,
+            direction = ReaderNavigationDirection.Backward,
+        )
         KeyEvent.KEYCODE_VOLUME_DOWN,
         KeyEvent.KEYCODE_VOLUME_UP,
-        -> readerVolumeKeyAction(
+        -> volumeKeyResult(
             keyCode = keyCode,
+            action = action,
             settings = settings,
             sasayakiEnabled = sasayakiEnabled,
             hasSasayakiAudio = hasSasayakiAudio,
@@ -51,37 +83,72 @@ internal fun readerHardwareKeyActionForKeyEvent(
         KeyEvent.KEYCODE_J,
         KeyEvent.KEYCODE_DPAD_RIGHT,
         KeyEvent.KEYCODE_L,
-        -> sasayakiKeyboardAction(
+        -> sasayakiKeyboardResult(
             keyCode = keyCode,
+            action = action,
+            repeatCount = repeatCount,
             sasayakiEnabled = sasayakiEnabled,
             hasSasayakiAudio = hasSasayakiAudio,
             textEditorFocused = textEditorFocused,
         )
-        else -> null
-    } ?: return null
-    // Only Sasayaki seek repeats while a key is held; everything else fires once.
-    if (repeatCount != 0 &&
-        resolved !is ReaderHardwareKeyAction.SasayakiSeekForward &&
-        resolved !is ReaderHardwareKeyAction.SasayakiSeekBackward
-    ) {
-        return null
+        else -> ReaderHardwareKeyEventResult(consumed = false)
     }
-    return resolved
 }
 
-private fun sasayakiKeyboardAction(
+private fun sasayakiKeyboardResult(
     keyCode: Int,
+    action: Int,
+    repeatCount: Int,
     sasayakiEnabled: Boolean,
     hasSasayakiAudio: Boolean,
     textEditorFocused: Boolean,
-): ReaderHardwareKeyAction? {
-    if (textEditorFocused || !sasayakiEnabled || !hasSasayakiAudio) return null
-    return when (keyCode) {
+): ReaderHardwareKeyEventResult {
+    if (textEditorFocused || !sasayakiEnabled || !hasSasayakiAudio) {
+        return ReaderHardwareKeyEventResult(consumed = false)
+    }
+    val keyAction = when (keyCode) {
         KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_K -> ReaderHardwareKeyAction.SasayakiTogglePlayback
         KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_J -> ReaderHardwareKeyAction.SasayakiSeekBackward
         KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_L -> ReaderHardwareKeyAction.SasayakiSeekForward
-        else -> null
+        else -> return ReaderHardwareKeyEventResult(consumed = false)
     }
+    // Play/pause fires once per press; seeks repeat while a key is held.
+    val fires = action == KeyEvent.ACTION_DOWN &&
+        (keyAction != ReaderHardwareKeyAction.SasayakiTogglePlayback || repeatCount == 0)
+    return ReaderHardwareKeyEventResult(consumed = true, action = keyAction.takeIf { fires })
+}
+
+private fun pageKeyResult(
+    action: Int,
+    repeatCount: Int,
+    direction: ReaderNavigationDirection,
+): ReaderHardwareKeyEventResult {
+    if (action != KeyEvent.ACTION_DOWN || repeatCount != 0) {
+        return ReaderHardwareKeyEventResult(consumed = false)
+    }
+    return ReaderHardwareKeyEventResult(
+        consumed = true,
+        action = ReaderHardwareKeyAction.ReaderNavigation(direction),
+    )
+}
+
+private fun volumeKeyResult(
+    keyCode: Int,
+    action: Int,
+    settings: ReaderSettings,
+    sasayakiEnabled: Boolean,
+    hasSasayakiAudio: Boolean,
+): ReaderHardwareKeyEventResult {
+    val keyAction = readerVolumeKeyAction(
+        keyCode = keyCode,
+        settings = settings,
+        sasayakiEnabled = sasayakiEnabled,
+        hasSasayakiAudio = hasSasayakiAudio,
+    ) ?: return ReaderHardwareKeyEventResult(consumed = false)
+    return ReaderHardwareKeyEventResult(
+        consumed = true,
+        action = keyAction.takeIf { action == KeyEvent.ACTION_DOWN },
+    )
 }
 
 private fun readerVolumeKeyAction(

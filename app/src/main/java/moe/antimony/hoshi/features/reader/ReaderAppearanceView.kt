@@ -479,6 +479,19 @@ private fun ReaderAppearanceContent(
                     )
                     AppearanceDivider(palette)
                     SliderRow(
+                        label = stringResource(R.string.reader_appearance_top_safe_area),
+                        value = "${settings.topSafeAreaDp.coerceReaderTopSafeAreaDp()}dp",
+                        sliderValue = settings.topSafeAreaDp.coerceReaderTopSafeAreaDp().toFloat(),
+                        valueRange = ReaderTopSafeAreaMinDp.toFloat()..ReaderTopSafeAreaMaxDp.toFloat(),
+                        steps = readerAppearanceTopSafeAreaSliderSteps(),
+                        onValueChange = { value ->
+                            onSettingsChange(
+                                settings.copy(topSafeAreaDp = readerAppearanceTopSafeAreaFromSlider(value)),
+                            )
+                        },
+                    )
+                    AppearanceDivider(palette)
+                    SliderRow(
                         label = stringResource(R.string.reader_appearance_bottom_safe_area),
                         value = "${settings.bottomSafeAreaDp.coerceReaderBottomSafeAreaDp()}dp",
                         sliderValue = settings.bottomSafeAreaDp.coerceReaderBottomSafeAreaDp().toFloat(),
@@ -858,6 +871,14 @@ internal fun readerAppearanceShowsAlwaysShowProgress(settings: ReaderSettings): 
 
 internal fun readerAppearanceShowsProgressPosition(settings: ReaderSettings): Boolean =
     readerAppearanceShowsAlwaysShowProgress(settings) && !settings.alwaysShowProgress
+
+internal fun readerAppearanceTopSafeAreaSliderSteps(): Int =
+    ((ReaderTopSafeAreaMaxDp - ReaderTopSafeAreaMinDp) / ReaderTopSafeAreaStepDp) - 1
+
+internal fun readerAppearanceTopSafeAreaFromSlider(value: Float): Int =
+    (round(value / ReaderTopSafeAreaStepDp) * ReaderTopSafeAreaStepDp)
+        .toInt()
+        .coerceReaderTopSafeAreaDp()
 
 internal fun readerAppearanceBottomSafeAreaSliderSteps(): Int =
     ((ReaderBottomSafeAreaMaxDp - ReaderBottomSafeAreaMinDp) / ReaderBottomSafeAreaStepDp) - 1

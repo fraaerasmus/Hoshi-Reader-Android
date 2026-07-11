@@ -229,6 +229,10 @@ class ReaderChromeTest {
             readerContentChromeInsets(settings = ReaderSettings(bottomSafeAreaDp = 40)),
         )
         assertEquals(
+            ReaderContentChromeInsets(topDp = 44, bottomDp = 18),
+            readerContentChromeInsets(settings = ReaderSettings(topSafeAreaDp = 40)),
+        )
+        assertEquals(
             ReaderContentChromeInsets(topDp = 34, bottomDp = 18),
             readerContentChromeInsets(
                 state = state,
@@ -250,6 +254,14 @@ class ReaderChromeTest {
         assertEquals(52, readerTopInfoOverlayPaddingDp(topSystemInsetDp = 0, focusMode = false))
         assertEquals(44, readerTopInfoOverlayPaddingDp(topSystemInsetDp = 44, focusMode = false))
         assertEquals(52, readerTopInfoOverlayPaddingDp(topSystemInsetDp = 52, focusMode = false))
+        assertEquals(
+            72,
+            readerTopInfoOverlayPaddingDp(
+                topSystemInsetDp = 44,
+                focusMode = false,
+                settings = ReaderSettings(topSafeAreaDp = 72),
+            ),
+        )
         assertEquals(0, readerTopInfoOverlayPaddingDp(topSystemInsetDp = 52, focusMode = true))
     }
 
@@ -362,7 +374,7 @@ class ReaderChromeTest {
 
     @Test
     fun statisticsTopToggleUsesSameMetricsAsSasayakiTopToggle() {
-        val metrics = readerBottomChromeMetrics()
+        val metrics = readerTopChromeMetrics()
 
         assertEquals(metrics.topSasayakiButtonSizeDp, metrics.topStatisticsButtonSizeDp)
         assertEquals(metrics.topSasayakiIconSizeDp, metrics.topStatisticsIconSizeDp)
@@ -441,13 +453,27 @@ class ReaderChromeTest {
 
     @Test
     fun topSasayakiToggleUsesSmallerCircleWithoutShrinkingTheIcon() {
-        val metrics = readerBottomChromeMetrics()
+        val metrics = readerTopChromeMetrics()
 
+        assertEquals(30, metrics.topSafeAreaDp)
         assertEquals(30, metrics.topSasayakiButtonSizeDp)
         assertEquals(22, metrics.topSasayakiIconSizeDp)
+        assertEquals(16, metrics.topJumpHistoryIconSizeDp)
         assertEquals(4, metrics.topButtonOffsetYDp)
         assertEquals(8, metrics.topButtonHorizontalInsetDp)
         assertEquals(0x00000000L, readerTopButtonContainerColor())
+    }
+
+    @Test
+    fun topQuickControlsScaleHitboxAndIconsWithTopSafeAreaHeight() {
+        val metrics = readerTopChromeMetrics(topSafeAreaDp = 72)
+
+        assertEquals(72, metrics.topSafeAreaDp)
+        assertEquals(72, metrics.topSasayakiButtonSizeDp)
+        assertEquals(72, metrics.topStatisticsButtonSizeDp)
+        assertEquals(40, metrics.topSasayakiIconSizeDp)
+        assertEquals(40, metrics.topStatisticsIconSizeDp)
+        assertEquals(28, metrics.topJumpHistoryIconSizeDp)
     }
 
     @Test
