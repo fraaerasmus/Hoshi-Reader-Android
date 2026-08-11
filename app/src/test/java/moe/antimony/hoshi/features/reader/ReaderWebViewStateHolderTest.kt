@@ -775,6 +775,7 @@ class ReaderWebViewStateHolderTest {
     fun readerAppearanceUpdateKeyTracksCustomContentColorsWithoutReloadingContent() {
         val base = ReaderSettings(
             theme = ReaderTheme.Custom,
+            colorPreset = ReaderColorPreset.Manual,
             customBackgroundColor = 0xFF112233,
             customTextColor = 0xFF445566,
         )
