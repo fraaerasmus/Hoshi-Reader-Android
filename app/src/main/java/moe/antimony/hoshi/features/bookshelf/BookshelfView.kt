@@ -1,16 +1,11 @@
 package moe.antimony.hoshi.features.bookshelf
 
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
-import android.util.LruCache
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -86,6 +81,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -98,11 +95,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.material3.pulltorefresh.pullToRefresh
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -111,7 +106,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -124,6 +118,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.LocalHoshiUiDependencies
@@ -153,8 +148,6 @@ import moe.antimony.hoshi.ui.rememberSyncedTextFieldState
 import moe.antimony.hoshi.ui.replaceTextAndSelectStart
 import moe.antimony.hoshi.ui.theme.LocalHoshiDarkTheme
 import moe.antimony.hoshi.ui.theme.LocalHoshiEInkMode
-import java.io.File
-import kotlin.math.max
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -194,6 +187,7 @@ fun BookshelfView(
     val renameScrollState = rememberScrollState()
     var showBulkDeleteConfirmation by remember { mutableStateOf(false) }
     var showShelfManagement by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     val importer = rememberLauncherForActivityResult(MultipleFileImportContent()) { uris: List<Uri> ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
@@ -269,8 +263,28 @@ fun BookshelfView(
         booksViewModel.consumeOpenReaderEvent()
     }
 
+    val shelfMoveSuccess = uiState.shelfCreationMoveStatus as? ShelfCreationMoveStatus.Succeeded
+    val shelfMoveSuccessMessage = shelfMoveSuccess?.let { success ->
+        pluralStringResource(
+            R.plurals.bookshelf_created_shelf_and_moved_books,
+            success.bookCount,
+            success.shelfName,
+            success.bookCount,
+        )
+    }
+    LaunchedEffect(shelfMoveSuccess, shelfMoveSuccessMessage) {
+        if (shelfMoveSuccess != null && shelfMoveSuccessMessage != null) {
+            presentShelfCreationMoveSuccess(
+                message = shelfMoveSuccessMessage,
+                showSnackbar = { snackbarHostState.showSnackbar(it) },
+                consumeSuccess = booksViewModel::consumeShelfCreationMoveStatus,
+            )
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
     BooksTab(
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         layoutSpec = layoutSpec,
         bookEntries = uiState.bookEntries,
         remoteBookEntries = uiState.remoteBookEntries,
@@ -300,6 +314,9 @@ fun BookshelfView(
         onToggleSelectedBook = booksViewModel::toggleSelectedBook,
         onShelfExpandedChange = booksViewModel::setShelfExpanded,
         onMoveSelectedBooks = booksViewModel::moveSelectedBooks,
+        onCreateShelfForSelectedBooks = {
+            booksViewModel.beginShelfCreationMoveForSelectedBooks()
+        },
         onDeleteSelectedBooks = { showBulkDeleteConfirmation = true },
         onManageShelves = { showShelfManagement = true },
         onImportFiles = ::launchBookImporter,
@@ -329,6 +346,10 @@ fun BookshelfView(
             renameTextState.replaceTextAndSelectStart(it.displayTitle)
         },
         onMoveBook = booksViewModel::moveBook,
+        onCreateShelfForBook = { entry ->
+            contextMenuTarget = null
+            booksViewModel.beginShelfCreationMoveForBook(entry)
+        },
         profileState = profileState,
         onSetBookProfile = booksViewModel::setBookProfile,
         syncSettings = syncSettings,
@@ -343,6 +364,13 @@ fun BookshelfView(
             )
         },
     )
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(16.dp),
+        )
+    }
 
     uiState.statusMessage?.let { message ->
         AlertDialog(
@@ -514,6 +542,26 @@ fun BookshelfView(
             onDismiss = { showShelfManagement = false },
         )
     }
+
+    uiState.shelfCreationMoveDialog?.let { dialog ->
+        NewShelfMoveDialog(
+            shelves = uiState.shelves,
+            name = dialog.name,
+            status = uiState.shelfCreationMoveStatus,
+            onNameChanged = booksViewModel::updateShelfCreationMoveName,
+            onConfirm = booksViewModel::confirmShelfCreationMove,
+            onDismiss = booksViewModel::dismissShelfCreationMoveDialog,
+        )
+    }
+}
+
+internal suspend fun presentShelfCreationMoveSuccess(
+    message: String,
+    showSnackbar: suspend (String) -> Unit,
+    consumeSuccess: () -> Unit,
+) {
+    showSnackbar(message)
+    consumeSuccess()
 }
 
 @Composable
@@ -834,6 +882,7 @@ private fun BooksTab(
     onToggleSelectedBook: (BookEntry) -> Unit,
     onShelfExpandedChange: (String, Boolean) -> Unit,
     onMoveSelectedBooks: (String?) -> Unit,
+    onCreateShelfForSelectedBooks: () -> Unit,
     onDeleteSelectedBooks: () -> Unit,
     onManageShelves: () -> Unit,
     onImportFiles: () -> Unit,
@@ -851,6 +900,7 @@ private fun BooksTab(
     onMarkReadCandidate: (BookEntry) -> Unit,
     onRenameCandidate: (BookEntry) -> Unit,
     onMoveBook: (BookEntry, String?) -> Unit,
+    onCreateShelfForBook: (BookEntry) -> Unit,
     profileState: ProfileState,
     onSetBookProfile: (BookEntry, String?) -> Unit,
     syncSettings: SyncSettings,
@@ -878,6 +928,7 @@ private fun BooksTab(
                 onStartSelecting = onStartSelecting,
                 onClearSelection = onClearSelection,
                 onMoveSelectedBooks = onMoveSelectedBooks,
+                onCreateShelfForSelectedBooks = onCreateShelfForSelectedBooks,
                 onDeleteSelectedBooks = onDeleteSelectedBooks,
                 onManageShelves = onManageShelves,
                 onImportFiles = onImportFiles,
@@ -915,7 +966,7 @@ private fun BooksTab(
                         .fillMaxWidth()
                         .padding(horizontal = layoutSpec.pageHorizontalPaddingDp.dp),
                 )
-                else -> CompositionLocalProvider(LocalOverscrollFactory provides null) {
+                else -> {
                     val pullRefreshState = rememberPullToRefreshState()
                     val pullRefreshEnabled = shouldEnableBookshelfPullRefresh(
                         syncSettings = syncSettings,
@@ -1021,6 +1072,7 @@ private fun BooksTab(
                                             expanded = isBookContextMenuExpanded(contextMenuTarget, section, entry),
                                             onDismiss = { onContextMenuTargetChange(null) },
                                             onMoveBook = onMoveBook,
+                                            onCreateShelfForBook = onCreateShelfForBook,
                                             onMarkReadCandidate = onMarkReadCandidate,
                                             onRenameCandidate = onRenameCandidate,
                                             onDeleteCandidate = onDeleteCandidate,
@@ -1115,6 +1167,7 @@ private fun BooksTopAppBar(
     onStartSelecting: () -> Unit,
     onClearSelection: () -> Unit,
     onMoveSelectedBooks: (String?) -> Unit,
+    onCreateShelfForSelectedBooks: () -> Unit,
     onDeleteSelectedBooks: () -> Unit,
     onManageShelves: () -> Unit,
     onImportFiles: () -> Unit,
@@ -1194,6 +1247,17 @@ private fun BooksTopAppBar(
                         expanded = moveMenuExpanded,
                         onDismissRequest = { moveMenuExpanded = false },
                     ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.bookshelf_new_shelf)) },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.Add, contentDescription = null)
+                            },
+                            onClick = {
+                                moveMenuExpanded = false
+                                onCreateShelfForSelectedBooks()
+                            },
+                        )
+                        HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.bookshelf_no_shelf)) },
                             onClick = {
@@ -1470,14 +1534,6 @@ private fun BookCoverCard(
     coverSource: BookCoverSource?,
     modifier: Modifier = Modifier,
 ) {
-    val cachedBitmap = remember(coverSource?.cacheKey) {
-        BookCoverBitmapCache.get(coverSource)
-    }
-    val bitmap by produceState<Bitmap?>(initialValue = cachedBitmap, key1 = coverSource) {
-        if (cachedBitmap == null) {
-            value = BookCoverBitmapCache.load(coverSource)
-        }
-    }
     val outerShape = RoundedCornerShape(7.dp)
     val innerShape = RoundedCornerShape(6.dp)
     val coverPlaceholderColor = Color.Gray.copy(alpha = 0.3f)
@@ -1501,9 +1557,9 @@ private fun BookCoverCard(
         val coverModifier = Modifier
             .fillMaxSize()
             .clip(innerShape)
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
+        if (coverSource != null) {
+            AsyncImage(
+                model = coverSource,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = coverModifier.background(coverPlaceholderColor),
@@ -1516,81 +1572,7 @@ private fun BookCoverCard(
     }
 }
 
-internal object BookCoverBitmapCache {
-    private const val MaxCoverDimensionPx = 768
-    private val cache = object : LruCache<String, Bitmap>(24 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
-    }
-
-    fun get(coverSource: BookCoverSource?): Bitmap? {
-        coverSource ?: return null
-        return synchronized(cache) {
-            cache.get(coverSource.cacheKey)
-        }
-    }
-
-    suspend fun load(coverSource: BookCoverSource?): Bitmap? = withContext(Dispatchers.IO) {
-        coverSource ?: return@withContext null
-        synchronized(cache) {
-            cache.get(coverSource.cacheKey)?.let { return@withContext it }
-        }
-        val bitmap = decodeSampledCoverBitmap(File(coverSource.path), MaxCoverDimensionPx) ?: return@withContext null
-        bitmap.prepareToDraw()
-        synchronized(cache) {
-            cache.put(coverSource.cacheKey, bitmap)
-        }
-        bitmap
-    }
-}
-
 private const val BookCoverAspectRatio = 0.709f
-
-internal fun coverDecodeSampleSize(width: Int, height: Int, maxDimensionPx: Int): Int {
-    if (width <= 0 || height <= 0 || maxDimensionPx <= 0) return 1
-    var sampleSize = 1
-    while (max(width / (sampleSize * 2), height / (sampleSize * 2)) >= maxDimensionPx) {
-        sampleSize *= 2
-    }
-    return sampleSize
-}
-
-internal data class CoverThumbnailSize(
-    val width: Int,
-    val height: Int,
-)
-
-internal fun coverThumbnailSize(width: Int, height: Int, maxDimensionPx: Int): CoverThumbnailSize {
-    if (width <= 0 || height <= 0 || maxDimensionPx <= 0) {
-        return CoverThumbnailSize(width = width, height = height)
-    }
-    val longest = max(width, height)
-    if (longest <= maxDimensionPx) {
-        return CoverThumbnailSize(width = width, height = height)
-    }
-    val scale = maxDimensionPx.toDouble() / longest.toDouble()
-    return CoverThumbnailSize(
-        width = max(1, (width * scale).toInt()),
-        height = max(1, (height * scale).toInt()),
-    )
-}
-
-internal fun decodeSampledCoverBitmap(file: File, maxDimensionPx: Int): Bitmap? {
-    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(file.absolutePath, bounds)
-    val options = BitmapFactory.Options().apply {
-        inSampleSize = coverDecodeSampleSize(bounds.outWidth, bounds.outHeight, maxDimensionPx)
-    }
-    val decoded = BitmapFactory.decodeFile(file.absolutePath, options) ?: return null
-    val targetSize = coverThumbnailSize(decoded.width, decoded.height, maxDimensionPx)
-    if (targetSize.width == decoded.width && targetSize.height == decoded.height) {
-        return decoded
-    }
-    val scaled = Bitmap.createScaledBitmap(decoded, targetSize.width, targetSize.height, true)
-    if (scaled !== decoded) {
-        decoded.recycle()
-    }
-    return scaled
-}
 
 @Composable
 private fun ReadingProgressPill(progress: Double, modifier: Modifier = Modifier) {
@@ -1642,6 +1624,7 @@ private fun BookContextMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onMoveBook: (BookEntry, String?) -> Unit,
+    onCreateShelfForBook: (BookEntry) -> Unit,
     onMarkReadCandidate: (BookEntry) -> Unit,
     onRenameCandidate: (BookEntry) -> Unit,
     onDeleteCandidate: (BookEntry) -> Unit,
@@ -1750,6 +1733,7 @@ private fun BookContextMenu(
         expanded = expanded && moveMenuExpanded,
         onDismiss = onDismiss,
         onMoveBook = onMoveBook,
+        onCreateShelfForBook = onCreateShelfForBook,
     )
     ProfileDestinationMenu(
         entry = entry,
@@ -1825,12 +1809,24 @@ private fun MoveDestinationMenu(
     expanded: Boolean,
     onDismiss: () -> Unit,
     onMoveBook: (BookEntry, String?) -> Unit,
+    onCreateShelfForBook: (BookEntry) -> Unit,
 ) {
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
     ) {
         SortMenuHeader(text = stringResource(R.string.bookshelf_move))
+        HorizontalDivider()
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.bookshelf_new_shelf)) },
+            leadingIcon = {
+                Icon(Icons.Rounded.Add, contentDescription = null)
+            },
+            onClick = {
+                onCreateShelfForBook(entry)
+                onDismiss()
+            },
+        )
         HorizontalDivider()
         DropdownMenuItem(
             text = { Text(stringResource(R.string.bookshelf_no_shelf)) },
