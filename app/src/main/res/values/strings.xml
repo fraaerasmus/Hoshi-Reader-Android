@@ -140,7 +140,7 @@
     <string name="settings_title" comment="Shared label for settings page titles distinct from the main tab key.">Settings</string>
     <string name="settings_language">Language</string>
     <string name="language_follow_system">Follow system</string>
-    <string name="language_english" translatable="false">English</string>
+    <string name="language_english" translatable="false" comment="App language option, intentionally matching English dictionary and profile language labels.">English</string>
     <string name="language_simplified_chinese" translatable="false">简体中文</string>
     <string name="bookshelf_open_failed">Failed to open EPUB.</string>
     <string name="bookshelf_import_failed">Failed to import EPUB.</string>
@@ -257,14 +257,14 @@
     <string name="dictionary_language_arabic">Arabic</string>
     <string name="dictionary_language_german">German</string>
     <string name="dictionary_language_modern_greek">Modern Greek</string>
-    <string name="dictionary_language_english">English</string>
+    <string name="dictionary_language_english" comment="Dictionary language label, intentionally matching the app and profile language labels.">English</string>
     <string name="dictionary_language_esperanto">Esperanto</string>
     <string name="dictionary_language_spanish">Spanish</string>
     <string name="dictionary_language_basque">Basque</string>
     <string name="dictionary_language_french">French</string>
     <string name="dictionary_language_irish">Irish</string>
     <string name="dictionary_language_ancient_greek">Ancient Greek</string>
-    <string name="dictionary_language_japanese">Japanese</string>
+    <string name="dictionary_language_japanese" comment="Dictionary language label, intentionally matching the profile language label.">Japanese</string>
     <string name="dictionary_language_georgian">Georgian</string>
     <string name="dictionary_language_korean">Korean</string>
     <string name="dictionary_language_latin">Latin</string>
@@ -307,8 +307,8 @@
     <string name="dictionary_release_show_keyboard">Release to show keyboard</string>
     <string name="dictionary_play_audio">Play Audio</string>
     <string name="dictionary_add_to_anki">Add to Anki</string>
-    <string name="profile_language_japanese">Japanese</string>
-    <string name="profile_language_english">English</string>
+    <string name="profile_language_japanese" comment="Profile language label, intentionally matching the dictionary language label.">Japanese</string>
+    <string name="profile_language_english" comment="Profile language label, intentionally matching the app and dictionary language labels.">English</string>
     <string name="profiles_title" comment="Profiles screen title, intentionally matching the Settings row label.">Profiles</string>
     <string name="profiles_active_global">Active Profile</string>
     <string name="profiles_loaded_reader">Reader Profile</string>
@@ -459,8 +459,8 @@
     <string name="reader_appearance_show_percentage">Show Percentage</string>
     <string name="reader_appearance_show_chapter">Show Chapter Information</string>
     <string name="reader_appearance_info_position">Information Position</string>
-    <string name="reader_appearance_info_position_left">Left</string>
-    <string name="reader_appearance_info_position_center">Center</string>
+    <string name="reader_appearance_info_position_left" comment="Reader information position option, intentionally matching the playback controls position option.">Left</string>
+    <string name="reader_appearance_info_position_center" comment="Reader information position option, intentionally matching the playback controls position option.">Center</string>
     <string name="reader_appearance_info_position_right">Right</string>
     <string name="reader_appearance_always_show_progress">Always Show Progress</string>
     <string name="reader_appearance_show_back_button">Show Back Button</string>
@@ -468,8 +468,8 @@
     <string name="reader_appearance_progress_top">Top</string>
     <string name="reader_appearance_progress_bottom">Bottom</string>
     <string name="reader_appearance_sasayaki_controls_position">Playback Controls Position</string>
-    <string name="reader_appearance_sasayaki_controls_position_left">Left</string>
-    <string name="reader_appearance_sasayaki_controls_position_center">Center</string>
+    <string name="reader_appearance_sasayaki_controls_position_left" comment="Playback controls position option, intentionally matching the reader information position option.">Left</string>
+    <string name="reader_appearance_sasayaki_controls_position_center" comment="Playback controls position option, intentionally matching the reader information position option.">Center</string>
     <string name="reader_appearance_sasayaki_controls_size">Playback Controls Size</string>
     <string name="reader_appearance_show_statistics_toggle">Show Statistics Toggle</string>
     <string name="reader_appearance_show_reading_speed">Show Reading Speed</string>
@@ -701,7 +701,7 @@
     <string name="sasayaki_delay">Delay</string>
     <string name="sasayaki_speed" comment="Sasayaki setting label, intentionally matching the statistics speed metric noun.">Speed</string>
     <string name="sasayaki_sleep_timer">Sleep timer</string>
-    <string name="sasayaki_sleep_timer_off">Off</string>
+    <string name="sasayaki_sleep_timer_off" comment="Sleep timer state, intentionally matching other off labels.">Off</string>
     <string name="sasayaki_sleep_timer_minutes">%1$d min</string>
     <string name="sasayaki_sleep_timer_end_of_chapter">End of chapter</string>
     <string name="sasayaki_reader_controls">Reader Controls</string>

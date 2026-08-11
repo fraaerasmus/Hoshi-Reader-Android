@@ -255,14 +255,14 @@
     <string name="dictionary_language_arabic">&#x963F;&#x62C9;&#x4F2F;&#x8BED;</string>
     <string name="dictionary_language_german">&#x5FB7;&#x8BED;</string>
     <string name="dictionary_language_modern_greek">&#x73B0;&#x4EE3;&#x5E0C;&#x814A;&#x8BED;</string>
-    <string name="dictionary_language_english">&#x82F1;&#x8BED;</string>
+    <string name="dictionary_language_english" comment="Dictionary language label, intentionally matching the profile language label.">&#x82F1;&#x8BED;</string>
     <string name="dictionary_language_esperanto">&#x4E16;&#x754C;&#x8BED;</string>
     <string name="dictionary_language_spanish">&#x897F;&#x73ED;&#x7259;&#x8BED;</string>
     <string name="dictionary_language_basque">&#x5DF4;&#x65AF;&#x514B;&#x8BED;</string>
     <string name="dictionary_language_french">&#x6CD5;&#x8BED;</string>
     <string name="dictionary_language_irish">&#x7231;&#x5C14;&#x5170;&#x8BED;</string>
     <string name="dictionary_language_ancient_greek">&#x53E4;&#x5E0C;&#x814A;&#x8BED;</string>
-    <string name="dictionary_language_japanese">&#x65E5;&#x8BED;</string>
+    <string name="dictionary_language_japanese" comment="Dictionary language label, intentionally matching the profile language label.">&#x65E5;&#x8BED;</string>
     <string name="dictionary_language_georgian">&#x683C;&#x9C81;&#x5409;&#x4E9A;&#x8BED;</string>
     <string name="dictionary_language_korean">&#x97E9;&#x8BED;</string>
     <string name="dictionary_language_latin">&#x62C9;&#x4E01;&#x8BED;</string>
@@ -305,8 +305,8 @@
     <string name="dictionary_release_show_keyboard">松开显示键盘</string>
     <string name="dictionary_play_audio">播放音频</string>
     <string name="dictionary_add_to_anki">添加到 Anki</string>
-    <string name="profile_language_japanese">日语</string>
-    <string name="profile_language_english">英语</string>
+    <string name="profile_language_japanese" comment="Profile language label, intentionally matching the dictionary language label.">日语</string>
+    <string name="profile_language_english" comment="Profile language label, intentionally matching the dictionary language label.">英语</string>
     <string name="profiles_title" comment="Profiles screen title, intentionally matching the Settings row label.">Profile</string>
     <string name="profiles_active_global">当前启用 Profile</string>
     <string name="profiles_loaded_reader">阅读器 Profile</string>
@@ -457,8 +457,8 @@
     <string name="reader_appearance_show_percentage">显示百分比</string>
     <string name="reader_appearance_show_chapter">显示章节信息</string>
     <string name="reader_appearance_info_position">信息位置</string>
-    <string name="reader_appearance_info_position_left">左侧</string>
-    <string name="reader_appearance_info_position_center">居中</string>
+    <string name="reader_appearance_info_position_left" comment="Reader information position option, intentionally matching the playback controls position option.">左侧</string>
+    <string name="reader_appearance_info_position_center" comment="Reader information position option, intentionally matching the playback controls position option.">居中</string>
     <string name="reader_appearance_info_position_right">右侧</string>
     <string name="reader_appearance_always_show_progress">始终显示进度</string>
     <string name="reader_appearance_show_back_button">显示返回按钮</string>
@@ -466,8 +466,8 @@
     <string name="reader_appearance_progress_top">顶部</string>
     <string name="reader_appearance_progress_bottom">底部</string>
     <string name="reader_appearance_sasayaki_controls_position">播放控件位置</string>
-    <string name="reader_appearance_sasayaki_controls_position_left">左侧</string>
-    <string name="reader_appearance_sasayaki_controls_position_center">居中</string>
+    <string name="reader_appearance_sasayaki_controls_position_left" comment="Playback controls position option, intentionally matching the reader information position option.">左侧</string>
+    <string name="reader_appearance_sasayaki_controls_position_center" comment="Playback controls position option, intentionally matching the reader information position option.">居中</string>
     <string name="reader_appearance_sasayaki_controls_size">播放控件大小</string>
     <string name="reader_appearance_show_statistics_toggle">显示统计开关</string>
     <string name="reader_appearance_show_reading_speed">显示阅读速度</string>
@@ -699,7 +699,7 @@
     <string name="sasayaki_delay">延迟</string>
     <string name="sasayaki_speed" comment="Sasayaki setting label, intentionally matching the statistics speed metric noun.">速度</string>
     <string name="sasayaki_sleep_timer">睡眠定时器</string>
-    <string name="sasayaki_sleep_timer_off">关闭</string>
+    <string name="sasayaki_sleep_timer_off" comment="Sleep timer state, intentionally matching other off labels.">关闭</string>
     <string name="sasayaki_sleep_timer_minutes">%1$d 分钟</string>
     <string name="sasayaki_sleep_timer_end_of_chapter">本章结束</string>
     <string name="sasayaki_reader_controls">阅读器控制</string>
