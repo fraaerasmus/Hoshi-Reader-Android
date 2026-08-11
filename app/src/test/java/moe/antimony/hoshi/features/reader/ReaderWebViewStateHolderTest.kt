@@ -700,6 +700,16 @@ class ReaderWebViewStateHolderTest {
     }
 
     @Test
+    fun readerContentReloadKeyChangesForTwoPageLandscape() {
+        val base = ReaderSettings(twoPageLandscape = true)
+
+        assertFalse(
+            base.readerContentReloadKey() ==
+                base.copy(twoPageLandscape = false).readerContentReloadKey(),
+        )
+    }
+
+    @Test
     fun readerContentReloadKeyChangesForVisualNovelModeAndSplitSettings() {
         val base = ReaderSettings()
         val visualNovel = base.copy(viewMode = ReaderViewMode.VisualNovel)

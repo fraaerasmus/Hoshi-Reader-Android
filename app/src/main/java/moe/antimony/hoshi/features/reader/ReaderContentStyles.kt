@@ -27,12 +27,13 @@ internal data class ReaderGeneratedLayout(
     val continuousBodyPaddingCss: String,
     val continuousBodyBottomPaddingCss: String,
     val paginatedColumnWidthCss: String,
+    val paginatedColumnCountCss: String,
     val imageWidthViewportRatio: Double,
     val imageHeightViewportRatio: Double,
     val imageWidthReductionPx: Int,
 ) {
     companion object {
-        fun from(settings: ReaderSettings): ReaderGeneratedLayout {
+        fun from(settings: ReaderSettings, paginatedTwoPage: Boolean = false): ReaderGeneratedLayout {
             val continuousBodyPadding = if (settings.verticalWriting) {
                 "${settings.verticalPaddingBlockCss} 0"
             } else {
@@ -43,15 +44,15 @@ internal data class ReaderGeneratedLayout(
             } else {
                 "0"
             }
-            val columnWidth = if (settings.verticalWriting) {
-                "var(--page-height, 100vh)"
-            } else {
-                "var(--page-width, 100vw)"
+            val columnWidth = when {
+                settings.verticalWriting -> "var(--page-height, 100vh)"
+                paginatedTwoPage -> "auto"
+                else -> "var(--page-width, 100vw)"
             }
-            val imageRatio = if (settings.continuousMode && settings.verticalWriting) {
-                1.0
-            } else {
-                settings.imageWidthViewportRatio
+            val imageRatio = when {
+                paginatedTwoPage -> settings.twoPageImageWidthViewportRatio
+                settings.continuousMode && settings.verticalWriting -> 1.0
+                else -> settings.imageWidthViewportRatio
             }
             return ReaderGeneratedLayout(
                 viewportHorizontalPaddingRatio = settings.continuousViewportHorizontalPaddingRatio,
@@ -59,9 +60,14 @@ internal data class ReaderGeneratedLayout(
                 continuousBodyPaddingCss = continuousBodyPadding,
                 continuousBodyBottomPaddingCss = continuousBottomPadding,
                 paginatedColumnWidthCss = columnWidth,
+                paginatedColumnCountCss = if (paginatedTwoPage) {
+                    "column-count: 2 !important;\n-webkit-column-count: 2 !important;"
+                } else {
+                    ""
+                },
                 imageWidthViewportRatio = imageRatio,
                 imageHeightViewportRatio = settings.imageHeightViewportRatio,
-                imageWidthReductionPx = if (settings.verticalWriting) 1 else 0,
+                imageWidthReductionPx = if (settings.verticalWriting || paginatedTwoPage) 1 else 0,
             )
         }
     }
@@ -76,6 +82,7 @@ internal object ReaderContentStyles {
         sasayakiBackgroundColor: Long = 0x6687CEEB,
         contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
         readerCssTemplate: String? = null,
+        paginatedTwoPage: Boolean = false,
     ): String = "<style>\n${
         css(
             settings = settings,
@@ -85,6 +92,7 @@ internal object ReaderContentStyles {
             sasayakiBackgroundColor = sasayakiBackgroundColor,
             contentLanguageProfile = contentLanguageProfile,
             readerCssTemplate = readerCssTemplate,
+            paginatedTwoPage = paginatedTwoPage,
         )
     }\n</style>"
 
@@ -96,6 +104,7 @@ internal object ReaderContentStyles {
         sasayakiBackgroundColor: Long = 0x6687CEEB,
         contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
         readerCssTemplate: String? = null,
+        paginatedTwoPage: Boolean = false,
     ): String {
         val textColor = settings.textColorCss(systemDark)
         val backgroundColor = settings.backgroundColorCss(systemDark)
@@ -181,7 +190,17 @@ internal object ReaderContentStyles {
             }
             """.trimIndent()
         }
-        val generatedLayout = ReaderGeneratedLayout.from(settings)
+        val generatedLayout = ReaderGeneratedLayout.from(settings, paginatedTwoPage)
+        val imageMaxWidthFallbackCss = if (paginatedTwoPage) {
+            "${(generatedLayout.imageWidthViewportRatio * 100).cssNumber()}vw"
+        } else {
+            settings.imageMaxWidthFallbackCss
+        }
+        val paginatedColumnCountCss = generatedLayout.paginatedColumnCountCss
+            .takeIf(String::isNotEmpty)
+            ?.prependIndent("                    ")
+            ?.let { "\n$it" }
+            .orEmpty()
         val layoutCss = when (settings.viewMode) {
             ReaderViewMode.Continuous -> {
                 val hiddenOverflowAxis = if (settings.verticalWriting) "overflow-y" else "overflow-x"
@@ -289,7 +308,7 @@ internal object ReaderContentStyles {
                     -webkit-text-size-adjust: none !important;
                     $textSpacingCss
                     box-sizing: border-box !important;
-                    column-width: ${generatedLayout.paginatedColumnWidthCss} !important;
+                    column-width: ${generatedLayout.paginatedColumnWidthCss} !important;$paginatedColumnCountCss
                     column-gap: ${settings.columnGapCss};
                     padding: ${settings.pagePaddingCss} !important;
                     padding-bottom: ${settings.bottomPaddingCss} !important;
@@ -322,7 +341,7 @@ internal object ReaderContentStyles {
                 sasayakiBackgroundColor.toReaderCssColor(includeAlpha = true),
             )
             .replace("__HOSHI_LAYOUT_CSS__", layoutCss)
-            .replace("__HOSHI_IMAGE_MAX_WIDTH_FALLBACK__", settings.imageMaxWidthFallbackCss)
+            .replace("__HOSHI_IMAGE_MAX_WIDTH_FALLBACK__", imageMaxWidthFallbackCss)
             .replace("__HOSHI_IMAGE_MAX_HEIGHT_FALLBACK__", settings.imageMaxHeightFallbackCss)
             .replace("__HOSHI_FURIGANA_CSS__", furiganaCss)
             .replace(

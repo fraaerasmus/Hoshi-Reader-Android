@@ -101,6 +101,7 @@ data class ReaderSettings(
     val bottomSafeAreaDp: Int = ReaderBottomSafeAreaDefaultDp,
     val avoidPageBreak: Boolean = false,
     val justifyText: Boolean = false,
+    val twoPageLandscape: Boolean = true,
     val blurImages: Boolean = false,
     val layoutAdvanced: Boolean = false,
     val lineHeight: Double = 1.65,
@@ -147,6 +148,9 @@ data class ReaderSettings(
 
     val imageWidthViewportRatio: Double
         get() = (100 - horizontalPadding).coerceAtLeast(1) / 100.0
+
+    val twoPageImageWidthViewportRatio: Double
+        get() = (100 - 2 * horizontalPadding).coerceAtLeast(1) / 200.0
 
     val imageHeightViewportRatio: Double
         get() = (100 - verticalPadding).coerceAtLeast(1) / 100.0
@@ -197,6 +201,10 @@ data class ReaderSettings(
 
     val trailingSpacerWidthCss: String
         get() = if (verticalWriting) "0" else "${(horizontalPadding / 2.0).cssNumber()}vw"
+
+    fun paginatedTwoPageActive(viewportCssWidth: Int, viewportCssHeight: Int): Boolean =
+        twoPageLandscape && viewMode == ReaderViewMode.Paginated &&
+            !verticalWriting && viewportCssWidth > viewportCssHeight
 
     fun backgroundColor(systemDark: Boolean): Long {
         if (eInkMode) {
@@ -425,6 +433,7 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             .coerceReaderBottomSafeAreaDp(),
         avoidPageBreak = preferences.getBoolean("avoidPageBreak", false),
         justifyText = preferences.getBoolean("justifyText", false),
+        twoPageLandscape = preferences.getBoolean("twoPageLandscape", true),
         blurImages = preferences.getBoolean("blurImages", false),
         layoutAdvanced = preferences.getBoolean("layoutAdvanced", false),
         lineHeight = preferences.getFloat("lineHeight", 1.65f).toDouble(),
@@ -499,6 +508,7 @@ class ReaderSettingsStore(context: Context) : ReaderSettingsLegacySource {
             .putInt("readerBottomSafeAreaDp", settings.bottomSafeAreaDp.coerceReaderBottomSafeAreaDp())
             .putBoolean("avoidPageBreak", settings.avoidPageBreak)
             .putBoolean("justifyText", settings.justifyText)
+            .putBoolean("twoPageLandscape", settings.twoPageLandscape)
             .putBoolean("blurImages", settings.blurImages)
             .putBoolean("layoutAdvanced", settings.layoutAdvanced)
             .putFloat("lineHeight", settings.lineHeight.toFloat())
@@ -660,6 +670,7 @@ class ReaderSettingsRepository(
                 .coerceReaderBottomSafeAreaDp(),
             avoidPageBreak = this[KEY_AVOID_PAGE_BREAK] ?: false,
             justifyText = this[KEY_JUSTIFY_TEXT] ?: false,
+            twoPageLandscape = this[KEY_TWO_PAGE_LANDSCAPE] ?: true,
             blurImages = this[KEY_BLUR_IMAGES] ?: false,
             layoutAdvanced = this[KEY_LAYOUT_ADVANCED] ?: false,
             lineHeight = (this[KEY_LINE_HEIGHT] ?: 1.65f).toDouble(),
@@ -734,6 +745,7 @@ class ReaderSettingsRepository(
         this[KEY_BOTTOM_SAFE_AREA_DP] = settings.bottomSafeAreaDp.coerceReaderBottomSafeAreaDp()
         this[KEY_AVOID_PAGE_BREAK] = settings.avoidPageBreak
         this[KEY_JUSTIFY_TEXT] = settings.justifyText
+        this[KEY_TWO_PAGE_LANDSCAPE] = settings.twoPageLandscape
         this[KEY_BLUR_IMAGES] = settings.blurImages
         this[KEY_LAYOUT_ADVANCED] = settings.layoutAdvanced
         this[KEY_LINE_HEIGHT] = settings.lineHeight.toFloat()
@@ -859,6 +871,7 @@ class ReaderSettingsRepository(
         private val KEY_BOTTOM_SAFE_AREA_DP = intPreferencesKey("readerBottomSafeAreaDp")
         private val KEY_AVOID_PAGE_BREAK = booleanPreferencesKey("avoidPageBreak")
         private val KEY_JUSTIFY_TEXT = booleanPreferencesKey("justifyText")
+        private val KEY_TWO_PAGE_LANDSCAPE = booleanPreferencesKey("twoPageLandscape")
         private val KEY_BLUR_IMAGES = booleanPreferencesKey("blurImages")
         private val KEY_LAYOUT_ADVANCED = booleanPreferencesKey("layoutAdvanced")
         private val KEY_LINE_HEIGHT = floatPreferencesKey("lineHeight")
@@ -935,6 +948,7 @@ private data class ProfileReaderAppearanceSettings(
     val bottomSafeAreaDp: Int = ReaderBottomSafeAreaDefaultDp,
     val avoidPageBreak: Boolean = false,
     val justifyText: Boolean = false,
+    val twoPageLandscape: Boolean = true,
     val blurImages: Boolean = false,
     val layoutAdvanced: Boolean = false,
     val lineHeight: Double = 1.65,
@@ -997,6 +1011,7 @@ private fun ReaderSettings.toProfileAppearanceSettings(): ProfileReaderAppearanc
         bottomSafeAreaDp = bottomSafeAreaDp.coerceReaderBottomSafeAreaDp(),
         avoidPageBreak = avoidPageBreak,
         justifyText = justifyText,
+        twoPageLandscape = twoPageLandscape,
         blurImages = blurImages,
         layoutAdvanced = layoutAdvanced,
         lineHeight = lineHeight,
@@ -1062,6 +1077,7 @@ private fun ReaderSettings.withProfileAppearance(appearance: ProfileReaderAppear
         bottomSafeAreaDp = appearance.bottomSafeAreaDp.coerceReaderBottomSafeAreaDp(),
         avoidPageBreak = appearance.avoidPageBreak,
         justifyText = appearance.justifyText,
+        twoPageLandscape = appearance.twoPageLandscape,
         blurImages = appearance.blurImages,
         layoutAdvanced = appearance.layoutAdvanced,
         lineHeight = appearance.lineHeight,

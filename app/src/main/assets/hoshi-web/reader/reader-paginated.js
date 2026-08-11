@@ -14,6 +14,8 @@ window.hoshiReader = {
   nodeStartOffsets: new WeakMap(),
   nodeStartRawOffsets: new WeakMap(),
   paginationMetrics: null,
+  twoPageMode: false,
+  twoPageParityFiller: null,
   isVertical: function() {
     return window.getComputedStyle(document.body).writingMode === "vertical-rl";
   },
@@ -279,6 +281,42 @@ __HOSHI_READER_SASAYAKI_SCRIPT__
   stabilizeRubyAdjacentTextNodes: function(root) {
     this.domText().stabilizeRubyAdjacentTextNodes(this, root);
   },
+  ensureTwoPageParityFiller: function() {
+    var filler = this.twoPageParityFiller;
+    var fillerAttached = !!(filler && filler.parentNode === document.body);
+    if (!this.twoPageMode || this.isVertical()) {
+      if (fillerAttached) {
+        filler.remove();
+        this.paginationMetrics = null;
+      }
+      return;
+    }
+
+    var pageWidth = Math.max(1, this.pageWidth || window.innerWidth);
+    var columnPitch = pageWidth / 2;
+    var contentWidth = document.body.scrollWidth;
+    if (fillerAttached) {
+      contentWidth = Math.max(pageWidth, contentWidth - columnPitch);
+    }
+    var columnCount = Math.max(1, Math.round(contentWidth / columnPitch));
+    var needsFiller = columnCount % 2 === 1;
+    if (needsFiller && !fillerAttached) {
+      if (!filler) {
+        filler = document.createElement('div');
+        filler.className = 'hoshi-two-page-parity-filler';
+        filler.style.breakBefore = 'column';
+        filler.style.breakInside = 'avoid';
+        filler.style.width = '100%';
+        filler.style.height = '100%';
+        this.twoPageParityFiller = filler;
+      }
+      document.body.appendChild(filler);
+      this.paginationMetrics = null;
+    } else if (!needsFiller && fillerAttached) {
+      filler.remove();
+      this.paginationMetrics = null;
+    }
+  },
   getScrollContext: function() {
     var vertical = this.isVertical();
     var scrollEl = document.body;
@@ -433,6 +471,7 @@ __HOSHI_READER_SASAYAKI_SCRIPT__
     }
   },
   buildPaginationMetrics: function() {
+    this.ensureTwoPageParityFiller();
     var context = this.getScrollContext();
     var currentScroll = this.getPagePosition(context);
     var maxAlignedScroll = Math.floor(context.maxScroll / context.pageSize) * context.pageSize;
@@ -636,6 +675,7 @@ __HOSHI_HIGHLIGHTS_SCRIPT__
 window.hoshiReader.initialize = function() {
   if (window.hoshiReader.didInitialize) return;
   window.hoshiReader.didInitialize = true;
+  window.hoshiReader.twoPageMode = __HOSHI_PAGINATED_TWO_PAGE__;
   var viewport = document.querySelector('meta[name="viewport"]');
   if (viewport) { viewport.remove(); }
   var newViewport = document.createElement('meta');
@@ -665,20 +705,26 @@ window.hoshiReader.initialize = function() {
   spacer.style.display = 'block';
   spacer.style.breakInside = 'avoid';
   document.body.appendChild(spacer);
+  window.hoshiReader.ensureTwoPageParityFiller();
   window.hoshiReader.normalizeRubyTextNodes();
   window.hoshiReader.stabilizeRubyAdjacentTextNodes();
+  var imageSetupComplete = imageSetupPromise.then(function() {
+    if (!images.length) return;
+    return new Promise(function(resolve) { setTimeout(resolve, 50); });
+  });
   // Reveal chapter-start opens after first paint; don't wait on image decode.
   if (__HOSHI_INITIAL_FRAGMENT_LITERAL__ === null && __HOSHI_INITIAL_PROGRESS__ <= 0) {
     requestAnimationFrame(function() {
       window.hoshiReader.buildNodeOffsets();
       __HOSHI_RESTORE_SCRIPTS__
     });
+    imageSetupComplete.then(function() {
+      window.hoshiReader.ensureTwoPageParityFiller();
+    });
     return;
   }
-  imageSetupPromise.then(function() {
-    if (!images.length) return;
-    return new Promise(function(resolve) { setTimeout(resolve, 50); });
-  }).then(function() {
+  imageSetupComplete.then(function() {
+    window.hoshiReader.ensureTwoPageParityFiller();
     window.hoshiReader.buildNodeOffsets();
     __HOSHI_RESTORE_SCRIPTS__
   });

@@ -18,6 +18,34 @@ class ReaderPaginationScriptsTest {
     }
 
     @Test
+    fun generatedPaginatedScriptSubstitutesTwoPageModeAndImageBudget() {
+        val settings = ReaderSettings(
+            viewMode = ReaderViewMode.Paginated,
+            verticalWriting = false,
+            horizontalPadding = 5,
+        )
+
+        val singlePage = ReaderPaginationScripts.shellScriptWithRestoreToken(
+            settings = settings,
+            restoreToken = "single",
+            paginatedTwoPage = false,
+        )
+        val twoPage = ReaderPaginationScripts.shellScriptWithRestoreToken(
+            settings = settings,
+            restoreToken = "spread",
+            paginatedTwoPage = true,
+        )
+
+        assertFalse(singlePage.contains("__HOSHI_"))
+        assertFalse(twoPage.contains("__HOSHI_"))
+        assertTrue(singlePage.contains("twoPageMode = false"))
+        assertTrue(twoPage.contains("twoPageMode = true"))
+        assertTrue(singlePage.contains("pageWidth * 0.95"))
+        assertTrue(twoPage.contains("pageWidth * 0.45"))
+        assertTrue(twoPage.contains("- 1) + 'px'"))
+    }
+
+    @Test
     fun previousChapterNavigationTargetsEndLikeIos() {
         val position = ReaderChapterPosition(index = 3)
 

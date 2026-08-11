@@ -366,6 +366,17 @@ private fun ReaderAppearanceContent(
                         },
                         palette = palette,
                     )
+                    if (settings.viewMode == ReaderViewMode.Paginated) {
+                        AppearanceDivider(palette)
+                        SwitchRow(
+                            label = stringResource(R.string.reader_appearance_two_page_landscape),
+                            supportingText = stringResource(
+                                R.string.reader_appearance_two_page_landscape_description,
+                            ),
+                            checked = settings.twoPageLandscape,
+                            onCheckedChange = { onSettingsChange(settings.copy(twoPageLandscape = it)) },
+                        )
+                    }
                     if (settings.viewMode == ReaderViewMode.Continuous) {
                         AppearanceDivider(palette)
                         SliderRow(
@@ -1267,6 +1278,7 @@ private fun readerFontLabel(fontName: String): String =
 private fun SwitchRow(
     label: String,
     checked: Boolean,
+    supportingText: String? = null,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val metrics = readerSheetDensityMetrics()
@@ -1277,13 +1289,20 @@ private fun SwitchRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            text = label,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            supportingText?.let { text ->
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides metrics.appearanceSwitchMinimumInteractiveSizeDp.dp) {
             Switch(checked = checked, onCheckedChange = onCheckedChange)
         }

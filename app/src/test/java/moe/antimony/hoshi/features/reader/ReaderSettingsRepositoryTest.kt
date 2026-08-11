@@ -208,6 +208,7 @@ class ReaderSettingsRepositoryTest {
                     bottomSafeAreaDp = 40,
                     avoidPageBreak = true,
                     justifyText = true,
+                    twoPageLandscape = false,
                     layoutAdvanced = true,
                     lineHeight = 1.8,
                     characterSpacing = 0.03,
@@ -274,6 +275,7 @@ class ReaderSettingsRepositoryTest {
             assertEquals(40, saved.bottomSafeAreaDp)
             assertTrue(saved.avoidPageBreak)
             assertTrue(saved.justifyText)
+            assertFalse(saved.twoPageLandscape)
             assertTrue(saved.layoutAdvanced)
             assertEquals(1.8, saved.lineHeight, 0.000001)
             assertEquals(0.03, saved.characterSpacing, 0.000001)
@@ -356,6 +358,7 @@ class ReaderSettingsRepositoryTest {
                     popupWidth = 440,
                     topSafeAreaDp = 46,
                     bottomSafeAreaDp = 44,
+                    twoPageLandscape = false,
                     visualNovelMergeCrossScreenSasayakiCues = true,
                     showStatisticsTab = false,
                     volumeKeysTurnPages = true,
@@ -372,6 +375,7 @@ class ReaderSettingsRepositoryTest {
             assertEquals(440, inherited.popupWidth)
             assertEquals(46, inherited.topSafeAreaDp)
             assertEquals(44, inherited.bottomSafeAreaDp)
+            assertFalse(inherited.twoPageLandscape)
             assertTrue(inherited.visualNovelMergeCrossScreenSasayakiCues)
             assertFalse(inherited.showStatisticsTab)
             assertTrue(inherited.volumeKeysTurnPages)
@@ -385,6 +389,7 @@ class ReaderSettingsRepositoryTest {
                     popupWidth = 280,
                     topSafeAreaDp = 58,
                     bottomSafeAreaDp = 60,
+                    twoPageLandscape = true,
                     visualNovelMergeCrossScreenSasayakiCues = false,
                     showStatisticsTab = true,
                     volumeKeysTurnPages = false,
@@ -400,6 +405,7 @@ class ReaderSettingsRepositoryTest {
             assertEquals(440, japanese.popupWidth)
             assertEquals(46, japanese.topSafeAreaDp)
             assertEquals(44, japanese.bottomSafeAreaDp)
+            assertFalse(japanese.twoPageLandscape)
             assertTrue(japanese.visualNovelMergeCrossScreenSasayakiCues)
             assertTrue(japanese.showStatisticsTab)
             assertFalse(japanese.volumeKeysTurnPages)

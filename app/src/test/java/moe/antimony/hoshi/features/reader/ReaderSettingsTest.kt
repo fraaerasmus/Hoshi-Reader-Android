@@ -30,6 +30,7 @@ class ReaderSettingsTest {
         assertEquals(0xFF999999L, settings.customInfoColor)
         assertEquals(ReaderColorPreset.RosePine, settings.colorPreset)
         assertFalse(settings.continuousMode)
+        assertTrue(settings.twoPageLandscape)
         assertFalse(settings.blurImages)
         assertFalse(settings.enableStatistics)
         assertTrue(settings.showStatisticsTab)
@@ -320,6 +321,67 @@ class ReaderSettingsTest {
             0,
             ReaderGeneratedLayout.from(ReaderSettings(verticalWriting = false)).imageWidthReductionPx,
         )
+    }
+
+    @Test
+    fun twoPagePaginatedLayoutUsesTwoColumnsAndHalfWidthImages() {
+        val settings = ReaderSettings(
+            viewMode = ReaderViewMode.Paginated,
+            verticalWriting = false,
+            horizontalPadding = 5,
+        )
+
+        val spreadCss = ReaderContentStyles.styleTag(
+            settings = settings,
+            paginatedTwoPage = true,
+        )
+        val defaultCss = ReaderContentStyles.styleTag(settings = settings)
+        val layout = ReaderGeneratedLayout.from(settings, paginatedTwoPage = true)
+
+        assertTrue(spreadCss.contains("column-count: 2 !important;"))
+        assertTrue(spreadCss.contains("-webkit-column-count: 2 !important;"))
+        assertTrue(spreadCss.contains("column-width: auto !important;"))
+        assertFalse(defaultCss.contains("column-count: 2 !important;"))
+        assertFalse(defaultCss.contains("column-width: auto !important;"))
+        assertEquals(0.45, layout.imageWidthViewportRatio, 0.0)
+        assertEquals(1, layout.imageWidthReductionPx)
+        assertTrue(spreadCss.contains("var(--hoshi-image-max-width, 45.0vw)"))
+    }
+
+    @Test
+    fun twoPagePaginatedPredicateRequiresEnabledHorizontalLandscapeMode() {
+        val eligible = ReaderSettings(
+            twoPageLandscape = true,
+            viewMode = ReaderViewMode.Paginated,
+            verticalWriting = false,
+        )
+
+        assertTrue(eligible.paginatedTwoPageActive(800, 480))
+        assertFalse(eligible.paginatedTwoPageActive(480, 800))
+        assertFalse(eligible.paginatedTwoPageActive(800, 800))
+        assertFalse(eligible.copy(verticalWriting = true).paginatedTwoPageActive(800, 480))
+        assertFalse(
+            eligible.copy(viewMode = ReaderViewMode.Continuous).paginatedTwoPageActive(800, 480),
+        )
+        assertFalse(
+            eligible.copy(viewMode = ReaderViewMode.VisualNovel).paginatedTwoPageActive(800, 480),
+        )
+        assertFalse(eligible.copy(twoPageLandscape = false).paginatedTwoPageActive(800, 480))
+    }
+
+    @Test
+    fun twoPageViewportLayoutHalvesLandscapeImageWidthBudget() {
+        val settings = ReaderSettings(
+            viewMode = ReaderViewMode.Paginated,
+            verticalWriting = false,
+            horizontalPadding = 5,
+        )
+
+        val landscape = readerViewportCssLayout(settings, viewportCssWidth = 800, viewportCssHeight = 480)
+        val portrait = readerViewportCssLayout(settings, viewportCssWidth = 480, viewportCssHeight = 800)
+
+        assertEquals(359, landscape.imageMaxWidthPx)
+        assertEquals(456, portrait.imageMaxWidthPx)
     }
 
     @Test

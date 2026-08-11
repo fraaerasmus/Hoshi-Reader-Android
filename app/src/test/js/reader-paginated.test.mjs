@@ -37,6 +37,7 @@ function readerSource(url, options = {}) {
         .replaceAll('__HOSHI_IMAGE_WIDTH_VIEWPORT_RATIO__', '1')
         .replaceAll('__HOSHI_IMAGE_HEIGHT_VIEWPORT_RATIO__', '1')
         .replaceAll('__HOSHI_IMAGE_WIDTH_REDUCTION_PX__', '0')
+        .replaceAll('__HOSHI_PAGINATED_TWO_PAGE__', String(options.paginatedTwoPage ?? false))
         .replaceAll('__HOSHI_BLUR_IMAGES__', 'false')
         .replaceAll('__HOSHI_TRAILING_SPACER_HEIGHT_LITERAL__', JSON.stringify('0px'))
         .replaceAll('__HOSHI_TRAILING_SPACER_WIDTH_LITERAL__', JSON.stringify('0px'))
@@ -874,6 +875,50 @@ test('paginated content metrics include final partial page when real text reache
     const metrics = reader.buildPaginationMetrics();
 
     assert.equal(metrics.maxScroll, 3450);
+});
+
+test('two-page parity filler stays stable for odd columns and is removed for even columns', () => {
+    const body = new TestElement('body');
+    const { reader } = loadReader(body, readerPaginatedUrl, {
+        writingMode: 'horizontal-tb',
+        paginatedTwoPage: true,
+    });
+    reader.pageWidth = 480;
+    reader.twoPageMode = true;
+    body.scrollWidth = 720;
+    reader.paginationMetrics = { cached: true };
+
+    reader.ensureTwoPageParityFiller();
+
+    const filler = reader.twoPageParityFiller;
+    assert.ok(filler);
+    assert.equal(body.childNodes.filter((node) => node.className === 'hoshi-two-page-parity-filler').length, 1);
+    assert.equal(filler.style.breakBefore, 'column');
+    assert.equal(filler.style.breakInside, 'avoid');
+    assert.equal(filler.style.width, '100%');
+    assert.equal(filler.style.height, '100%');
+    assert.equal(reader.paginationMetrics, null);
+
+    body.scrollWidth = 960;
+    reader.paginationMetrics = { cached: true };
+    reader.ensureTwoPageParityFiller();
+
+    assert.equal(reader.twoPageParityFiller, filler);
+    assert.equal(body.childNodes.filter((node) => node.className === 'hoshi-two-page-parity-filler').length, 1);
+    assert.deepEqual(reader.paginationMetrics, { cached: true });
+
+    body.scrollWidth = 1200;
+    reader.ensureTwoPageParityFiller();
+
+    assert.equal(body.childNodes.filter((node) => node.className === 'hoshi-two-page-parity-filler').length, 0);
+    assert.equal(reader.paginationMetrics, null);
+
+    body.scrollWidth = 960;
+    reader.paginationMetrics = { cached: true };
+    reader.ensureTwoPageParityFiller();
+
+    assert.equal(body.childNodes.filter((node) => node.className === 'hoshi-two-page-parity-filler').length, 0);
+    assert.deepEqual(reader.paginationMetrics, { cached: true });
 });
 
 test('paginated forward navigation reaches final partial page', () => {

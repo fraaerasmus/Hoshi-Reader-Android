@@ -106,6 +106,7 @@ internal object ReaderPaginationScripts {
         initialFragment: String? = null,
         restoreToken: String,
         assets: ReaderWebAssets? = null,
+        paginatedTwoPage: Boolean = false,
     ): String {
         val initialRestoreScript = initialFragment?.let { fragment ->
             "window.hoshiReader.jumpToFragment(${fragment.javaScriptStringLiteral()});"
@@ -124,7 +125,7 @@ internal object ReaderPaginationScripts {
                 initialRestoreScript = initialRestoreScript,
             )
         }
-        val generatedLayout = ReaderGeneratedLayout.from(settings)
+        val generatedLayout = ReaderGeneratedLayout.from(settings, paginatedTwoPage)
         val body = template
             .replace("__HOSHI_HIGHLIGHTS_SCRIPT__", source.highlights)
             .replace("__HOSHI_READER_SASAYAKI_SCRIPT__", source.readerSasayaki)
@@ -159,6 +160,7 @@ internal object ReaderPaginationScripts {
             .replace("__HOSHI_IMAGE_WIDTH_VIEWPORT_RATIO__", generatedLayout.imageWidthViewportRatio.toString())
             .replace("__HOSHI_IMAGE_HEIGHT_VIEWPORT_RATIO__", generatedLayout.imageHeightViewportRatio.toString())
             .replace("__HOSHI_IMAGE_WIDTH_REDUCTION_PX__", generatedLayout.imageWidthReductionPx.toString())
+            .replace("__HOSHI_PAGINATED_TWO_PAGE__", paginatedTwoPage.toString())
             .replace("__HOSHI_TRAILING_SPACER_HEIGHT_LITERAL__", settings.trailingSpacerHeightCss.javaScriptSingleQuotedStringLiteral())
             .replace("__HOSHI_TRAILING_SPACER_WIDTH_LITERAL__", settings.trailingSpacerWidthCss.javaScriptSingleQuotedStringLiteral())
             .replace("__HOSHI_BLUR_IMAGES__", settings.blurImages.toString())

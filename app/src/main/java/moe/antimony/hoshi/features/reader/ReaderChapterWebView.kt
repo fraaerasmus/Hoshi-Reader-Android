@@ -868,6 +868,10 @@ private fun readerSetupScript(
     val eInkMode = readerJavaScriptStringLiteral(if (settings.eInkMode) "true" else "false")
     val contentLanguageTag = readerJavaScriptStringLiteral(contentLanguageProfile.htmlLang)
     val selectionLanguageId = readerJavaScriptStringLiteral(contentLanguageProfile.dictionaryLanguageId)
+    val paginatedTwoPage = settings.paginatedTwoPageActive(
+        viewportCssWidth = webViewViewportCssSize.width,
+        viewportCssHeight = webViewViewportCssSize.height,
+    )
     val viewportLayout = readerViewportCssLayout(
         settings = settings,
         viewportCssWidth = webViewViewportCssSize.width,
@@ -881,6 +885,7 @@ private fun readerSetupScript(
         sasayakiBackgroundColor = sasayakiBackgroundColor,
         contentLanguageProfile = contentLanguageProfile,
         readerCssTemplate = assets.readerCss,
+        paginatedTwoPage = paginatedTwoPage,
     ).let { css ->
         "${viewportLayout.cssVariables()}\n$css"
     }.let(::readerJavaScriptStringLiteral)
@@ -894,6 +899,7 @@ private fun readerSetupScript(
         highlightsJson = highlightsJson,
         restoreToken = restoreToken,
         assets = assets,
+        paginatedTwoPage = paginatedTwoPage,
     ).scriptTagBody()
     return """
         (function() {
@@ -958,7 +964,8 @@ internal fun readerViewportCssLayout(
     val width = viewportCssWidth.coerceAtLeast(1)
     val height = viewportCssHeight.coerceAtLeast(1)
     val pageHeight = height + settings.bottomOverlapPx
-    val generatedLayout = ReaderGeneratedLayout.from(settings)
+    val paginatedTwoPage = settings.paginatedTwoPageActive(width, height)
+    val generatedLayout = ReaderGeneratedLayout.from(settings, paginatedTwoPage)
     val imageMaxWidth = max(
         1,
         floor(width * generatedLayout.imageWidthViewportRatio).toInt() - generatedLayout.imageWidthReductionPx,

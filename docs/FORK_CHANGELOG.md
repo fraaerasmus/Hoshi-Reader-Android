@@ -11,6 +11,7 @@ below is a single living summary of everything the fork adds, grouped Added / Fi
 
 ## Added
 
+- Add an on-by-default "Two-Page View" toggle in reader Appearance > Layout that shows paginated books as side-by-side pages in landscape; vertical/tategaki writing remains single-page.
 - Extend dictionary lookup to all 18 languages supported by the kaihouguide hoshidicts engine. Set a profile's language (e.g. German, Korean, Spanish, Latin) and reader popups, recursive lookups, Dictionary search, and Android Process Text all look up in that language. Built on the upstream dictionary profiles and the kaihouguide multilingual bridge rather than upstream's Japanese/English-only engine; in exchange, English IPA transcriptions and multi-source deinflection traces from the upstream engine are unavailable in this fork.
 - Add settings backup and restore as a JSON file from Advanced > Backup, including Google Drive and Anki credentials so a new install can take over; the file holds those credentials in plain text, so keep it private and delete it after importing.
 - Add multi-word phrase lookup so tapping a word in space-delimited languages (e.g. French "coup de main") matches dictionary entries that span spaces, with a "Scan Multi-Word Phrases" toggle in Dictionary settings; the reader tap scan now follows the configured scan length.
