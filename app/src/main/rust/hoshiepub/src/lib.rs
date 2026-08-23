@@ -78,6 +78,14 @@ impl EpubBook {
             .map(|l| l.value().to_string())
     }
 
+    pub fn author(&self) -> Option<String> {
+        self.epub
+            .metadata()
+            .creators()
+            .next()
+            .map(|creator| creator.value().to_string())
+    }
+
     pub fn cover_href(&self) -> Option<String> {
         self.epub
             .manifest()

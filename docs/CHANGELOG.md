@@ -8,6 +8,8 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Added
 
+- Add Show, Blur, and Hide privacy modes for bookshelf covers, plus deterministic
+  title and author artwork when a book has no visible cover.
 - Warn users before enabling AnkiConnect that most setups can create cards
   directly through AnkiDroid and that an incorrect AnkiConnect configuration
   prevents fetching decks and note types or creating cards.

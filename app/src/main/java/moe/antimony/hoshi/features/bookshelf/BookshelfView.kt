@@ -80,6 +80,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -105,7 +108,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
@@ -117,7 +119,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.LocalHoshiUiDependencies
@@ -145,7 +146,6 @@ import moe.antimony.hoshi.ui.hoshiOutlinedTextFieldColors
 import moe.antimony.hoshi.ui.hoshiSingleLineTextFieldLineLimits
 import moe.antimony.hoshi.ui.rememberSyncedTextFieldState
 import moe.antimony.hoshi.ui.replaceTextAndSelectStart
-import moe.antimony.hoshi.ui.theme.LocalHoshiDarkTheme
 import moe.antimony.hoshi.ui.theme.LocalHoshiEInkMode
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
@@ -294,6 +294,7 @@ fun BookshelfView(
         remoteBusyBookIds = uiState.remoteBusyBookIds,
         coverSourcesById = uiState.coverSourcesById,
         remoteCoverSourcesById = uiState.remoteCoverSourcesById,
+        coverMode = uiState.coverMode,
         sortOption = uiState.sortOption,
         hasLoadedBooks = uiState.hasLoadedBooks,
         isLoading = uiState.isLoading,
@@ -533,7 +534,9 @@ fun BookshelfView(
         ShelfManagementDialog(
             shelves = uiState.shelves,
             showReading = uiState.showReading,
+            coverMode = uiState.coverMode,
             onShowReadingChange = booksViewModel::changeShowReading,
+            onCoverModeChange = booksViewModel::changeCoverMode,
             onCreateShelf = booksViewModel::createShelf,
             onDeleteShelf = booksViewModel::deleteShelf,
             onRenameShelf = booksViewModel::renameShelf,
@@ -760,6 +763,7 @@ private fun LazyGridScope.googleDriveSection(
     remoteImportProgressById: Map<String, Double>,
     remoteBusyBookIds: Set<String>,
     remoteCoverSourcesById: Map<String, BookCoverSource>,
+    coverMode: BookshelfCoverMode,
     layoutSpec: MainShellLayoutSpec,
     contentWidthDp: Int,
     fileTaskBlocked: Boolean,
@@ -803,6 +807,7 @@ private fun LazyGridScope.googleDriveSection(
                     progress = remoteProgressById[entry.id] ?: 0.0,
                     downloadProgress = remoteImportProgressById[entry.id],
                     coverSource = remoteCoverSourcesById[entry.id],
+                    coverMode = coverMode,
                     layoutSpec = layoutSpec,
                     enabled = presentation.allowsHitTesting && !fileTaskBlocked && entry.id !in remoteBusyBookIds,
                     onImport = { onImportRemoteBook(entry) },
@@ -837,7 +842,10 @@ private fun LazyGridScope.googleDriveSection(
                     .take(layoutSpec.collapsedShelfPreviewColumns(contentWidthDp))
                     .forEach { entry ->
                         BookCoverCard(
+                            title = entry.title,
+                            author = null,
                             coverSource = remoteCoverSourcesById[entry.id],
+                            coverMode = coverMode,
                             modifier = Modifier.width(collapsedCoverWidthDp.dp),
                         )
                     }
@@ -859,6 +867,7 @@ private fun BooksTab(
     remoteBusyBookIds: Set<String>,
     coverSourcesById: Map<String, BookCoverSource>,
     remoteCoverSourcesById: Map<String, BookCoverSource>,
+    coverMode: BookshelfCoverMode,
     sortOption: BookSortOption,
     hasLoadedBooks: Boolean,
     isLoading: Boolean,
@@ -998,6 +1007,7 @@ private fun BooksTab(
                                     remoteImportProgressById = remoteImportProgressById,
                                     remoteBusyBookIds = remoteBusyBookIds,
                                     remoteCoverSourcesById = remoteCoverSourcesById,
+                                    coverMode = coverMode,
                                     layoutSpec = layoutSpec,
                                     contentWidthDp = contentWidthDp,
                                     fileTaskBlocked = fileTaskBlocked,
@@ -1045,6 +1055,7 @@ private fun BooksTab(
                                             entry = entry,
                                             progress = bookProgressById[entry.metadata.id] ?: 0.0,
                                             coverSource = coverSourcesById[entry.metadata.id],
+                                            coverMode = coverMode,
                                             layoutSpec = layoutSpec,
                                             isSelecting = isSelecting,
                                             isSelected = entry.metadata.id in selectedBookIds,
@@ -1097,7 +1108,10 @@ private fun BooksTab(
                                             layoutSpec.collapsedShelfPreviewCoverWidthDp(contentWidthDp)
                                         section.books.take(layoutSpec.collapsedShelfPreviewColumns(contentWidthDp)).forEach { entry ->
                                             BookCoverCard(
+                                                title = entry.displayTitle,
+                                                author = entry.metadata.author,
                                                 coverSource = coverSourcesById[entry.metadata.id],
+                                                coverMode = coverMode,
                                                 modifier = Modifier.width(collapsedCoverWidthDp.dp),
                                             )
                                         }
@@ -1112,6 +1126,7 @@ private fun BooksTab(
                                 remoteImportProgressById = remoteImportProgressById,
                                 remoteBusyBookIds = remoteBusyBookIds,
                                 remoteCoverSourcesById = remoteCoverSourcesById,
+                                coverMode = coverMode,
                                 layoutSpec = layoutSpec,
                                 contentWidthDp = contentWidthDp,
                                 fileTaskBlocked = fileTaskBlocked,
@@ -1402,6 +1417,7 @@ private fun BookGridCell(
     entry: BookEntry,
     progress: Double,
     coverSource: BookCoverSource?,
+    coverMode: BookshelfCoverMode,
     layoutSpec: MainShellLayoutSpec,
     isSelecting: Boolean,
     isSelected: Boolean,
@@ -1424,7 +1440,12 @@ private fun BookGridCell(
         ),
     ) {
         Box {
-            BookCoverCard(coverSource = coverSource)
+            BookCoverCard(
+                title = entry.displayTitle,
+                author = entry.metadata.author,
+                coverSource = coverSource,
+                coverMode = coverMode,
+            )
             if (isSelecting) {
                 Icon(
                     imageVector = if (isSelected) {
@@ -1479,6 +1500,7 @@ private fun RemoteBookGridCell(
     progress: Double,
     downloadProgress: Double?,
     coverSource: BookCoverSource?,
+    coverMode: BookshelfCoverMode,
     layoutSpec: MainShellLayoutSpec,
     enabled: Boolean,
     onImport: () -> Unit,
@@ -1492,7 +1514,12 @@ private fun RemoteBookGridCell(
             onLongClick = onOpenContextMenu,
         ),
     ) {
-        BookCoverCard(coverSource = coverSource)
+        BookCoverCard(
+            title = entry.title,
+            author = null,
+            coverSource = coverSource,
+            coverMode = coverMode,
+        )
         Spacer(Modifier.height(6.dp))
         ReadingProgressPill(progress = progress)
         Spacer(Modifier.height(6.dp))
@@ -1521,51 +1548,6 @@ internal suspend fun loadBookProgressById(
     entries.associate { entry ->
         entry.metadata.id to bookRepository.loadReadingProgress(entry.root)
     }
-
-@Composable
-private fun BookCoverCard(
-    coverSource: BookCoverSource?,
-    modifier: Modifier = Modifier,
-) {
-    val outerShape = RoundedCornerShape(7.dp)
-    val innerShape = RoundedCornerShape(6.dp)
-    val coverPlaceholderColor = Color.Gray.copy(alpha = 0.3f)
-    val coverContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
-    val coverBorderColor = if (LocalHoshiDarkTheme.current) {
-        Color.White.copy(alpha = 0.18f)
-    } else {
-        Color.Black.copy(alpha = 0.06f)
-    }
-    Box(
-        modifier = Modifier
-            .then(modifier)
-            .fillMaxWidth()
-            .aspectRatio(BookCoverAspectRatio)
-            .clip(outerShape)
-            .background(coverContainerColor)
-            .border(BorderStroke(1.dp, coverBorderColor), outerShape)
-            .padding(3.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        val coverModifier = Modifier
-            .fillMaxSize()
-            .clip(innerShape)
-        if (coverSource != null) {
-            AsyncImage(
-                model = coverSource,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = coverModifier.background(coverPlaceholderColor),
-            )
-        } else {
-            Box(
-                modifier = coverModifier.background(coverPlaceholderColor),
-            )
-        }
-    }
-}
-
-private const val BookCoverAspectRatio = 0.709f
 
 @Composable
 private fun ReadingProgressPill(progress: Double, modifier: Modifier = Modifier) {
@@ -1916,7 +1898,9 @@ internal fun selectedBookProfileId(
 internal fun ShelfManagementDialog(
     shelves: List<BookShelf>,
     showReading: Boolean,
+    coverMode: BookshelfCoverMode,
     onShowReadingChange: (Boolean) -> Unit,
+    onCoverModeChange: (BookshelfCoverMode) -> Unit,
     onCreateShelf: (String) -> Unit,
     onDeleteShelf: (String) -> Unit,
     onRenameShelf: (String, String) -> Unit,
@@ -1942,6 +1926,36 @@ internal fun ShelfManagementDialog(
                     .testTag(ShelfManagementShelfListTag),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item(key = "cover-mode") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(stringResource(R.string.bookshelf_covers), style = MaterialTheme.typography.bodyLarge)
+                        Spacer(Modifier.weight(1f))
+                        SingleChoiceSegmentedButtonRow(
+                            modifier = Modifier.width(180.dp),
+                        ) {
+                            BookshelfCoverMode.entries.forEachIndexed { index, mode ->
+                                SegmentedButton(
+                                    selected = coverMode == mode,
+                                    onClick = { onCoverModeChange(mode) },
+                                    shape = SegmentedButtonDefaults.itemShape(index, BookshelfCoverMode.entries.size),
+                                    icon = {},
+                                ) {
+                                    Text(
+                                        when (mode) {
+                                            BookshelfCoverMode.Show -> stringResource(R.string.bookshelf_cover_mode_show)
+                                            BookshelfCoverMode.Blur -> stringResource(R.string.bookshelf_cover_mode_blur)
+                                            BookshelfCoverMode.Hide -> stringResource(R.string.bookshelf_cover_mode_hide)
+                                        },
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 item(key = "reading-shelf") {
                     Row(
                         modifier = Modifier.fillMaxWidth(),

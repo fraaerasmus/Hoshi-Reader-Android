@@ -531,6 +531,13 @@ internal class BookshelfViewModel : ViewModel {
         }
     }
 
+    fun changeCoverMode(coverMode: BookshelfCoverMode) {
+        _uiState.update { it.copy(coverMode = coverMode) }
+        workScope.launch {
+            repository.changeCoverMode(coverMode)
+        }
+    }
+
     fun startSelecting() {
         _uiState.update { it.copy(isSelecting = true, selectedBookIds = emptySet()) }
     }
@@ -710,6 +717,7 @@ internal class BookshelfViewModel : ViewModel {
                 ),
                 sortOption = result.settings.sortOption,
                 showReading = result.settings.showReading,
+                coverMode = result.settings.coverMode,
                 selectedBookIds = validSelectedIds,
                 hasLoadedBooks = true,
                 isLoading = false,

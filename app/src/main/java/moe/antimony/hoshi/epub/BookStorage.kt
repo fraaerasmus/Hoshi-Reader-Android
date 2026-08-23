@@ -41,6 +41,7 @@ data class BookMetadata(
     val epub: String? = null,
     val profileId: String? = null,
     val bookLanguage: String? = null,
+    val author: String? = null,
 ) {
     val displayTitle: String
         get() = renamedTitle?.takeIf { it.isNotBlank() } ?: title.orEmpty()

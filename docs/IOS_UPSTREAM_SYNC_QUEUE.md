@@ -54,46 +54,7 @@ Validation:
   and vertical writing, with lookup, highlights, Sasayaki, restore, and ruby
   split across styled nodes.
 
-### 2. Bookshelf cover privacy and fallback artwork
-
-Status: pending Android sync.
-
-Commits:
-
-- `c6b29c8` - show title/author fallback artwork when no cover exists.
-- `1db2cd3` - add Show, Blur, and Hide cover modes.
-
-Dependency/value reasoning:
-
-- The fallback and privacy modes affect every local/remote/shelf preview cover
-  and should reuse the existing shared Coil/thumbnail-store boundary.
-
-iOS behavior to mirror:
-
-- A deterministic gradient card with title and optional author replaces the gray
-  placeholder when a book has no real cover.
-- Bookshelf and shelf-management surfaces can show, blur, or hide covers.
-
-Android current gap:
-
-- `BookshelfSettings` stores only sort and Reading Shelf visibility; there is no
-  cover mode.
-- `BookCoverCard()` in `BookshelfView.kt` renders a gray box for missing covers
-  and has no title/author input. `BookMetadata` does not store author, and
-  `EpubBook` does not expose parsed author metadata.
-
-Suggested slice:
-
-- Add optional author metadata compatibly during import/parse, then add a
-  deterministic Compose fallback and cover-mode setting applied to all cover
-  consumers.
-
-Validation:
-
-- Missing-cover books with/without authors, legacy metadata, local/remote books,
-  collapsed shelf previews, multi-select, Show/Blur/Hide, dark/e-ink themes.
-
-### 3. Lookup popup two-column layout and visual sizing
+### 2. Lookup popup two-column layout and visual sizing
 
 Status: pending Android sync.
 
@@ -138,7 +99,7 @@ Validation:
 - Run `node --test app/src/test/js/*.test.mjs`, focused settings tests,
   localization tests, and lint.
 
-### 4. Reader route open-failure fallback
+### 3. Reader route open-failure fallback
 
 Status: pending Android sync.
 
@@ -172,7 +133,7 @@ Validation:
 - Missing/corrupt book, working Close, normal Reader open/close, Android Back,
   bookshelf state preservation, and bookmark refresh.
 
-### 5. Google Drive timeout and automatic-refresh error suppression
+### 4. Google Drive timeout and automatic-refresh error suppression
 
 Status: pending Android sync.
 
@@ -210,7 +171,7 @@ Validation:
 - Automatic refresh offline, slow token/list requests, and connection loss;
   manual connect/refresh/import/export/delete must still show actionable errors.
 
-### 6. Reader WebView line-box CSS parity
+### 5. Reader WebView line-box CSS parity
 
 Status: pending Android sync.
 
@@ -248,7 +209,6 @@ Validation:
 | Commit | Date | iOS summary | Android status |
 | --- | --- | --- | --- |
 | `15d4a6e`, `23e0764` | 2026-06-15 / 2026-06-20 | Three-state revealable furigana mode and migration | Pending enum, migration, and tap semantics |
-| `c6b29c8`, `1db2cd3` | 2026-07-26 | Cover fallback and Show/Blur/Hide modes | Pending metadata/settings/Compose UI |
 | `ed25036`, `8d1442e` | 2026-06-14 / 2026-07-01 | Popup masonry redesign and theme accents | Pending settings/assets/height range |
 | `53fdb72` | 2026-06-15 | Closeable Reader open-failure view | Pending route error UI |
 | `4dae37c` | 2026-06-13 | Drive timeouts and transient refresh suppression | Pending timeout/error normalization |
@@ -257,14 +217,18 @@ Validation:
 ## Suggested Implementation Order
 
 1. Reader furigana reveal mode.
-2. Bookshelf cover privacy and fallback artwork.
-3. Lookup popup two-column layout and visual sizing.
-4. Reader route open-failure fallback.
-5. Google Drive timeout and automatic-refresh error suppression.
-6. Reader WebView line-box CSS parity.
+2. Lookup popup two-column layout and visual sizing.
+3. Reader route open-failure fallback.
+4. Google Drive timeout and automatic-refresh error suppression.
+5. Reader WebView line-box CSS parity.
 
 ## Covered Or No Android Action
 
+- `c6b29c8`, `1db2cd3`: Android now stores the first EPUB creator as optional
+  compatible book metadata, renders deterministic title/author fallback artwork,
+  and applies persisted Show/Blur/Hide privacy modes across local, remote,
+  expanded, and collapsed bookshelf covers. Android 8-11 safely maps Blur to the
+  hidden fallback because the platform blur effect starts on Android 12.
 - `eb86431`, `c31c9d0`, `ff86caa`: the paragraph fragmenter and explicit font
   request are WKWebView-specific selection/layout workarounds. Android's
   paginated reader already locks Chromium WebView scrolling during native

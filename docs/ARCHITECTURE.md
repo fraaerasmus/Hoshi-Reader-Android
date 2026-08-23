@@ -1,6 +1,6 @@
 # Hoshi Android Current Architecture
 
-Date: 2026-08-23
+Date: 2026-08-24
 
 This document describes the current architecture that exists in the Android
 repo. It is not a future plan and should not track task status. Long-lived
@@ -56,6 +56,15 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   the original cover through Coil, and malformed or decoder-rejected
   derivatives invalidate only their size bucket before the next request
   rebuilds them.
+- Imported EPUB metadata includes the trimmed first creator when nonblank as
+  an optional iOS-compatible book author. Bookshelf cover cards render
+  deterministic title/author gradient artwork when a declared cover is
+  missing, fails to decode, or is hidden. A global DataStore-backed Bookshelf
+  setting controls
+  Show, Blur, and Hide across local, remote, expanded, and collapsed shelf
+  previews; Hide never submits the cover source to Coil, while Blur uses the
+  platform effect on Android 12+ and safely uses the hidden fallback on older
+  Android versions.
 - Book metadata, bookmarks, highlights, reading statistics, and Sasayaki data
   are persisted through book sidecar repositories and models.
 - The Statistics dashboard aggregates local book `statistics.json` sidecars

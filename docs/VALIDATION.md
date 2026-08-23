@@ -209,6 +209,13 @@ Validate relevant bookshelf/import changes with:
   Reading Shelf.
 - E-ink multi-select markers, confirming unselected books show empty circles and
   selected books show check marks.
+- bookshelf covers for local and Google Drive books in expanded and collapsed
+  shelves: verify missing covers show deterministic title artwork with an
+  optional author, legacy metadata without an author remains readable, decode
+  failures use the same fallback, and progress/read/multi-select overlays stay
+  intact. Verify Show/Blur/Hide persist across restart in dark and E-ink themes;
+  Hide must not reveal the real cover, Blur must visibly blur on Android 12+
+  and safely show fallback artwork on Android 8-11.
 - dark and E-ink editable text fields, confirming visible cursors and horizontal
   scrolling for long values.
 - Android-created `Books` and `Dictionaries` `.hoshi` archives restored by iOS

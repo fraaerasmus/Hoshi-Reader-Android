@@ -43,7 +43,11 @@ class BookshelfViewModelTest {
             progressById = mapOf("book-a" to 0.25),
             coverSourcesById = mapOf("book-a" to coverSource),
             shelves = listOf(BookShelf("Manga", listOf("book-a"))),
-            settings = BookshelfSettings(sortOption = BookSortOption.Title, showReading = true),
+            settings = BookshelfSettings(
+                sortOption = BookSortOption.Title,
+                showReading = true,
+                coverMode = BookshelfCoverMode.Blur,
+            ),
         )
         val viewModel = BookshelfViewModel(repository, testScope())
 
@@ -55,9 +59,24 @@ class BookshelfViewModelTest {
         assertEquals(listOf(BookShelf("Manga", listOf("book-a"))), viewModel.uiState.value.shelves)
         assertEquals(BookSortOption.Title, viewModel.uiState.value.sortOption)
         assertTrue(viewModel.uiState.value.showReading)
+        assertEquals(BookshelfCoverMode.Blur, viewModel.uiState.value.coverMode)
         assertTrue(viewModel.uiState.value.hasLoadedBooks)
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.errorMessage.testString())
+    }
+
+    @Test
+    fun changeCoverModePersistsAndPublishesState() {
+        val persistenceGate = CompletableDeferred<Unit>()
+        val repository = FakeBookshelfRepository(coverModeGate = persistenceGate)
+        val viewModel = BookshelfViewModel(repository, testScope())
+
+        viewModel.changeCoverMode(BookshelfCoverMode.Hide)
+
+        assertEquals(listOf(BookshelfCoverMode.Hide), repository.coverModeUpdates)
+        assertEquals(BookshelfCoverMode.Hide, viewModel.uiState.value.coverMode)
+
+        persistenceGate.complete(Unit)
     }
 
     @Test
@@ -1185,6 +1204,7 @@ class BookshelfViewModelTest {
         val createShelfAndMoveResult: Boolean = true,
         val createShelfAndMoveGate: CompletableDeferred<Unit>? = null,
         val createShelfAndMoveError: Throwable? = null,
+        val coverModeGate: CompletableDeferred<Unit>? = null,
         private val loadPlans: ArrayDeque<LoadPlan> = ArrayDeque(),
     ) : BookshelfRepository {
         data class LoadPlan(
@@ -1207,6 +1227,7 @@ class BookshelfViewModelTest {
         val deletedRemoteEntries = mutableListOf<RemoteBookEntry>()
         val exportedBooks = mutableListOf<BookEntry>()
         val showReadingUpdates = mutableListOf<Boolean>()
+        val coverModeUpdates = mutableListOf<BookshelfCoverMode>()
         val renamedBooks = mutableListOf<Pair<BookEntry, String?>>()
         val profiledBooks = mutableListOf<Pair<BookEntry, String?>>()
 
@@ -1326,6 +1347,12 @@ class BookshelfViewModelTest {
         override suspend fun changeShowReading(showReading: Boolean) {
             settings = settings.copy(showReading = showReading)
             showReadingUpdates += showReading
+        }
+
+        override suspend fun changeCoverMode(coverMode: BookshelfCoverMode) {
+            coverModeUpdates += coverMode
+            coverModeGate?.await()
+            settings = settings.copy(coverMode = coverMode)
         }
 
         override suspend fun rebuildLookupQuery() = Unit

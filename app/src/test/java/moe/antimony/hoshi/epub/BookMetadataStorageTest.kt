@@ -29,6 +29,7 @@ class BookMetadataStorageTest {
         val metadata = BookMetadata(
             id = bookId,
             title = "屍人荘の殺人",
+            author = "今村昌弘",
             epub = "book-a.epub",
             renamedTitle = "Custom Shelf Title",
             cover = "Books/book-a/cover.jpg",
@@ -42,6 +43,7 @@ class BookMetadataStorageTest {
         assertEquals(bookId, saved.getValue("id").jsonPrimitive.content)
         UUID.fromString(saved.getValue("id").jsonPrimitive.content)
         assertEquals("屍人荘の殺人", saved.getValue("title").jsonPrimitive.content)
+        assertEquals("今村昌弘", saved.getValue("author").jsonPrimitive.content)
         assertEquals("book-a.epub", saved.getValue("epub").jsonPrimitive.content)
         assertEquals("Custom Shelf Title", saved.getValue("renamedTitle").jsonPrimitive.content)
         assertEquals("Books/book-a/cover.jpg", saved.getValue("cover").jsonPrimitive.content)
@@ -69,6 +71,7 @@ class BookMetadataStorageTest {
 
         assertEquals("Original Title", metadata.title)
         assertEquals(null, metadata.epub)
+        assertEquals(null, metadata.author)
         assertEquals(null, metadata.renamedTitle)
         assertEquals("Original Title", metadata.displayTitle)
     }

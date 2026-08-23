@@ -18,6 +18,7 @@ data class EpubBook(
     val resources: Map<String, EpubResource> = emptyMap(),
     val rootDirectory: File? = null,
     val bookInfo: BookInfo = buildBookInfo(chapters),
+    val author: String? = null,
 ) {
     fun readResource(path: String): ByteArray? {
         val normalized = path.normalizeResourceHref()
@@ -128,6 +129,10 @@ class EpubBookParser @Inject constructor(
 
     private fun NativeEpubBook.toReaderBook(root: File, fallbackTitle: String?, cachedBookInfo: BookInfo?): EpubBook {
         val manifest = manifest().associateBy { it.id }
+        val declaredCoverHref = coverHref()
+            ?: manifest.values.firstOrNull { item ->
+                item.id.contains("cover", ignoreCase = true) && item.mediaType.isCoverFallbackImageType()
+            }?.href
         val contentDirectory = File(contentDir())
         val contentDirectoryPrefix = contentDirectory.relativeDirectoryHref(root)
         val guideTocHrefs = root.readGuideTocHrefs()
@@ -169,17 +174,19 @@ class EpubBookParser @Inject constructor(
         return EpubBook(
             title = title()?.ifBlank { null } ?: fallbackTitle?.takeIf { it.isNotBlank() } ?: root.nameWithoutExtension,
             language = language()?.ifBlank { null },
-            coverHref = coverHref()
-                ?.let { contentDirectoryPrefix.resolveManifestHref(it) }
-                ?: resources.entries.firstOrNull { (_, resource) -> resource.mediaType.startsWith("image/") }?.key,
+            coverHref = declaredCoverHref?.let { contentDirectoryPrefix.resolveManifestHref(it) },
             toc = tocItems,
             chapters = chapters,
             resources = resources,
             rootDirectory = root,
             bookInfo = reusableBookInfo ?: buildBookInfo(chapters, tocItems, root),
+            author = author()?.trim()?.takeIf { it.isNotEmpty() },
         )
     }
 }
+
+private fun String.isCoverFallbackImageType(): Boolean =
+    lowercase() in setOf("image/jpeg", "image/png", "image/gif", "image/svg+xml")
 
 private fun extractPackedEpubFresh(epubFile: File, extractedRoot: File) {
     extractedRoot.deleteRecursively()

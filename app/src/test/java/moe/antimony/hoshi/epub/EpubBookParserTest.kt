@@ -123,6 +123,44 @@ class EpubBookParserTest {
     }
 
     @Test
+    fun parsesAndTrimsFirstPackageAuthor() {
+        val root = tempFolder.newFolder("authored-book")
+        writeMinimalExtractedEpub(root, author = "  Jane Doe  ")
+
+        val book = EpubBookParser().parse(root)
+
+        assertEquals("Jane Doe", book.author)
+    }
+
+    @Test
+    fun explicitCoverNamedManifestImageIsUsedWithoutCoverMetadata() {
+        val root = tempFolder.newFolder("named-cover-book")
+        writeMinimalExtractedEpub(
+            root = root,
+            coverId = "front-cover-art",
+            coverProperties = null,
+        )
+
+        val book = EpubBookParser().parse(root)
+
+        assertEquals("OPS/images/cover.jpg", book.coverHref)
+    }
+
+    @Test
+    fun unrelatedFirstManifestImageIsNotUsedAsCover() {
+        val root = tempFolder.newFolder("illustration-only-book")
+        writeMinimalExtractedEpub(
+            root = root,
+            coverId = "chapter-illustration",
+            coverProperties = null,
+        )
+
+        val book = EpubBookParser().parse(root)
+
+        assertEquals(null, book.coverHref)
+    }
+
+    @Test
     fun resolvesEpub3TocHrefsRelativeToNestedNavigationDocument() {
         val root = tempFolder.newFolder("nested-epub3-navigation")
         writeNestedEpub3NavigationFixture(root)
