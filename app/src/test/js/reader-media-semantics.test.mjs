@@ -332,7 +332,7 @@ test('shared media setup waits for pending images when requested', async () => {
     assert.equal(pending.classList.contains('block-img'), true);
 });
 
-test('shared media setup replaces failed gaiji with alt text and removes empty fallbacks', async () => {
+test('shared media setup replaces failed gaiji with alt text and preserves broken images without fallback text', async () => {
     const media = loadMediaSemantics();
     const root = new TestElement('section');
     const withAlt = image({ class: 'gaiji', src: 'images/sigma.png', alt: 'Σ' });
@@ -347,7 +347,7 @@ test('shared media setup replaces failed gaiji with alt text and removes empty f
 
     await media.setupReaderImages(root, { waitForImages: true });
 
-    assert.equal(root.childNodes.length, 3);
+    assert.equal(root.childNodes.length, 4);
     assert.equal(root.childNodes[0].tagName, 'SPAN');
     assert.equal(root.childNodes[0].classList.contains('hoshi-gaiji-fallback'), true);
     assert.equal(root.childNodes[0].classList.contains('hoshi-gaiji-fallback-single'), true);
@@ -356,22 +356,29 @@ test('shared media setup replaces failed gaiji with alt text and removes empty f
     assert.equal(root.childNodes[1].classList.contains('hoshi-gaiji-fallback'), true);
     assert.equal(root.childNodes[1].classList.contains('hoshi-gaiji-fallback-single'), false);
     assert.equal(root.childNodes[1].getAttribute('data-hoshi-gaiji-alt'), 'eiπ＋１＝０');
-    assert.equal(root.childNodes[2], regular);
+    assert.equal(root.childNodes[2], withoutAlt);
+    assert.equal(root.childNodes[3], regular);
 });
 
-test('shared media setup replaces gaiji that fail after non-blocking setup', async () => {
+test('shared media setup handles gaiji failures after non-blocking setup', async () => {
     const media = loadMediaSemantics();
     const root = new TestElement('section');
     const pending = image({ class: 'gaiji', src: 'images/pending.png', alt: '冴' });
-    pending.complete = false;
-    pending.naturalWidth = 0;
-    pending.naturalHeight = 0;
+    const withoutAlt = image({ class: 'gaiji', src: 'images/broken.png', alt: '' });
+    [pending, withoutAlt].forEach((img) => {
+        img.complete = false;
+        img.naturalWidth = 0;
+        img.naturalHeight = 0;
+    });
     root.appendChild(pending);
+    root.appendChild(withoutAlt);
 
     await media.setupReaderImages(root, { waitForImages: false });
     pending.onerror();
+    withoutAlt.onerror();
 
-    assert.equal(root.childNodes.length, 1);
+    assert.equal(root.childNodes.length, 2);
     assert.equal(root.childNodes[0].tagName, 'SPAN');
     assert.equal(root.childNodes[0].getAttribute('data-hoshi-gaiji-alt'), '冴');
+    assert.equal(root.childNodes[1], withoutAlt);
 });

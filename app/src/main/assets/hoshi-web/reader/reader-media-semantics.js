@@ -89,10 +89,7 @@
     var doc = documentForNode(img);
     if (!doc || !doc.createElement) return;
     var alt = (img.getAttribute && img.getAttribute('alt')) || '';
-    if (!alt.trim()) {
-      img.parentNode.removeChild(img);
-      return;
-    }
+    if (!alt.trim()) return;
     var fallback = doc.createElement('span');
     fallback.className = 'hoshi-gaiji-fallback';
     if (Array.from(alt.trim()).length === 1) {
