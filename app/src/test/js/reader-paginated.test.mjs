@@ -1079,6 +1079,27 @@ test('paginated Sasayaki media stop plan lists every image page before target cu
     );
 });
 
+test('paginated Sasayaki media stop plan ignores wide inline gaiji', () => {
+    const body = new TestElement('body');
+    body.scrollHeight = 2_400;
+    body.scrollWidth = 480;
+    body.scrollTop = 0;
+    body.scrollLeft = 0;
+    body.appendChild(new TestText('一'));
+    const gaijiWide = imgAt(900, 1_000);
+    gaijiWide.classList.add('gaiji-wide');
+    body.appendChild(gaijiWide);
+    const target = new TestText('二三');
+    target.rects = [testRect(1_700, 1_730)];
+    body.appendChild(target);
+    const { reader } = loadReader(body, readerPaginatedUrl);
+    reader.pageHeight = 800;
+
+    const stops = reader.sasayakiMediaStopsBeforeCue({ id: 'cue', start: 1, length: 2 });
+
+    assert.deepEqual(Array.from(stops), []);
+});
+
 test('paginated Sasayaki media stop plan includes the current image page before target cue', () => {
     const body = new TestElement('body');
     body.scrollHeight = 2_400;

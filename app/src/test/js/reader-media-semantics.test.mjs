@@ -216,6 +216,25 @@ test('shared media setup scans scoped images, svg images, gaiji, and src fallbac
     ]);
 });
 
+test('shared media setup keeps large gaiji-wide images inline', async () => {
+    const media = loadMediaSemantics();
+    const messages = [];
+    const root = new TestElement('p');
+    const gaijiWide = image({ class: 'gaiji-wide', src: 'images/kao1.jpg' });
+    gaijiWide.naturalWidth = 303;
+    gaijiWide.naturalHeight = 128;
+    root.appendChild(gaijiWide);
+
+    await media.setupReaderImages(root, {
+        blurImages: false,
+        imageBridge: { postMessage: (message) => messages.push(message) },
+    });
+    gaijiWide.dispatchEvent(clickEvent());
+
+    assert.equal(gaijiWide.classList.contains('block-img'), false);
+    assert.deepEqual(messages, []);
+});
+
 test('shared media setup waits for pending images when requested', async () => {
     const media = loadMediaSemantics();
     const root = new TestElement('section');

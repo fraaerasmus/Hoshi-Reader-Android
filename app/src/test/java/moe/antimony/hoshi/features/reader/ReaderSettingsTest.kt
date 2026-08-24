@@ -639,6 +639,52 @@ class ReaderSettingsTest {
     }
 
     @Test
+    fun readerGaijiFilterFollowsContentPaletteInsteadOfInterfaceTheme() {
+        val darkContentCss = ReaderContentStyles.styleTag(
+            settings = ReaderSettings(
+                theme = ReaderTheme.Custom,
+                uiTheme = ReaderInterfaceTheme.Light,
+                customBackgroundColor = 0xFF17150F,
+                customTextColor = 0xFFF2E2C9,
+            ),
+        )
+        val lightContentCss = ReaderContentStyles.styleTag(
+            settings = ReaderSettings(
+                theme = ReaderTheme.Custom,
+                uiTheme = ReaderInterfaceTheme.Dark,
+                customBackgroundColor = 0xFFF2E2C9,
+                customTextColor = 0xFF17150F,
+            ),
+        )
+
+        assertEquals("invert(90%)", cssCustomProperty(darkContentCss, "--hoshi-gaiji-filter"))
+        assertEquals("none", cssCustomProperty(lightContentCss, "--hoshi-gaiji-filter"))
+        assertEquals(
+            "var(--hoshi-gaiji-filter) !important",
+            cssDeclarationsForSelector(darkContentCss, "img.gaiji-wide")["filter"],
+        )
+    }
+
+    @Test
+    fun readerGaijiFilterUsesTextPolarityWhenBackgroundIsTranslucent() {
+        val translucentDarkOnLight = ReaderSettings(
+            theme = ReaderTheme.Custom,
+            uiTheme = ReaderInterfaceTheme.Light,
+            customBackgroundColor = 0x40000000,
+            customTextColor = 0xFFFFFFFF,
+        )
+        val translucentLightOnDark = ReaderSettings(
+            theme = ReaderTheme.Custom,
+            uiTheme = ReaderInterfaceTheme.Dark,
+            customBackgroundColor = 0x40FFFFFF,
+            customTextColor = 0xFF000000,
+        )
+
+        assertEquals("invert(90%)", translucentDarkOnLight.gaijiFilterCss(systemDark = false))
+        assertEquals("none", translucentLightOnDark.gaijiFilterCss(systemDark = false))
+    }
+
+    @Test
     fun eInkModeOverridesCustomThemeContentColors() {
         val settings = ReaderSettings(
             theme = ReaderTheme.Custom,
@@ -836,4 +882,11 @@ class ReaderSettingsTest {
             }
             .toMap()
     }
+
+    private fun cssCustomProperty(css: String, property: String): String? =
+        Regex("""${Regex.escape(property)}\s*:\s*([^;]+);""")
+            .find(css)
+            ?.groupValues
+            ?.get(1)
+            ?.trim()
 }

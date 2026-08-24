@@ -149,9 +149,11 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   persisted progress as chapter progress mapped to whole-book character count.
 - Reader `bookinfo.json` sidecars persist whole-book/spine character counts plus
   optional iOS-compatible TOC fragment offsets and a first-appearance raster
-  image inventory. Contents rows, chapter progress, and chapter time remaining
-  derive from one Kotlin-owned TOC range model; Gallery thumbnails and the
-  fullscreen viewer reuse the existing safe EPUB resource path.
+  image inventory. A reader-facts schema version invalidates stale derived
+  fields when their indexing semantics change. Contents rows, chapter progress,
+  and chapter time remaining derive from one Kotlin-owned TOC range model;
+  Gallery thumbnails and the fullscreen viewer reuse the existing safe EPUB
+  resource path.
 - Reader text semantics live in `reader-text-semantics.js` and are consumed by
   paginated, continuous, and VN assets for normalization, matchable character
   counting, raw character counting, and matchable-character checks.

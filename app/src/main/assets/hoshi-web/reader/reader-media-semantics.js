@@ -6,7 +6,11 @@
   }
 
   function isGaijiImage(img) {
-    return !!(img && img.classList && (img.classList.contains('gaiji') || img.classList.contains('gaiji-line')));
+    return !!(img && img.classList && (
+      img.classList.contains('gaiji') ||
+      img.classList.contains('gaiji-line') ||
+      img.classList.contains('gaiji-wide')
+    ));
   }
 
   function isLargeImage(img) {

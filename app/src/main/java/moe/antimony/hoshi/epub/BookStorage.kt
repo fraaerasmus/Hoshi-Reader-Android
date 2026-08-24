@@ -20,6 +20,7 @@ data class BookInfo(
     val characterCount: Int,
     val chapterInfo: Map<String, ChapterInfo>,
     val images: List<String>? = null,
+    val readerFactsVersion: Int? = null,
 ) {
     @Serializable
     data class ChapterInfo(
