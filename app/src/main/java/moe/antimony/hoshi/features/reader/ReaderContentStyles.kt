@@ -163,6 +163,7 @@ internal object ReaderContentStyles {
         }
         val eInkLineColor = if (settings.usesDarkInterface(systemDark)) "#fff" else "#000"
         val gaijiFilter = settings.gaijiFilterCss(systemDark)
+        val gaijiBlendMode = settings.gaijiBlendModeCss(systemDark)
         val gridCss = if (!settings.justifyText) {
             """
             text-align: start !important;
@@ -356,6 +357,7 @@ internal object ReaderContentStyles {
             .replace("__HOSHI_TEXT_COLOR__", textColor)
             .replace("__HOSHI_EINK_LINE_COLOR__", eInkLineColor)
             .replace("__HOSHI_GAIJI_FILTER__", gaijiFilter)
+            .replace("__HOSHI_GAIJI_BLEND_MODE__", gaijiBlendMode)
             .replace("__HOSHI_READER_EINK_MODE__", if (settings.eInkMode) "1" else "0")
             .replace("__HOSHI_READER_VERTICAL_WRITING__", if (settings.verticalWriting) "1" else "0")
             .replace("__HOSHI_SASAYAKI_TEXT_COLOR__", sasayakiTextColor.toReaderCssColor())

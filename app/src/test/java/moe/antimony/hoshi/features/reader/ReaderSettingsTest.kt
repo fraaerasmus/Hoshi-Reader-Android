@@ -639,7 +639,7 @@ class ReaderSettingsTest {
     }
 
     @Test
-    fun readerGaijiFilterFollowsContentPaletteInsteadOfInterfaceTheme() {
+    fun readerGaijiColorsBlendIntoContentPaletteInsteadOfInterfaceTheme() {
         val darkContentCss = ReaderContentStyles.styleTag(
             settings = ReaderSettings(
                 theme = ReaderTheme.Custom,
@@ -657,11 +657,28 @@ class ReaderSettingsTest {
             ),
         )
 
-        assertEquals("invert(90%)", cssCustomProperty(darkContentCss, "--hoshi-gaiji-filter"))
+        assertEquals(
+            "grayscale(100%) invert(100%)",
+            cssCustomProperty(darkContentCss, "--hoshi-gaiji-filter"),
+        )
+        assertEquals("screen", cssCustomProperty(darkContentCss, "--hoshi-gaiji-blend-mode"))
         assertEquals("none", cssCustomProperty(lightContentCss, "--hoshi-gaiji-filter"))
+        assertEquals("multiply", cssCustomProperty(lightContentCss, "--hoshi-gaiji-blend-mode"))
         assertEquals(
             "var(--hoshi-gaiji-filter) !important",
             cssDeclarationsForSelector(darkContentCss, "img.gaiji-wide")["filter"],
+        )
+        assertEquals(
+            "var(--hoshi-gaiji-blend-mode) !important",
+            cssDeclarationsForSelector(darkContentCss, "img.gaiji")["mix-blend-mode"],
+        )
+        assertEquals(
+            "var(--hoshi-gaiji-blend-mode) !important",
+            cssDeclarationsForSelector(darkContentCss, "img.gaiji-line")["mix-blend-mode"],
+        )
+        assertEquals(
+            "var(--hoshi-gaiji-blend-mode) !important",
+            cssDeclarationsForSelector(darkContentCss, "img.gaiji-wide")["mix-blend-mode"],
         )
     }
 
@@ -680,7 +697,10 @@ class ReaderSettingsTest {
             customTextColor = 0xFF000000,
         )
 
-        assertEquals("invert(90%)", translucentDarkOnLight.gaijiFilterCss(systemDark = false))
+        assertEquals(
+            "grayscale(100%) invert(100%)",
+            translucentDarkOnLight.gaijiFilterCss(systemDark = false),
+        )
         assertEquals("none", translucentLightOnDark.gaijiFilterCss(systemDark = false))
     }
 
@@ -865,11 +885,15 @@ class ReaderSettingsTest {
     }
 
     private fun cssDeclarationsForSelector(css: String, selector: String): Map<String, String> {
-        val escapedSelector = Regex.escape(selector)
-        val block = Regex("""$escapedSelector\s*\{([^}]*)}""")
-            .find(css)
+        val block = Regex("""([^{}]+)\{([^{}]*)}""")
+            .findAll(css)
+            .firstOrNull { match ->
+                match.groupValues[1]
+                    .split(",")
+                    .any { it.trim() == selector }
+            }
             ?.groupValues
-            ?.get(1)
+            ?.get(2)
             ?: return emptyMap()
         return block
             .split(";")

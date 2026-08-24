@@ -338,7 +338,14 @@ fun ReaderSettings.usesDarkInterface(systemDark: Boolean): Boolean = when (theme
 }
 
 internal fun ReaderSettings.gaijiFilterCss(systemDark: Boolean): String {
-    val usesLightText = when {
+    return if (usesLightGaijiText(systemDark)) "grayscale(100%) invert(100%)" else "none"
+}
+
+internal fun ReaderSettings.gaijiBlendModeCss(systemDark: Boolean): String =
+    if (usesLightGaijiText(systemDark)) "screen" else "multiply"
+
+private fun ReaderSettings.usesLightGaijiText(systemDark: Boolean): Boolean =
+    when {
         eInkMode -> usesDarkInterface(systemDark)
         theme == ReaderTheme.System -> systemDark
         theme == ReaderTheme.Light -> false
@@ -351,8 +358,6 @@ internal fun ReaderSettings.gaijiFilterCss(systemDark: Boolean): String {
             red * 299 + green * 587 + blue * 114 >= 128_000
         }
     }
-    return if (usesLightText) "invert(90%)" else "none"
-}
 
 fun ReaderSettings.usesDarkSystemBarIcons(systemDark: Boolean): Boolean =
     !usesDarkInterface(systemDark)

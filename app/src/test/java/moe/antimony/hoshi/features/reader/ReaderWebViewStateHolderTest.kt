@@ -719,19 +719,17 @@ class ReaderWebViewStateHolderTest {
     }
 
     @Test
-    fun readerAppearanceUpdateKeyTracksGaijiFilterWithoutReloadingContent() {
+    fun readerAppearanceUpdateKeyTracksGaijiColorsWithoutReloadingContent() {
         val light = ReaderSettings(theme = ReaderTheme.Light)
         val dark = ReaderSettings(theme = ReaderTheme.Dark)
+        val lightKey = readerAppearanceUpdateKey(light, false, 0xFF111111, 0xFFFFFFFF)
+        val darkKey = readerAppearanceUpdateKey(dark, false, 0xFF111111, 0xFFFFFFFF)
 
         assertEquals(light.readerContentReloadKey(), dark.readerContentReloadKey())
-        assertEquals(
-            "none",
-            readerAppearanceUpdateKey(light, false, 0xFF111111, 0xFFFFFFFF).gaijiFilterCss,
-        )
-        assertEquals(
-            "invert(90%)",
-            readerAppearanceUpdateKey(dark, false, 0xFF111111, 0xFFFFFFFF).gaijiFilterCss,
-        )
+        assertEquals("none", lightKey.gaijiFilterCss)
+        assertEquals("multiply", lightKey.gaijiBlendModeCss)
+        assertEquals("grayscale(100%) invert(100%)", darkKey.gaijiFilterCss)
+        assertEquals("screen", darkKey.gaijiBlendModeCss)
     }
 
     @Test
