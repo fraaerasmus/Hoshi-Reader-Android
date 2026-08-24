@@ -533,8 +533,6 @@ internal data class ReaderAppearanceUpdateKey(
     val backgroundColorCss: String,
     val textColorCss: String,
     val eInkLineColorCss: String,
-    val gaijiFilterCss: String,
-    val gaijiBlendModeCss: String,
     val eInkModeCss: String,
     val verticalWritingCss: String,
     val visualNovelRevealSpeed: Int,
@@ -552,8 +550,6 @@ internal fun readerAppearanceUpdateKey(
         backgroundColorCss = settings.backgroundColorCss(systemDark),
         textColorCss = settings.textColorCss(systemDark),
         eInkLineColorCss = if (settings.usesDarkInterface(systemDark)) "#fff" else "#000",
-        gaijiFilterCss = settings.gaijiFilterCss(systemDark),
-        gaijiBlendModeCss = settings.gaijiBlendModeCss(systemDark),
         eInkModeCss = if (settings.eInkMode) "1" else "0",
         verticalWritingCss = if (settings.verticalWriting) "1" else "0",
         visualNovelRevealSpeed = settings.visualNovelRevealSpeed.coerceIn(0, 120),
@@ -951,8 +947,6 @@ private fun readerAppearanceScript(
     val backgroundColor = readerJavaScriptStringLiteral(appearanceUpdateKey.backgroundColorCss)
     val textColor = readerJavaScriptStringLiteral(appearanceUpdateKey.textColorCss)
     val eInkLineColor = readerJavaScriptStringLiteral(appearanceUpdateKey.eInkLineColorCss)
-    val gaijiFilter = readerJavaScriptStringLiteral(appearanceUpdateKey.gaijiFilterCss)
-    val gaijiBlendMode = readerJavaScriptStringLiteral(appearanceUpdateKey.gaijiBlendModeCss)
     val eInkMode = readerJavaScriptStringLiteral(appearanceUpdateKey.eInkModeCss)
     val verticalWriting = readerJavaScriptStringLiteral(appearanceUpdateKey.verticalWritingCss)
     val visualNovelRevealSpeed = appearanceUpdateKey.visualNovelRevealSpeed
@@ -963,8 +957,6 @@ private fun readerAppearanceScript(
           document.documentElement.style.setProperty('--hoshi-background-color', $backgroundColor);
           document.documentElement.style.setProperty('--hoshi-text-color', $textColor);
           document.documentElement.style.setProperty('--hoshi-eink-line-color', $eInkLineColor);
-          document.documentElement.style.setProperty('--hoshi-gaiji-filter', $gaijiFilter);
-          document.documentElement.style.setProperty('--hoshi-gaiji-blend-mode', $gaijiBlendMode);
           document.documentElement.style.setProperty('--hoshi-reader-eink-mode', $eInkMode);
           document.documentElement.dataset.hoshiReaderEinkMode = $eInkMode === '1' ? 'true' : 'false';
           document.documentElement.style.setProperty('--hoshi-reader-vertical-writing', $verticalWriting);

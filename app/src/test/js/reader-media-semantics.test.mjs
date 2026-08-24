@@ -123,16 +123,43 @@ function image(attributes = {}) {
     return img;
 }
 
-function loadMediaSemantics() {
+function loadMediaSemanticsContext() {
     const window = {};
+    const documentElement = new TestElement('html');
     const document = {
         baseURI: 'https://example.invalid/chapter.xhtml',
+        documentElement,
         createElement(tagName) {
-            return new TestElement(tagName);
+            const element = new TestElement(tagName);
+            element.ownerDocument = document;
+            return element;
+        },
+        createElementNS(namespaceURI, tagName) {
+            const element = new TestElement(tagName);
+            element.namespaceURI = namespaceURI;
+            element.ownerDocument = document;
+            return element;
+        },
+        getElementById(id) {
+            let result = null;
+            const visit = (node) => {
+                if (result) return;
+                if (node.getAttribute?.('id') === id) {
+                    result = node;
+                    return;
+                }
+                node.childNodes?.forEach(visit);
+            };
+            visit(documentElement);
+            return result;
         },
     };
     vm.runInNewContext(fs.readFileSync(readerMediaSemanticsUrl, 'utf8'), { window, document, URL });
-    return window.hoshiReaderMediaSemantics;
+    return { document, media: window.hoshiReaderMediaSemantics };
+}
+
+function loadMediaSemantics() {
+    return loadMediaSemanticsContext().media;
 }
 
 function clickEvent() {
@@ -214,6 +241,53 @@ test('shared media setup scans scoped images, svg images, gaiji, and src fallbac
         'https://example.invalid/images/large.jpg',
         'https://example.invalid/images/plate.jpg',
     ]);
+});
+
+test('shared media setup installs one gaiji filter colored from the Reader text variable', async () => {
+    const { document, media } = loadMediaSemanticsContext();
+    const root = new TestElement('section');
+    root.appendChild(image({ class: 'gaiji', src: 'images/gaiji.png' }));
+
+    await media.setupReaderImages(root, { blurImages: false });
+    await media.setupReaderImages(root, { blurImages: false });
+
+    assert.equal(document.documentElement.childNodes.length, 1);
+    const svg = document.documentElement.childNodes[0];
+    assert.equal(svg.getAttribute('aria-hidden'), 'true');
+    assert.equal(svg.getAttribute('width'), '0');
+    assert.equal(svg.getAttribute('height'), '0');
+    assert.equal(
+        svg.getAttribute('style'),
+        'position: absolute !important; width: 0 !important; height: 0 !important; overflow: hidden !important; pointer-events: none !important',
+    );
+
+    const filter = svg.childNodes[0];
+    assert.equal(filter.getAttribute('id'), 'hoshi-gaiji-text-color-filter');
+    assert.equal(filter.getAttribute('color-interpolation-filters'), 'sRGB');
+
+    const inverseLuminance = filter.childNodes[0];
+    assert.equal(inverseLuminance.tagName, 'FECOLORMATRIX');
+    assert.equal(inverseLuminance.getAttribute('in'), 'SourceGraphic');
+    assert.match(inverseLuminance.getAttribute('values'), /-0\.2126 -0\.7152 -0\.0722 0 1/);
+
+    const sourceAlphaMask = filter.childNodes[1];
+    assert.equal(sourceAlphaMask.tagName, 'FECOMPOSITE');
+    assert.equal(sourceAlphaMask.getAttribute('in2'), 'SourceAlpha');
+    assert.equal(sourceAlphaMask.getAttribute('operator'), 'in');
+
+    const solidStrokeMask = filter.childNodes[2];
+    assert.equal(solidStrokeMask.tagName, 'FECOMPONENTTRANSFER');
+    assert.equal(solidStrokeMask.childNodes[0].getAttribute('slope'), '1.1');
+
+    const textColor = filter.childNodes[3];
+    assert.equal(textColor.tagName, 'FEFLOOD');
+    assert.equal(textColor.getAttribute('style'), 'flood-color: var(--hoshi-text-color)');
+
+    const coloredGlyph = filter.childNodes[4];
+    assert.equal(coloredGlyph.tagName, 'FECOMPOSITE');
+    assert.equal(coloredGlyph.getAttribute('in'), 'textColor');
+    assert.equal(coloredGlyph.getAttribute('in2'), 'solidStrokeMask');
+    assert.equal(coloredGlyph.getAttribute('operator'), 'in');
 });
 
 test('shared media setup keeps large gaiji-wide images inline', async () => {

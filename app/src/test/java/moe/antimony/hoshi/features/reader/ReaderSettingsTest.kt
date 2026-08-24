@@ -639,69 +639,25 @@ class ReaderSettingsTest {
     }
 
     @Test
-    fun readerGaijiColorsBlendIntoContentPaletteInsteadOfInterfaceTheme() {
-        val darkContentCss = ReaderContentStyles.styleTag(
+    fun readerGaijiUsesReaderTextColorMaskForEverySemanticClass() {
+        val contentCss = ReaderContentStyles.styleTag(
             settings = ReaderSettings(
                 theme = ReaderTheme.Custom,
                 uiTheme = ReaderInterfaceTheme.Light,
-                customBackgroundColor = 0xFF17150F,
-                customTextColor = 0xFFF2E2C9,
-            ),
-        )
-        val lightContentCss = ReaderContentStyles.styleTag(
-            settings = ReaderSettings(
-                theme = ReaderTheme.Custom,
-                uiTheme = ReaderInterfaceTheme.Dark,
-                customBackgroundColor = 0xFFF2E2C9,
-                customTextColor = 0xFF17150F,
+                customBackgroundColor = 0xFFD0B2CA,
+                customTextColor = 0xFF5F8FFF,
             ),
         )
 
-        assertEquals(
-            "grayscale(100%) invert(100%)",
-            cssCustomProperty(darkContentCss, "--hoshi-gaiji-filter"),
-        )
-        assertEquals("screen", cssCustomProperty(darkContentCss, "--hoshi-gaiji-blend-mode"))
-        assertEquals("none", cssCustomProperty(lightContentCss, "--hoshi-gaiji-filter"))
-        assertEquals("multiply", cssCustomProperty(lightContentCss, "--hoshi-gaiji-blend-mode"))
-        assertEquals(
-            "var(--hoshi-gaiji-filter) !important",
-            cssDeclarationsForSelector(darkContentCss, "img.gaiji-wide")["filter"],
-        )
-        assertEquals(
-            "var(--hoshi-gaiji-blend-mode) !important",
-            cssDeclarationsForSelector(darkContentCss, "img.gaiji")["mix-blend-mode"],
-        )
-        assertEquals(
-            "var(--hoshi-gaiji-blend-mode) !important",
-            cssDeclarationsForSelector(darkContentCss, "img.gaiji-line")["mix-blend-mode"],
-        )
-        assertEquals(
-            "var(--hoshi-gaiji-blend-mode) !important",
-            cssDeclarationsForSelector(darkContentCss, "img.gaiji-wide")["mix-blend-mode"],
-        )
-    }
-
-    @Test
-    fun readerGaijiFilterUsesTextPolarityWhenBackgroundIsTranslucent() {
-        val translucentDarkOnLight = ReaderSettings(
-            theme = ReaderTheme.Custom,
-            uiTheme = ReaderInterfaceTheme.Light,
-            customBackgroundColor = 0x40000000,
-            customTextColor = 0xFFFFFFFF,
-        )
-        val translucentLightOnDark = ReaderSettings(
-            theme = ReaderTheme.Custom,
-            uiTheme = ReaderInterfaceTheme.Dark,
-            customBackgroundColor = 0x40FFFFFF,
-            customTextColor = 0xFF000000,
-        )
-
-        assertEquals(
-            "grayscale(100%) invert(100%)",
-            translucentDarkOnLight.gaijiFilterCss(systemDark = false),
-        )
-        assertEquals("none", translucentLightOnDark.gaijiFilterCss(systemDark = false))
+        assertEquals("#5f8fff", cssCustomProperty(contentCss, "--hoshi-text-color"))
+        listOf("img.gaiji", "img.gaiji-line", "img.gaiji-wide").forEach { selector ->
+            val declarations = cssDeclarationsForSelector(contentCss, selector)
+            assertEquals(
+                "url(\"#hoshi-gaiji-text-color-filter\") !important",
+                declarations["filter"],
+            )
+            assertEquals("normal !important", declarations["mix-blend-mode"])
+        }
     }
 
     @Test

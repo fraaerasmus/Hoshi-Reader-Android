@@ -31,9 +31,10 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Fixed
 
-- Keep wide inline gaiji at the publisher's text-relative size, blend inline
-  gaiji image backgrounds into the active Reader palette in light and dark
-  themes, and exclude gaiji from image navigation.
+- Keep wide inline gaiji at the publisher's text-relative size, render inline
+  gaiji strokes with the active Reader text color while blending away their
+  image backgrounds in standard and custom themes, and exclude gaiji from
+  image navigation.
 - Use EPUB fallback text for failed inline gaiji images and suppress Android's
   broken-image marker when the EPUB does not provide fallback text.
 - Open EPUB pages that use paired XHTML viewport metadata instead of remaining
