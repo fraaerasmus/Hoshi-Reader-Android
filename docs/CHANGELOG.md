@@ -31,6 +31,9 @@ Historical release notes before v1.3.0 live in [CHANGELOG_ARCHIVE.md](CHANGELOG_
 
 ### Fixed
 
+- Import EPUB and TTU bookdata with multibyte titles that exceed Android's
+  filename byte limit while preserving the complete visible title and cleaning
+  temporary EPUB data after failed imports.
 - Keep wide inline gaiji at the publisher's text-relative size, render inline
   gaiji strokes with the active Reader text color while blending away their
   image backgrounds in standard and custom themes, and exclude gaiji from

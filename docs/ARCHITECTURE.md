@@ -46,6 +46,11 @@ refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
   persist the filename in `BookMetadata.epub`. Sidecar JSON and cached covers
   remain beside the EPUB; parser and reader paths extract packed EPUBs only into
   controlled app cache/temp directories when they need the EPUB tree.
+- Android keeps the iOS-sanitized title as the physical book folder when its
+  packed EPUB filename fits the platform limit. Longer multibyte titles retain
+  the full value in `BookMetadata.title` while the physical basename is capped
+  at 250 UTF-8 bytes with a readable prefix and deterministic SHA-256 suffix;
+  TTU import and backup paths use the same byte-safe policy.
 - Bookshelf and Statistics cover rendering uses one process-wide Coil loader.
   `BookCoverThumbnailStore` owns a versioned, source-fingerprinted 256/512/768 px
   WebP derivative cache under the app cache directory. Original-cover thumbnail

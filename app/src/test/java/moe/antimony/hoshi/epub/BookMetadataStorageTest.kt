@@ -453,6 +453,79 @@ class BookMetadataStorageTest {
     }
 
     @Test
+    fun importedBookDirectoryCapsLongUtf8TitleForPackedEpubName() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-long-book-title").toFile())
+        val title = "長".repeat(86)
+
+        val root = storage.createBookDirectoryForImportedTitle(title)
+
+        assertTrue(root.name.toByteArray(Charsets.UTF_8).size <= 250)
+        assertTrue("${root.name}.epub".toByteArray(Charsets.UTF_8).size <= 255)
+        assertTrue(root.name.startsWith("長"))
+        assertTrue(root.name.substringAfterLast('-').matches(Regex("[0-9a-f]{16}")))
+    }
+
+    @Test
+    fun importedBookDirectoryKeepsByteSafeTitleUnchanged() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-safe-book-title").toFile())
+        val title = "a".repeat(250)
+
+        val root = storage.createBookDirectoryForImportedTitle(title)
+
+        assertEquals(title, root.name)
+    }
+
+    @Test
+    fun importedBookDirectoryShortensTitleOneByteOverLimit() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-overlong-book-title").toFile())
+        val title = "a".repeat(251)
+
+        val root = storage.createBookDirectoryForImportedTitle(title)
+
+        assertTrue(root.name.toByteArray(Charsets.UTF_8).size <= 250)
+        assertFalse(root.name == title)
+        assertTrue(root.name.substringAfterLast('-').matches(Regex("[0-9a-f]{16}")))
+    }
+
+    @Test
+    fun importedBookDirectoryMapsLongTitlesDeterministicallyWithoutPrefixCollisions() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-long-book-dedupe").toFile())
+        val sharedPrefix = "長".repeat(86)
+
+        val first = storage.createBookDirectoryForImportedTitle("${sharedPrefix}甲")
+        val duplicate = storage.createBookDirectoryForImportedTitle("${sharedPrefix}甲")
+        val different = storage.createBookDirectoryForImportedTitle("${sharedPrefix}乙")
+
+        assertEquals(first.canonicalFile, duplicate.canonicalFile)
+        assertFalse(first.name == different.name)
+        assertTrue(first.name.toByteArray(Charsets.UTF_8).size <= 250)
+        assertTrue(different.name.toByteArray(Charsets.UTF_8).size <= 250)
+    }
+
+    @Test
+    fun importedBookDirectoryDoesNotSplitEmojiSurrogatePairAtUtf8Boundary() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-emoji-book-title").toFile())
+        val title = "a".repeat(232) + "📚".repeat(8)
+
+        val root = storage.createBookDirectoryForImportedTitle(title)
+
+        assertTrue(root.name.toByteArray(Charsets.UTF_8).size <= 250)
+        assertFalse(root.name.any { Character.isSurrogate(it) })
+    }
+
+    @Test
+    fun importedBookDirectoryKeepsCombiningCodePointsValidAtUtf8Boundary() = runBlocking {
+        val storage = BookStorage(Files.createTempDirectory("hoshi-combining-book-title").toFile())
+        val title = "e\u0301".repeat(100)
+
+        val root = storage.createBookDirectoryForImportedTitle(title)
+        val encoded = root.name.toByteArray(Charsets.UTF_8)
+
+        assertTrue(encoded.size <= 250)
+        assertEquals(root.name, encoded.toString(Charsets.UTF_8))
+    }
+
+    @Test
     fun savesAndLoadsIosCompatibleSasayakiSidecars() = runBlocking {
         val storage = BookStorage(Files.createTempDirectory("hoshi-sasayaki-sidecars").toFile())
         val root = storage.createBookDirectory("book")

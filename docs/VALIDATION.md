@@ -203,6 +203,10 @@ Validate relevant bookshelf/import changes with:
 - Settings detail open/return behavior, confirming returning from a detail route
   lands back on Settings without changing top-level tab state.
 - multi-EPUB DocumentsUI import and recursive EPUB folder import.
+- EPUB and TTU bookdata imports whose metadata title exceeds 250 UTF-8 bytes,
+  including Japanese and emoji: confirm the full title remains visible, the
+  Reader opens, reimport deduplicates, Android TTU export/restore succeeds, and
+  neither successful nor failed imports add persistent `ImportTemp` residue.
 - external EPUB open/import requests, confirming the request is consumed once
   and routes to Reader after import succeeds.
 - shelf-name entry, including user shelves named Reading alongside the virtual
