@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 90
 
     env:
-      CMAKE_VERSION: "3.22.1"
+      CMAKE_VERSION: "3.31.6"
       NDK_VERSION: "27.2.12479018"
 
     steps:
