@@ -739,7 +739,7 @@ class ReaderWebViewStateHolderTest {
 
     @Test
     fun readerAppearanceUpdateKeyTracksCustomTextColorWithoutReloadingContent() {
-        val blue = ReaderSettings(theme = ReaderTheme.Custom, customTextColor = 0xFF5F8FFF)
+        val blue = ReaderSettings(theme = ReaderTheme.Custom, colorPreset = ReaderColorPreset.Manual, customTextColor = 0xFF5F8FFF)
         val red = blue.copy(customTextColor = 0xFFFF0000)
         val blueKey = readerAppearanceUpdateKey(blue, false, 0xFF111111, 0xFFFFFFFF)
         val redKey = readerAppearanceUpdateKey(red, false, 0xFF111111, 0xFFFFFFFF)

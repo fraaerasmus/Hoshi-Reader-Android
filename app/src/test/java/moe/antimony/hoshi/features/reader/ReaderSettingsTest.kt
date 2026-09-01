@@ -752,6 +752,7 @@ class ReaderSettingsTest {
             settings = ReaderSettings(
                 theme = ReaderTheme.Custom,
                 uiTheme = ReaderInterfaceTheme.Light,
+                colorPreset = ReaderColorPreset.Manual,
                 customBackgroundColor = 0xFFD0B2CA,
                 customTextColor = 0xFF5F8FFF,
             ),
