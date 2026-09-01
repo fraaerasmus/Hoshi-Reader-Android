@@ -540,6 +540,23 @@
     <string name="kosync_auto_sync_description">打开书籍或返回前台时拉取进度，阅读后推送进度。</string>
     <string name="kosync_push">推送进度到 KOReader</string>
     <string name="kosync_push_description">保存位置时即发送；KOReader 会打开到同一段落。</string>
+    <string name="bookshelf_import_opds">OPDS 目录</string>
+    <string name="opds_title">OPDS 目录</string>
+    <string name="opds_add_catalog">添加目录</string>
+    <string name="opds_edit_catalog">编辑目录</string>
+    <string name="opds_catalog_name">名称</string>
+    <string name="opds_catalog_url">目录地址</string>
+    <string name="opds_no_catalogs">尚无目录。点击 + 添加 calibre 内容服务器的 /opds 地址。</string>
+    <string name="opds_remove">移除</string>
+    <string name="opds_remove_confirmation_format">移除目录 %1$s？</string>
+    <string name="opds_search">搜索</string>
+    <string name="opds_search_hint">搜索目录</string>
+    <string name="opds_load_more">加载更多</string>
+    <string name="opds_download">下载</string>
+    <string name="opds_no_epub">无 EPUB</string>
+    <string name="opds_empty_feed">这里没有内容。</string>
+    <string name="opds_error_format">无法加载目录：%1$s</string>
+    <string name="opds_downloaded_format">已下载 %1$s，正在导入。</string>
     <string name="update_downloaded_title">更新已下载</string>
     <string name="update_downloaded_message_format" comment="Downloaded update prompt message, intentionally matching About update status.">更新 %1$s 已下载。</string>
     <string name="update_available_title">有可用更新</string>

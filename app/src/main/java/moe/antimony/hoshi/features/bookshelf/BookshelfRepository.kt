@@ -57,6 +57,7 @@ internal interface BookshelfRepository {
     suspend fun loadRemoteBooks(localEntries: List<BookEntry>): RemoteBookshelfLoadResult
     suspend fun openBook(entry: BookEntry): String
     suspend fun importBook(uri: Uri): String
+    suspend fun importBookFile(file: File, displayName: String): String
     suspend fun exportBook(entry: BookEntry, uri: Uri)
     suspend fun importRemoteBook(
         entry: RemoteBookEntry,
@@ -152,6 +153,15 @@ internal class AndroidBookshelfRepository @Inject constructor(
 
     override suspend fun importBook(uri: Uri): String = withContext(ioDispatcher) {
         val root = bookRepository.importBook(contentResolver, uri)
+        val parsedBook = bookParser.parse(root)
+        saveMetadata(root, parsedBook, bookRepository.loadMetadata(root))
+        saveBookInfo(root, parsedBook)
+        prewarmBookCover(root)
+        readerBookId(root)
+    }
+
+    override suspend fun importBookFile(file: File, displayName: String): String = withContext(ioDispatcher) {
+        val root = bookRepository.importBook(file, displayName)
         val parsedBook = bookParser.parse(root)
         saveMetadata(root, parsedBook, bookRepository.loadMetadata(root))
         saveBookInfo(root, parsedBook)

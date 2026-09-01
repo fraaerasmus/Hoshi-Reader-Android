@@ -542,6 +542,23 @@
     <string name="kosync_auto_sync_description">Pull progress when a book opens or returns to the foreground, and push after you read.</string>
     <string name="kosync_push">Push progress to KOReader</string>
     <string name="kosync_push_description">Send your position whenever it is saved; KOReader opens at the same paragraph.</string>
+    <string name="bookshelf_import_opds">OPDS catalog</string>
+    <string name="opds_title">OPDS Catalogs</string>
+    <string name="opds_add_catalog">Add catalog</string>
+    <string name="opds_edit_catalog">Edit catalog</string>
+    <string name="opds_catalog_name">Name</string>
+    <string name="opds_catalog_url">Catalog URL</string>
+    <string name="opds_no_catalogs">No catalogs yet. Add your calibre content server\'s /opds address with the + button.</string>
+    <string name="opds_remove">Remove</string>
+    <string name="opds_remove_confirmation_format">Remove catalog %1$s?</string>
+    <string name="opds_search">Search</string>
+    <string name="opds_search_hint">Search catalog</string>
+    <string name="opds_load_more">Load more</string>
+    <string name="opds_download">Download</string>
+    <string name="opds_no_epub">No EPUB</string>
+    <string name="opds_empty_feed">Nothing here.</string>
+    <string name="opds_error_format">Could not load catalog: %1$s</string>
+    <string name="opds_downloaded_format">Downloaded %1$s, importing.</string>
     <string name="update_downloaded_title">Update Downloaded</string>
     <string name="update_downloaded_message_format" comment="Downloaded update prompt message, intentionally matching About update status.">Update %1$s has been downloaded.</string>
     <string name="update_available_title">Update Available</string>

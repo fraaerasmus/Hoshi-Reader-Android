@@ -130,6 +130,7 @@ import moe.antimony.hoshi.epub.BookShelf
 import moe.antimony.hoshi.epub.BookSortOption
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.sync.DriveAuthStatus
+import moe.antimony.hoshi.features.opds.OpdsView
 import moe.antimony.hoshi.features.sync.SyncDirection
 import moe.antimony.hoshi.features.sync.SyncMode
 import moe.antimony.hoshi.features.sync.SyncSettings
@@ -187,6 +188,7 @@ fun BookshelfView(
     val renameScrollState = rememberScrollState()
     var showBulkDeleteConfirmation by remember { mutableStateOf(false) }
     var showShelfManagement by remember { mutableStateOf(false) }
+    var showOpdsCatalogs by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
     val importer = rememberLauncherForActivityResult(MultipleFileImportContent()) { uris: List<Uri> ->
@@ -321,6 +323,7 @@ fun BookshelfView(
         onManageShelves = { showShelfManagement = true },
         onImportFiles = ::launchBookImporter,
         onImportFolder = ::launchBookFolderImporter,
+        onImportOpds = { showOpdsCatalogs = true },
         onOpenBook = booksViewModel::openBook,
         onRefreshRemoteBooks = booksViewModel::refreshRemoteBooks,
         onImportRemoteBook = { entry ->
@@ -364,6 +367,14 @@ fun BookshelfView(
             )
         },
     )
+        if (showOpdsCatalogs) {
+            OpdsView(
+                onClose = { showOpdsCatalogs = false },
+                onImportFile = booksViewModel::importDownloadedBook,
+                importBusy = uiState.blockingProgressMessage != null,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
@@ -887,6 +898,7 @@ private fun BooksTab(
     onManageShelves: () -> Unit,
     onImportFiles: () -> Unit,
     onImportFolder: () -> Unit,
+    onImportOpds: () -> Unit,
     onOpenBook: (BookEntry) -> Unit,
     onRefreshRemoteBooks: () -> Unit,
     onImportRemoteBook: (RemoteBookEntry) -> Unit,
@@ -933,6 +945,7 @@ private fun BooksTab(
                 onManageShelves = onManageShelves,
                 onImportFiles = onImportFiles,
                 onImportFolder = onImportFolder,
+                onImportOpds = onImportOpds,
             )
         },
     ) { innerPadding ->
@@ -1172,6 +1185,7 @@ private fun BooksTopAppBar(
     onManageShelves: () -> Unit,
     onImportFiles: () -> Unit,
     onImportFolder: () -> Unit,
+    onImportOpds: () -> Unit,
 ) {
     var moveMenuExpanded by remember { mutableStateOf(false) }
     var importMenuExpanded by remember { mutableStateOf(false) }
@@ -1315,6 +1329,13 @@ private fun BooksTopAppBar(
                             onClick = {
                                 importMenuExpanded = false
                                 onImportFolder()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.bookshelf_import_opds)) },
+                            onClick = {
+                                importMenuExpanded = false
+                                onImportOpds()
                             },
                         )
                     }

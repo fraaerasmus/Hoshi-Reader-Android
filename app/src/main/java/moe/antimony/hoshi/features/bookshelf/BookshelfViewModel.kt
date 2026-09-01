@@ -129,6 +129,17 @@ internal class BookshelfViewModel : ViewModel {
         }
     }
 
+    /** Imports a downloaded EPUB (e.g. from an OPDS catalog) and deletes the temp file afterwards. */
+    fun importDownloadedBook(file: java.io.File, displayName: String) {
+        importBook("file:${file.absolutePath}", displayName) {
+            try {
+                repository.importBookFile(file, displayName)
+            } finally {
+                file.delete()
+            }
+        }
+    }
+
     fun importBooks(imports: List<BookImportItem>) {
         val pendingImports = imports.map { import ->
             PendingBookImport(

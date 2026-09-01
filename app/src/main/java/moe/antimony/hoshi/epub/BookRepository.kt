@@ -227,6 +227,9 @@ class BookRepository private constructor(
     suspend fun importBook(contentResolver: ContentResolver, uri: Uri): File =
         importDataSource.importBook(contentResolver, uri)
 
+    suspend fun importBook(file: File, displayName: String): File =
+        importDataSource.importBook(file, displayName)
+
     private suspend fun File.fallbackMetadata(): BookMetadata = withContext(ioDispatcher) {
         BookMetadata(
             id = name,
@@ -492,15 +495,25 @@ class BookImportDataSource(
     private val archiveExtractor: EpubArchiveExtractor = EpubArchiveExtractor(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    suspend fun importBook(contentResolver: ContentResolver, uri: Uri): File = withContext(ioDispatcher) {
+    suspend fun importBook(contentResolver: ContentResolver, uri: Uri): File {
         val displayName = contentResolver.validateImportFile(uri, ImportFileType.Epub)
+        return importBook(displayName) { contentResolver.openInputStream(uri) }
+    }
+
+    /** Imports an EPUB already on disk (e.g. an OPDS download) through the same byte-preserving path as the picker. */
+    suspend fun importBook(file: File, displayName: String): File {
+        if (!ImportFileType.Epub.matchesDisplayName(displayName)) throw ImportFileType.Epub.unsupportedFileError(displayName)
+        return importBook(displayName) { file.inputStream() }
+    }
+
+    private suspend fun importBook(displayName: String, openInput: () -> java.io.InputStream?): File = withContext(ioDispatcher) {
         val fallbackTitle = displayName
             .substringBeforeLast('.', missingDelimiterValue = displayName)
             .takeIf { it.isNotBlank() }
         val importRoot = File(filesDir, "ImportTemp/${UUID.randomUUID()}").canonicalFile
         val archiveFile = importRoot.resolve("source.epub").canonicalFile
         val extractedRoot = importRoot.resolve("extracted").canonicalFile
-        contentResolver.openInputStream(uri).use { input ->
+        openInput().use { input ->
             requireNotNull(input) { "Unable to open selected EPUB" }
             runCatching {
                 importRoot.mkdirs()

@@ -48,6 +48,7 @@ import moe.antimony.hoshi.features.reader.ReaderSettingsRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsRepository
 import moe.antimony.hoshi.features.sync.DeviceCodeDriveAuthorizer
 import moe.antimony.hoshi.features.kosync.KosyncSettingsRepository
+import moe.antimony.hoshi.features.opds.OpdsCatalogRepository
 import moe.antimony.hoshi.features.sync.SyncSettingsRepository
 import moe.antimony.hoshi.features.update.UpdateSettingsRepository
 import moe.antimony.hoshi.profiles.ProfileRepository
@@ -69,6 +70,7 @@ class SettingsBackupRepository @Inject constructor(
     private val bookshelfSettingsRepository: BookshelfSettingsRepository,
     private val syncSettingsRepository: SyncSettingsRepository,
     private val kosyncSettingsRepository: KosyncSettingsRepository,
+    private val opdsCatalogRepository: OpdsCatalogRepository,
     private val updateSettingsRepository: UpdateSettingsRepository,
     private val driveAuthorizer: DeviceCodeDriveAuthorizer,
     private val profileRepository: ProfileRepository,
@@ -130,6 +132,7 @@ class SettingsBackupRepository @Inject constructor(
                 buildJsonObject {
                     put(CREDENTIAL_DRIVE, driveCredentials)
                     put(CREDENTIAL_KOSYNC, kosyncSettingsRepository.exportCredentials())
+                    put(CREDENTIAL_OPDS, opdsCatalogRepository.exportCredentials())
                 },
             )
             put(KEY_PROFILES, profiles)
@@ -152,6 +155,8 @@ class SettingsBackupRepository @Inject constructor(
             ?.let { driveAuthorizer.importCredentials(it) }
         envelope[KEY_CREDENTIALS]?.jsonObject?.store(CREDENTIAL_KOSYNC)
             ?.let { kosyncSettingsRepository.importCredentials(it) }
+        envelope[KEY_CREDENTIALS]?.jsonObject?.store(CREDENTIAL_OPDS)
+            ?.let { opdsCatalogRepository.importCredentials(it) }
 
         envelope[KEY_PROFILES]?.jsonObject?.let { profileRepository.importProfilesBackup(it) }
     }
@@ -181,6 +186,7 @@ class SettingsBackupRepository @Inject constructor(
         const val STORE_UPDATE = "update"
         const val CREDENTIAL_DRIVE = "drive"
         const val CREDENTIAL_KOSYNC = "kosync"
+        const val CREDENTIAL_OPDS = "opds"
 
         val JSON = Json {
             prettyPrint = true
