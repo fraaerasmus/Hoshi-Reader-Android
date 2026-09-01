@@ -45,11 +45,7 @@ class KosyncManager private constructor(
         settingsProvider = { settingsRepository.settings.first() },
         credentialsProvider = settingsRepository::credentials,
         deviceIdProvider = { settingsRepository.deviceId },
-        bookLoader = { entry ->
-            runCatching {
-                epubBookParser.parse(entry.root, cachedBookInfo = bookRepository.loadBookInfo(entry.root))
-            }.getOrNull()
-        },
+        bookLoader = { entry -> loadBookForKosync(epubBookParser, bookRepository, entry) },
         ioDispatcher = ioDispatcher,
     )
 
@@ -195,3 +191,10 @@ class KosyncManager private constructor(
         private val json = Json { ignoreUnknownKeys = true }
     }
 }
+
+private suspend fun loadBookForKosync(parser: EpubBookParser, repository: BookRepository, entry: BookEntry): EpubBook? =
+    try {
+        parser.parse(entry.root, cachedBookInfo = repository.loadBookInfo(entry.root))
+    } catch (error: Exception) {
+        null
+    }
