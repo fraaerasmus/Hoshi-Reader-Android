@@ -43,7 +43,11 @@ class BookshelfViewModelTest {
             progressById = mapOf("book-a" to 0.25),
             coverSourcesById = mapOf("book-a" to coverSource),
             shelves = listOf(BookShelf("Manga", listOf("book-a"))),
-            settings = BookshelfSettings(sortOption = BookSortOption.Title, showReading = true),
+            settings = BookshelfSettings(
+                sortOption = BookSortOption.Title,
+                showReading = true,
+                coverMode = BookshelfCoverMode.Blur,
+            ),
         )
         val viewModel = BookshelfViewModel(repository, testScope())
 
@@ -55,9 +59,24 @@ class BookshelfViewModelTest {
         assertEquals(listOf(BookShelf("Manga", listOf("book-a"))), viewModel.uiState.value.shelves)
         assertEquals(BookSortOption.Title, viewModel.uiState.value.sortOption)
         assertTrue(viewModel.uiState.value.showReading)
+        assertEquals(BookshelfCoverMode.Blur, viewModel.uiState.value.coverMode)
         assertTrue(viewModel.uiState.value.hasLoadedBooks)
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.errorMessage.testString())
+    }
+
+    @Test
+    fun changeCoverModePersistsAndPublishesState() {
+        val persistenceGate = CompletableDeferred<Unit>()
+        val repository = FakeBookshelfRepository(coverModeGate = persistenceGate)
+        val viewModel = BookshelfViewModel(repository, testScope())
+
+        viewModel.changeCoverMode(BookshelfCoverMode.Hide)
+
+        assertEquals(listOf(BookshelfCoverMode.Hide), repository.coverModeUpdates)
+        assertEquals(BookshelfCoverMode.Hide, viewModel.uiState.value.coverMode)
+
+        persistenceGate.complete(Unit)
     }
 
     @Test
@@ -491,7 +510,7 @@ class BookshelfViewModelTest {
             error("bad epub")
         }
 
-        assertEquals("bad epub", viewModel.uiState.value.errorMessage.testString())
+        assertEquals("Failed to import EPUB.", viewModel.uiState.value.errorMessage.testString())
         assertFalse(viewModel.uiState.value.isLoading)
         assertNull(viewModel.uiState.value.blockingProgressMessage.testString())
 
@@ -1105,7 +1124,7 @@ class BookshelfViewModelTest {
             error("bad epub")
         }
 
-        assertEquals("bad epub", viewModel.uiState.value.errorMessage.testString())
+        assertEquals("Failed to import EPUB.", viewModel.uiState.value.errorMessage.testString())
 
         viewModel.consumeErrorMessage()
 
@@ -1185,6 +1204,7 @@ class BookshelfViewModelTest {
         val createShelfAndMoveResult: Boolean = true,
         val createShelfAndMoveGate: CompletableDeferred<Unit>? = null,
         val createShelfAndMoveError: Throwable? = null,
+        val coverModeGate: CompletableDeferred<Unit>? = null,
         private val loadPlans: ArrayDeque<LoadPlan> = ArrayDeque(),
     ) : BookshelfRepository {
         data class LoadPlan(
@@ -1207,6 +1227,7 @@ class BookshelfViewModelTest {
         val deletedRemoteEntries = mutableListOf<RemoteBookEntry>()
         val exportedBooks = mutableListOf<BookEntry>()
         val showReadingUpdates = mutableListOf<Boolean>()
+        val coverModeUpdates = mutableListOf<BookshelfCoverMode>()
         val renamedBooks = mutableListOf<Pair<BookEntry, String?>>()
         val profiledBooks = mutableListOf<Pair<BookEntry, String?>>()
 
@@ -1330,6 +1351,12 @@ class BookshelfViewModelTest {
             showReadingUpdates += showReading
         }
 
+        override suspend fun changeCoverMode(coverMode: BookshelfCoverMode) {
+            coverModeUpdates += coverMode
+            coverModeGate?.await()
+            settings = settings.copy(coverMode = coverMode)
+        }
+
         override suspend fun rebuildLookupQuery() = Unit
 
         override suspend fun syncBook(
@@ -1353,6 +1380,7 @@ private fun UiText?.testString(): String? =
             R.string.bookshelf_importing_named_format -> "Importing ${args[0]}..."
             R.string.bookshelf_importing_progress_format -> "Importing ${args[0]} / ${args[1]}..."
             R.string.bookshelf_legacy_migration_progress_format -> "Preparing older books ${args[0]} / ${args[1]}..."
+            R.string.bookshelf_import_failed -> "Failed to import EPUB."
             R.string.bookshelf_import_failed_list_format -> "Failed to import:\n${args[0]}"
             R.string.bookshelf_scanning_folder -> "Scanning folder..."
             R.string.bookshelf_no_epub_files_found -> "No EPUB files found."

@@ -57,8 +57,8 @@ android {
         applicationId = "moe.antimony.hoshi"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10302
-        versionName = "1.3.2"
+        versionCode = 10303
+        versionName = "1.3.3"
         releaseVersionCode?.let { versionCode = it }
         releaseVersionName?.let { versionName = it }
 
@@ -164,7 +164,7 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+            version = "3.31.6"
         }
     }
     sourceSets["main"].java.directories.add(uniffiOutDir.absolutePath)
@@ -211,6 +211,7 @@ dependencies {
     ksp(libs.androidx.hilt.compiler)
     ksp(libs.google.dagger.hilt.android.compiler)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly("net.java.dev.jna:jna:${libs.versions.jna.get()}@jar")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

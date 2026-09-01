@@ -8,8 +8,88 @@ fork adds on top of upstream live in [FORK_CHANGELOG.md](FORK_CHANGELOG.md).
 
 ## [Unreleased]
 
+### Added
+
+- Add Show, Blur, and Hide privacy modes for bookshelf covers, plus deterministic
+  title and author artwork when a book has no visible cover.
+- Warn users before enabling AnkiConnect that most setups can create cards
+  directly through AnkiDroid and that an incorrect AnkiConnect configuration
+  prevents fetching decks and note types or creating cards.
+- Add term dictionary categories with category-aware Anki definition mappings
+  and iOS-aligned advanced category/fallback controls, Kanji dictionary
+  import/management and popup lookup, a verified one-tap
+  stroke-order font download for Kanji users, plus complete pitch data with H/L
+  patterns and nasal/devoice markers.
+- Add downloadable recommended Japanese font families to Reader Appearance,
+  including separate family and named variant selectors, real static and
+  variable weight selection, verified app-private downloads, and family/variant
+  grouping for imported TTF and OTF fonts, with compact one-level type grouping
+  in the font menu.
+- Add an optional Reader Behavior setting that uses the volume keys to jump
+  between terms in the topmost lookup popup.
+- Add `hoshi://search?text=...` deep links for opening lookup results in the
+  existing popup overlay, with `mode=app` support for opening the Dictionary
+  tab instead.
+
 ### Fixed
 
+- Import EPUB and TTU bookdata with multibyte titles that exceed Android's
+  filename byte limit while preserving the complete visible title and cleaning
+  temporary EPUB data after failed imports.
+- Keep wide inline gaiji at the publisher's text-relative size, render inline
+  gaiji strokes with the active Reader text color while blending away their
+  image backgrounds in standard and custom themes, and exclude gaiji from
+  image navigation.
+- Use EPUB fallback text for failed inline gaiji images, while retaining a
+  broken-image marker and its inline space when no fallback text is available.
+- Open EPUB pages that use paired XHTML viewport metadata instead of remaining
+  on the Reader loading screen.
+- Keep oversized lookup popup frames fully inside the visible screen so their
+  bottom border and all scrollable content remain reachable.
+- Prefer Arial throughout lookup popups before Android's Japanese font fallback
+  so pitch-accent markers stay aligned with their reading, and keep pitch
+  dictionary labels intact when compact entries wrap.
+
+## [v1.3.3] - 2026-08-13
+
+### Added
+
+- Automatically center the current chapter when opening the Reader Contents or
+  Sasayaki chapter list.
+- Add per-source enable controls for imported local audio databases while
+  preserving each source's configured priority.
+- Add Ogg Opus audiobook import with embedded title, artist, cover, and chapter
+  metadata in Sasayaki, load its artist without the platform-reader delay, and
+  show MP3, M4B, and Opus audiobook duration before playback starts.
+- Add a Reader Appearance swipe-threshold control for paginated and VN modes;
+  setting it to zero disables swipe page turns while preserving hardware page
+  keys.
+- Add up to three named Anki card formats with independent icons, decks, note
+  types, field mappings, tags, and duplicate states.
+- Add confirmation before deleting Anki formats and an edit-screen action that
+  duplicates a format and returns to the format list.
+- Add Anki duplicate-note search buttons that appear only for matching notes,
+  plus grouped per-format mining and search actions placed before audio.
+- Add precise cloze-part handlebars, numeric pitch accent graph handlebars, and
+  advanced glossary mapping options for Anki cards.
+
+### Changed
+
+- Increase the default lookup popup size to 500 × 500 dp and allow its
+  height to be adjusted up to 1000 dp.
+- Align the built-in Lapis, Kiku, and Senren field presets with iOS by no longer
+  setting sentence-card marker fields.
+
+### Fixed
+
+- Allow importing supported files whose display names contain `#` or `?`,
+  including EPUB volume numbers such as `Book #01.epub`.
+- Base reduced-motion popup scrolling on the portion of the popup that is
+  actually visible when its configured height exceeds the screen.
+- Show Reader Contents, fragment jumps, and chapter labels for EPUBs whose
+  navigation document is stored in a subdirectory.
+- Prevent staggered multi-touch taps in paginated and VN Reader modes from
+  being mistaken for a page-turn swipe.
 - Keep Google Drive sync and TTU backup restore compatible with progress files
   whose book data IDs exceed Android's 32-bit integer range.
 - Keep dictionary lookup available when tapping Sasayaki-highlighted text in VN

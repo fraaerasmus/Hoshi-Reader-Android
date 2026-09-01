@@ -15,6 +15,7 @@ import moe.antimony.hoshi.epub.writeMinimalExtractedEpub
 import moe.antimony.hoshi.profiles.ProfileRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -236,7 +237,10 @@ class HoshiBackupRepositoryTest {
         val sourceDir = Files.createTempDirectory("hoshi-dictionaries-backup-source").toFile()
         sourceDir.resolve("Dictionaries/Term/JMdict").mkdirs()
         sourceDir.resolve("Dictionaries/Term/JMdict/index.json").writeText("""{"title":"JMdict"}""")
-        sourceDir.resolve("Dictionaries/config.json").writeText("""{"termDictionaries":[]}""")
+        sourceDir.resolve("Dictionaries/Kanji/KANJIDIC").mkdirs()
+        sourceDir.resolve("Dictionaries/Kanji/KANJIDIC/index.json").writeText("""{"title":"KANJIDIC"}""")
+        val config = """{"termDictionaries":[{"fileName":"JMdict","isEnabled":true,"order":0,"category":"exclude"}],"frequencyDictionaries":[],"pitchDictionaries":[],"kanjiDictionaries":[{"fileName":"KANJIDIC","isEnabled":true,"order":0,"category":"none"}]}"""
+        sourceDir.resolve("Dictionaries/config.json").writeText(config)
         val output = ByteArrayOutputStream()
         HoshiBackupRepository(sourceDir).exportDictionaries(output)
         val targetDir = Files.createTempDirectory("hoshi-dictionaries-backup-target").toFile()
@@ -249,7 +253,8 @@ class HoshiBackupRepositoryTest {
 
         assertFalse(targetDir.resolve("Dictionaries/old/index.json").exists())
         assertEquals("""{"title":"JMdict"}""", targetDir.resolve("Dictionaries/Term/JMdict/index.json").readText())
-        assertEquals("""{"termDictionaries":[]}""", targetDir.resolve("Dictionaries/config.json").readText())
+        assertEquals("""{"title":"KANJIDIC"}""", targetDir.resolve("Dictionaries/Kanji/KANJIDIC/index.json").readText())
+        assertEquals(config, targetDir.resolve("Dictionaries/config.json").readText())
         assertFalse(zipEntryNames(output.toByteArray()).any { it == "Dictionaries/" || it.startsWith("Dictionaries/") })
     }
 
@@ -505,6 +510,72 @@ class HoshiBackupRepositoryTest {
         assertEquals(2, bookFolders.size)
         assertTrue("Same Title" in bookFolders)
         assertEquals(2, entries.count { it.endsWith("/cover_1_6.jpg") })
+    }
+
+    @Test
+    fun exportTtuBookDataDisambiguatesDuplicateLongTitlesWithinByteLimit() = runBlocking {
+        val sourceDir = Files.createTempDirectory("hoshi-ttu-backup-duplicate-long-title").toFile()
+        val sourceRepository = BookRepository(sourceDir)
+        val longTitle = "長".repeat(86)
+        val first = sourceRepository.createPackedTestBook("First Long Book")
+        val second = sourceRepository.createPackedTestBook("Second Long Book")
+        listOf(first, second).forEach { entry ->
+            sourceRepository.saveMetadata(entry.root, entry.metadata.copy(renamedTitle = longTitle))
+        }
+        val output = ByteArrayOutputStream()
+
+        HoshiBackupRepository(sourceDir).exportTtuBookData(output)
+
+        val bookFolders = zipEntryNames(output.toByteArray())
+            .filter { it.contains("/bookdata_") }
+            .map { it.substringBefore('/') }
+            .distinct()
+        assertEquals(2, bookFolders.size)
+        assertTrue(bookFolders.all { it.toByteArray(Charsets.UTF_8).size <= 255 })
+    }
+
+    @Test
+    fun exportAndRestoreTtuBookDataKeepsLongTitleWithByteSafeArchiveFolder() = runBlocking {
+        val sourceDir = Files.createTempDirectory("hoshi-ttu-backup-long-title").toFile()
+        val sourceRepository = BookRepository(sourceDir)
+        val title = "長".repeat(86)
+        val sourceEntry = sourceRepository.createPackedTestBook("Long Title Source")
+        sourceRepository.saveMetadata(sourceEntry.root, sourceEntry.metadata.copy(title = title))
+        val output = ByteArrayOutputStream()
+
+        HoshiBackupRepository(sourceDir).exportTtuBookData(output)
+
+        val bookDataEntry = zipEntryNames(output.toByteArray()).single { it.contains("/bookdata_") }
+        assertTrue(bookDataEntry.substringBefore('/').toByteArray(Charsets.UTF_8).size <= 255)
+
+        val targetDir = Files.createTempDirectory("hoshi-ttu-backup-long-title-target").toFile()
+        val restored = HoshiBackupRepository(targetDir).restoreTtuBookData(ByteArrayInputStream(output.toByteArray()))
+        val restoredEntry = BookRepository(targetDir).loadBookEntries().single()
+
+        assertEquals(1, restored)
+        assertEquals(title, restoredEntry.metadata.title)
+        assertTrue(restoredEntry.root.name.toByteArray(Charsets.UTF_8).size <= 250)
+    }
+
+    @Test
+    fun ttuRestoreEntryNameCapsIosStyleLongTopLevelFolder() {
+        val rawFolder = "長".repeat(86)
+
+        val mapped = remapTtuRestoreEntryName("$rawFolder/bookdata_1_6_1_2_3.zip")
+
+        assertTrue(mapped.substringBefore('/').toByteArray(Charsets.UTF_8).size <= 255)
+        assertTrue(mapped.substringBefore('/').substringAfterLast('-').matches(Regex("[0-9a-f]{16}")))
+        assertEquals("bookdata_1_6_1_2_3.zip", mapped.substringAfter('/'))
+    }
+
+    @Test
+    fun ttuRestoreEntryNameRejectsParentTraversalBeforeMapping() {
+        assertThrows(IllegalArgumentException::class.java) {
+            remapTtuRestoreEntryName("../bookdata_1_6_1_2_3.zip")
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            remapTtuRestoreEntryName("/Long Book/bookdata_1_6_1_2_3.zip")
+        }
     }
 
     @Test

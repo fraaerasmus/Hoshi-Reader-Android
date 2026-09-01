@@ -1,6 +1,7 @@
 package moe.antimony.hoshi.features.dictionary
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
@@ -35,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.ProcessTextLookupRequest
+import moe.antimony.hoshi.MainActivity
 import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.dictionary.DictionaryRepository
 import moe.antimony.hoshi.features.audio.AudioRequestHandler
@@ -46,6 +48,7 @@ import moe.antimony.hoshi.features.anki.AnkiViewModel
 import moe.antimony.hoshi.features.reader.ReaderLookupPopupBridgeCallbackHolder
 import moe.antimony.hoshi.features.reader.ReaderLookupPopupBridgeCallbacks
 import moe.antimony.hoshi.features.reader.ReaderLookupPopupBridgeMessage
+import moe.antimony.hoshi.features.reader.readerPopupBooleanMapJson
 import moe.antimony.hoshi.features.reader.ReaderLookupPopupIframeSync
 import moe.antimony.hoshi.features.reader.ReaderLookupPopupResourceHandler
 import moe.antimony.hoshi.features.reader.ReaderLookupPopupViewport
@@ -81,7 +84,25 @@ class ProcessTextLookupActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val request = ProcessTextLookupRequest.fromIntent(intent) ?: run {
+        val deepLinkRequest = DictionaryDeepLinkRequest.fromIntent(intent)
+        if (deepLinkRequest?.destination == DictionaryDeepLinkDestination.MainApp) {
+            startActivity(
+                Intent(this, MainActivity::class.java).apply {
+                    action = OpenDictionaryLookupAction
+                    putExtra(OpenDictionaryLookupTextExtra, deepLinkRequest.text)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                },
+            )
+            finish()
+            return
+        }
+        val request = deepLinkRequest
+            ?.takeIf { it.destination == DictionaryDeepLinkDestination.Overlay }
+            ?.let { ProcessTextLookupRequest(query = it.text.trim()) }
+            ?: ProcessTextLookupRequest.fromIntent(intent)
+            ?: run {
             finish()
             return
         }
@@ -138,7 +159,10 @@ private fun ProcessTextLookupOverlay(
     val ankiViewModel: AnkiViewModel = hiltViewModel()
     val ankiUiState by ankiViewModel.uiState.collectAsStateWithLifecycle()
     val assets = remember(context) { LookupPopupAssets.load(context) }
-    val fontFaceCss = dependencies.readerFontManager.popupFontFaceCss()
+    val fontLibraryState by dependencies.readerFontManager.libraryState.collectAsStateWithLifecycle()
+    val fontFaceCss = remember(dependencies.readerFontManager, fontLibraryState.revision) {
+        dependencies.readerFontManager.popupFontFaceCss()
+    }
     val popupSettings = popups.firstOrNull()?.state
     val readerPopupIframeDocument = remember(
         popupSettings?.dictionaryStyles,
@@ -356,14 +380,20 @@ private fun ProcessTextLookupOverlay(
                 is ReaderLookupPopupBridgeMessage.MineEntry -> {
                     val popup = popupById(message.popupId) ?: return
                     val messageId = message.messageId ?: return
-                    ankiViewModel.mineEntryAsync(message.payloadJson, popup.state.ankiContext) { mined ->
+                    ankiViewModel.mineEntryAsync(message.formatId, message.payloadJson, popup.state.ankiContext) { mined ->
                         replyIframeMessage(message.popupId, messageId, mined.toString())
                     }
                 }
                 is ReaderLookupPopupBridgeMessage.DuplicateCheck -> {
                     val messageId = message.messageId ?: return
-                    ankiViewModel.duplicateCheckAsync(message.expression) { isDuplicate ->
-                        replyIframeMessage(message.popupId, messageId, isDuplicate.toString())
+                    ankiViewModel.duplicateStatesAsync(message.valuesByHandlebar) { states ->
+                        replyIframeMessage(message.popupId, messageId, readerPopupBooleanMapJson(states))
+                    }
+                }
+                is ReaderLookupPopupBridgeMessage.ShowNotes -> {
+                    val messageId = message.messageId ?: return
+                    ankiViewModel.showNotesAsync(message.formatId, message.valuesByHandlebar) { shown ->
+                        replyIframeMessage(message.popupId, messageId, shown.toString())
                     }
                 }
                 is ReaderLookupPopupBridgeMessage.LookupRedirect -> {
@@ -394,6 +424,24 @@ private fun ProcessTextLookupOverlay(
                             )
                     }
                     replyIframeMessage(message.popupId, messageId, results.size.toString())
+                }
+                is ReaderLookupPopupBridgeMessage.KanjiRedirect -> {
+                    val messageId = message.messageId ?: return
+                    val result = dependencies.dictionaryRepository.lookupKanji(message.kanji)
+                    replyIframeMessage(
+                        message.popupId,
+                        messageId,
+                        if (result.entries.isEmpty()) "null" else LookupPopupHtml.kanjiJsonString(result),
+                    )
+                }
+                is ReaderLookupPopupBridgeMessage.KanjiRedirectCommitted -> {
+                    val current = popupHistories[message.popupId] ?: ReaderPopupHistoryCounts()
+                    popupHistories = popupHistories + (
+                        message.popupId to current.copy(
+                            backCount = current.backCount + 1,
+                            forwardCount = 0,
+                        )
+                    )
                 }
                 is ReaderLookupPopupBridgeMessage.GetEntry -> {
                     val entry = popupById(message.popupId)?.state?.results?.getOrNull(message.index)

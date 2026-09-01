@@ -105,6 +105,8 @@ class EpubBookModelTest {
         root.resolve("OPS/images/first.jpg").writeBytes(byteArrayOf(1))
         root.resolve("OPS/images/second.PNG").writeBytes(byteArrayOf(2))
         root.resolve("OPS/images/gaiji.png").writeBytes(byteArrayOf(3))
+        root.resolve("OPS/images/gaiji-line.png").writeBytes(byteArrayOf(4))
+        root.resolve("OPS/images/gaiji-wide.jpg").writeBytes(byteArrayOf(5))
         root.resolve("OPS/images/vector.svg").writeText("<svg/>")
         val chapter = EpubChapter(
             id = "chapter",
@@ -117,6 +119,8 @@ class EpubBookModelTest {
                   <img src="../images/first.jpg" />
                   <img src="../images/first.jpg" />
                   <img class="ornament gaiji" src="../images/gaiji.png" />
+                  <img class="gaiji-line" src="../images/gaiji-line.png" />
+                  <img class="gaiji-wide" src="../images/gaiji-wide.jpg" />
                   <svg><image xlink:href="../images/second.PNG" /></svg>
                   <img src="../images/vector.svg" />
                   <img src="../images/missing.jpeg" />
@@ -169,6 +173,7 @@ class EpubBookModelTest {
         )
         val complete = legacy.copy(
             images = emptyList(),
+            readerFactsVersion = 1,
             chapterInfo = legacy.chapterInfo.mapValues { (_, info) ->
                 info.copy(fragmentOffsets = mapOf("part" to 4))
             },

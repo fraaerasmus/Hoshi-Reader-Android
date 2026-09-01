@@ -13,6 +13,8 @@ private val readerAttributeRegex = Regex(
 private val readerOpeningTagRegex = Regex("""<[A-Za-z][^>]*>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
 private val readerBodyOpeningTagRegex = Regex("""<body\b[^>]*>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
 private val readerGalleryExtensions = setOf("jpg", "jpeg", "png")
+private val readerInlineGlyphImageClasses = setOf("gaiji", "gaiji-line", "gaiji-wide")
+private const val CURRENT_READER_FACTS_VERSION = 1
 
 internal fun buildBookInfo(
     chapters: List<EpubChapter>,
@@ -47,6 +49,7 @@ internal fun buildBookInfo(
         characterCount = total,
         chapterInfo = chapterInfo,
         images = images.toList(),
+        readerFactsVersion = CURRENT_READER_FACTS_VERSION,
     )
 }
 
@@ -54,7 +57,11 @@ internal fun BookInfo.matchesReaderFacts(
     chapters: List<EpubChapter>,
     toc: List<EpubTocItem>,
 ): Boolean {
-    if (!matchesChapterShells(chapters) || images == null) return false
+    if (
+        readerFactsVersion != CURRENT_READER_FACTS_VERSION ||
+        !matchesChapterShells(chapters) ||
+        images == null
+    ) return false
     val tocFragments = toc.readerTocFragmentsByChapter()
     return tocFragments.all { (href, fragments) ->
         val info = chapterInfo[href] ?: return@all true
@@ -99,7 +106,12 @@ private fun String.readerGalleryImagePaths(
     val chapterParent = canonicalRoot.resolve(chapterHref).canonicalFile.parentFile ?: canonicalRoot
     return readerImageTagRegex.findAll(this).mapNotNull { match ->
         val attributes = match.value.readerAttributes()
-        if (attributes["class"].orEmpty().split(Regex("""\s+""")).any { it.equals("gaiji", ignoreCase = true) }) {
+        if (
+            attributes["class"]
+                .orEmpty()
+                .split(Regex("""\s+"""))
+                .any { it.lowercase() in readerInlineGlyphImageClasses }
+        ) {
             return@mapNotNull null
         }
         val source = attributes["src"] ?: attributes["xlink:href"] ?: return@mapNotNull null

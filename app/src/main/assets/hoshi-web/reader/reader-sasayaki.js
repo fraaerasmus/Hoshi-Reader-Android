@@ -232,7 +232,13 @@
   sasayakiMediaElements: function() {
     return Array.from(document.body.querySelectorAll('img, svg, image, video, canvas, picture, table, iframe, object, embed')).filter(function(element) {
       var tag = String(element.tagName || '').toLowerCase();
-      if (tag === 'img' && (element.classList.contains('gaiji') || element.classList.contains('gaiji-line'))) return false;
+      if (
+        tag === 'img' && (
+          element.classList.contains('gaiji') ||
+          element.classList.contains('gaiji-line') ||
+          element.classList.contains('gaiji-wide')
+        )
+      ) return false;
       var rect = element.getBoundingClientRect();
       return rect && rect.width > 0 && rect.height > 0;
     });

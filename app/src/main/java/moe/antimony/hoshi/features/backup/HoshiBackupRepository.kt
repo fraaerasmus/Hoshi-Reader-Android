@@ -29,6 +29,8 @@ import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.ReadingStatistics
 import moe.antimony.hoshi.epub.EpubBookParser
+import moe.antimony.hoshi.epub.MAX_PATH_COMPONENT_UTF8_BYTES
+import moe.antimony.hoshi.epub.fitUtf8PathComponent
 import moe.antimony.hoshi.features.sync.TtuBookDataConverter
 import moe.antimony.hoshi.features.sync.TtuProgress
 import moe.antimony.hoshi.features.sync.TtuSyncRules
@@ -168,7 +170,7 @@ class HoshiBackupRepository @Inject constructor(
             tempRoot.mkdirs()
             try {
                 archiveFile.outputStream().use { output -> input.copyTo(output) }
-                unzipInto(archiveFile, tempRoot)
+                unzipInto(archiveFile, tempRoot, ::remapTtuRestoreEntryName)
                 var restoredCount = 0
                 tempRoot.listFiles().orEmpty().filter(File::isDirectory).forEach { folder ->
                     val files = folder.listFiles().orEmpty()
@@ -373,13 +375,18 @@ class HoshiBackupRepository @Inject constructor(
         }.getOrThrow()
     }
 
-    private fun unzipInto(archiveFile: File, destinationRoot: File) {
+    private fun unzipInto(
+        archiveFile: File,
+        destinationRoot: File,
+        entryNameMapper: (String) -> String = { it },
+    ) {
         val destinationCanonical = destinationRoot.canonicalFile
         ZipFile(archiveFile).use { zip ->
             val entries = zip.entries()
             while (entries.hasMoreElements()) {
                 val entry = entries.nextElement()
-                val target = destinationCanonical.resolve(entry.name).canonicalFile
+                val entryName = entryNameMapper(entry.name)
+                val target = destinationCanonical.resolve(entryName).canonicalFile
                 require(target.path == destinationCanonical.path || target.path.startsWith(destinationCanonical.path + File.separator)) {
                     "Unsafe backup entry: ${entry.name}"
                 }
@@ -480,17 +487,33 @@ private fun uniqueTtuBackupFolderName(
     usedNames: MutableSet<String>,
 ): String {
     val normalizedBase = baseName.ifBlank { "Book" }
-    if (usedNames.add(normalizedBase)) return normalizedBase
+    val firstCandidate = normalizedBase.fitUtf8PathComponent(MAX_PATH_COMPONENT_UTF8_BYTES)
+    if (usedNames.add(firstCandidate)) return firstCandidate
 
     val stableSuffix = bookId.take(8).ifBlank { UUID.randomUUID().toString().take(8) }
     val suffixBase = "$normalizedBase-$stableSuffix"
-    var candidate = suffixBase
+    var candidate = suffixBase.fitUtf8PathComponent(MAX_PATH_COMPONENT_UTF8_BYTES)
     var index = 2
     while (!usedNames.add(candidate)) {
-        candidate = "$suffixBase-$index"
+        candidate = "$suffixBase-$index".fitUtf8PathComponent(MAX_PATH_COMPONENT_UTF8_BYTES)
         index += 1
     }
     return candidate
+}
+
+internal fun remapTtuRestoreEntryName(entryName: String): String {
+    val isDirectory = entryName.endsWith('/')
+    val path = entryName.removeSuffix("/")
+    require(path.isNotEmpty() && !path.startsWith('/')) { "Unsafe TTU backup entry: $entryName" }
+    val segments = path.split('/')
+    require(segments.none { it.isEmpty() || it == "." || it == ".." || '\u0000' in it }) {
+        "Unsafe TTU backup entry: $entryName"
+    }
+    val mapped = buildList {
+        add(segments.first().fitUtf8PathComponent(MAX_PATH_COMPONENT_UTF8_BYTES))
+        addAll(segments.drop(1))
+    }.joinToString(separator = "/")
+    return mapped + if (isDirectory) "/" else ""
 }
 
 private val backupJson = Json {

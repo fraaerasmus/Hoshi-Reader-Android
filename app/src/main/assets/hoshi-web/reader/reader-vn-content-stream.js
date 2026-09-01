@@ -175,7 +175,7 @@
   }
 
   function isInlineGlyphImage(node) {
-    return hasClass(node, 'gaiji') || hasClass(node, 'gaiji-line');
+    return hasClass(node, 'gaiji') || hasClass(node, 'gaiji-line') || hasClass(node, 'gaiji-wide');
   }
 
   function isStandaloneImageNode(node, contextRoot) {

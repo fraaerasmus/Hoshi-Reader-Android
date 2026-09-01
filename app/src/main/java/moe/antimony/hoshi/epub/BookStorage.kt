@@ -20,6 +20,7 @@ data class BookInfo(
     val characterCount: Int,
     val chapterInfo: Map<String, ChapterInfo>,
     val images: List<String>? = null,
+    val readerFactsVersion: Int? = null,
 ) {
     @Serializable
     data class ChapterInfo(
@@ -41,6 +42,7 @@ data class BookMetadata(
     val epub: String? = null,
     val profileId: String? = null,
     val bookLanguage: String? = null,
+    val author: String? = null,
 ) {
     val displayTitle: String
         get() = renamedTitle?.takeIf { it.isNotBlank() } ?: title.orEmpty()

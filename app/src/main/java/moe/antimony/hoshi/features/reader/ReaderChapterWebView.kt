@@ -29,6 +29,7 @@ import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -140,9 +141,20 @@ internal fun ChapterWebView(
     val continuousScrollProgressScheduler = remember { ReaderContinuousScrollProgressScheduler() }
     val chapter = book.chapters[chapterPosition.index]
     var readerWebView by remember { mutableStateOf<WebView?>(null) }
-    val fontFaceUrl = remember(readerSettings.selectedFont) {
-        fontManager.webViewFontUrl(readerSettings.selectedFont)
+    val fontLibraryState by fontManager.libraryState.collectAsState()
+    val fontRenderSpec = remember(
+        readerSettings.selectedFont,
+        readerSettings.selectedFontFamilyId,
+        readerSettings.selectedFontVariantId,
+        fontLibraryState.revision,
+    ) {
+        fontManager.resolveRenderSpec(
+            selectedFont = readerSettings.selectedFont,
+            familyId = readerSettings.selectedFontFamilyId,
+            variantId = readerSettings.selectedFontVariantId,
+        )
     }
+    val fontFaceUrl = fontRenderSpec.faces.firstOrNull()?.url
     val baseUrl = remember(chapter) { "https://appassets.androidplatform.net/epub/${chapter.href}" }
     val readerContentReloadKey = remember(readerSettings) {
         readerSettings.readerContentReloadKey()
@@ -164,6 +176,9 @@ internal fun ChapterWebView(
         scanWithShiftKey,
         contentLanguageProfile,
         fontFaceUrl,
+        fontRenderSpec.familyId,
+        fontRenderSpec.variantId,
+        fontRenderSpec.revision,
     ) {
         ReaderWebViewSetupReloadKey(
             initialProgress = chapterPosition.progress,
@@ -173,6 +188,9 @@ internal fun ChapterWebView(
             scanWithShiftKey = scanWithShiftKey,
             contentLanguageProfile = contentLanguageProfile,
             fontFaceUrl = fontFaceUrl,
+            fontFamilyId = fontRenderSpec.familyId,
+            fontVariantId = fontRenderSpec.variantId,
+            fontRevision = fontRenderSpec.revision,
         )
     }
     val loadKey = readerWebViewLoadKey(
@@ -189,6 +207,7 @@ internal fun ChapterWebView(
         readerContentReloadKey,
         appearanceUpdateKey,
         fontFaceUrl,
+        fontRenderSpec,
         systemDark,
         scanNonJapaneseText,
         scanMultiWordPhrases,
@@ -207,6 +226,7 @@ internal fun ChapterWebView(
             initialFragment = chapterFragment,
             settings = readerSettings,
             fontFaceUrl = fontFaceUrl,
+            fontRenderSpec = fontRenderSpec,
             systemDark = systemDark,
             scanNonJapaneseText = scanNonJapaneseText,
             scanMultiWordPhrases = scanMultiWordPhrases,
@@ -391,74 +411,78 @@ internal fun ChapterWebView(
                     continuousScrollProgressScheduler.reset(webView::removeCallbacks)
                     readerPendingProgressSaveCallbacks.remove(webView)?.let(webView::removeCallbacks)
                     webView.setOnScrollChangeListener(null)
-                    webView.setOnTouchListener(object : SwipePageTouchListener() {
-                        override fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean =
-                            shouldIgnoreReaderGestureEvent(event)
+                    webView.setOnTouchListener(
+                        object : SwipePageTouchListener(
+                            swipeDistance = readerSettings.pageSwipeThresholdPx.toFloat(),
+                        ) {
+                            override fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean =
+                                shouldIgnoreReaderGestureEvent(event)
 
-                        override fun isEdgeSwipeEnabled(): Boolean = currentEdgeSwipeEnabled.value
+                            override fun isEdgeSwipeEnabled(): Boolean = currentEdgeSwipeEnabled.value
 
-                        override fun onEdgeBrightnessDrag(fraction: Float) {
-                            currentOnEdgeBrightnessDrag.value(fraction)
-                        }
+                            override fun onEdgeBrightnessDrag(fraction: Float) {
+                                currentOnEdgeBrightnessDrag.value(fraction)
+                            }
 
-                        override fun onEdgeVolumeDrag(fraction: Float) {
-                            currentOnEdgeVolumeDrag.value(fraction)
-                        }
+                            override fun onEdgeVolumeDrag(fraction: Float) {
+                                currentOnEdgeVolumeDrag.value(fraction)
+                            }
 
-                        override fun onEdgeDragEnd() {
-                            currentOnEdgeDragEnd.value()
-                        }
+                            override fun onEdgeDragEnd() {
+                                currentOnEdgeDragEnd.value()
+                            }
 
-                        override fun onTap(x: Float, y: Float) {
-                            selectAt(x, y) {
-                                if (readerSettings.viewMode == ReaderViewMode.VisualNovel && readerSettings.visualNovelClickAdvance) {
-                                    currentOnReaderInteraction.value()
-                                    currentOnClearLookupPopup.value()
-                                    webView.navigatePageForDirection(
-                                        direction = ReaderNavigationDirection.Forward,
-                                        onNextChapter = currentOnNextChapter.value,
-                                        onPreviousChapter = currentOnPreviousChapter.value,
-                                        onDisplayedProgress = currentOnDisplayProgress.value,
-                                        onSaveProgress = currentOnSaveBookmark.value,
-                                    )
-                                } else {
-                                    currentOnReaderTapOutside.value()
+                            override fun onTap(x: Float, y: Float) {
+                                selectAt(x, y) {
+                                    if (readerSettings.viewMode == ReaderViewMode.VisualNovel && readerSettings.visualNovelClickAdvance) {
+                                        currentOnReaderInteraction.value()
+                                        currentOnClearLookupPopup.value()
+                                        webView.navigatePageForDirection(
+                                            direction = ReaderNavigationDirection.Forward,
+                                            onNextChapter = currentOnNextChapter.value,
+                                            onPreviousChapter = currentOnPreviousChapter.value,
+                                            onDisplayedProgress = currentOnDisplayProgress.value,
+                                            onSaveProgress = currentOnSaveBookmark.value,
+                                        )
+                                    } else {
+                                        currentOnReaderTapOutside.value()
+                                    }
                                 }
                             }
-                        }
 
-                        override fun onLeftSwipe() {
-                            currentOnReaderInteraction.value()
-                            currentOnClearLookupPopup.value()
-                            val direction = readerNavigationDirectionForSwipe(
-                                isVerticalWriting = readerSettings.verticalWriting,
-                                swipeDirection = ReaderSwipeDirection.Left,
-                            )
-                            webView.navigatePageForDirection(
-                                direction = direction,
-                                onNextChapter = currentOnNextChapter.value,
-                                onPreviousChapter = currentOnPreviousChapter.value,
-                                onDisplayedProgress = currentOnDisplayProgress.value,
-                                onSaveProgress = currentOnSaveBookmark.value,
-                            )
-                        }
+                            override fun onLeftSwipe() {
+                                currentOnReaderInteraction.value()
+                                currentOnClearLookupPopup.value()
+                                val direction = readerNavigationDirectionForSwipe(
+                                    isVerticalWriting = readerSettings.verticalWriting,
+                                    swipeDirection = ReaderSwipeDirection.Left,
+                                )
+                                webView.navigatePageForDirection(
+                                    direction = direction,
+                                    onNextChapter = currentOnNextChapter.value,
+                                    onPreviousChapter = currentOnPreviousChapter.value,
+                                    onDisplayedProgress = currentOnDisplayProgress.value,
+                                    onSaveProgress = currentOnSaveBookmark.value,
+                                )
+                            }
 
-                        override fun onRightSwipe() {
-                            currentOnReaderInteraction.value()
-                            currentOnClearLookupPopup.value()
-                            val direction = readerNavigationDirectionForSwipe(
-                                isVerticalWriting = readerSettings.verticalWriting,
-                                swipeDirection = ReaderSwipeDirection.Right,
-                            )
-                            webView.navigatePageForDirection(
-                                direction = direction,
-                                onNextChapter = currentOnNextChapter.value,
-                                onPreviousChapter = currentOnPreviousChapter.value,
-                                onDisplayedProgress = currentOnDisplayProgress.value,
-                                onSaveProgress = currentOnSaveBookmark.value,
-                            )
-                        }
-                    })
+                            override fun onRightSwipe() {
+                                currentOnReaderInteraction.value()
+                                currentOnClearLookupPopup.value()
+                                val direction = readerNavigationDirectionForSwipe(
+                                    isVerticalWriting = readerSettings.verticalWriting,
+                                    swipeDirection = ReaderSwipeDirection.Right,
+                                )
+                                webView.navigatePageForDirection(
+                                    direction = direction,
+                                    onNextChapter = currentOnNextChapter.value,
+                                    onPreviousChapter = currentOnPreviousChapter.value,
+                                    onDisplayedProgress = currentOnDisplayProgress.value,
+                                    onSaveProgress = currentOnSaveBookmark.value,
+                                )
+                            }
+                        },
+                    )
                 }
             }
             webView.evaluateJavascript(readerAppearanceScript, null)
@@ -534,6 +558,9 @@ internal data class ReaderWebViewSetupReloadKey(
     val scanWithShiftKey: Boolean,
     val contentLanguageProfile: ContentLanguageProfile,
     val fontFaceUrl: String?,
+    val fontFamilyId: String? = null,
+    val fontVariantId: String? = null,
+    val fontRevision: Long = 0,
 )
 
 internal data class ReaderAppearanceUpdateKey(
@@ -574,30 +601,6 @@ internal fun readerWebViewLoadKey(
 
 internal fun readerWebViewRestoreToken(loadKey: String, restoreEpoch: Int): String =
     "$loadKey#$restoreEpoch"
-
-internal fun readerHtmlWithEarlyViewport(html: String): String {
-    val normalizedHtml = html.removeWhitespaceBeforeXmlDeclaration()
-    val withoutViewport = readerViewportMetaRegex.replace(normalizedHtml, "")
-    val head = readerHeadOpenTagRegex.find(withoutViewport)
-    val viewport = """<meta name="viewport" content="$ReaderViewportContent" />"""
-    if (head != null) {
-        val insertAt = head.range.last + 1
-        return withoutViewport.substring(0, insertAt) + "\n$viewport" + withoutViewport.substring(insertAt)
-    }
-    return withoutViewport
-}
-
-private fun String.removeWhitespaceBeforeXmlDeclaration(): String {
-    val trimmed = trimStart()
-    return if (trimmed.startsWith("<?xml", ignoreCase = true)) trimmed else this
-}
-
-private const val ReaderViewportContent = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
-
-private val readerViewportMetaRegex =
-    Regex("""(?is)<meta\b(?=[^>]*\bname\s*=\s*(['"])viewport\1)[^>]*>""")
-
-private val readerHeadOpenTagRegex = Regex("""(?is)<head\b[^>]*>""")
 
 internal fun readerShouldReserveSasayakiTopToggle(bookRoot: File?, settings: SasayakiSettings): Boolean =
     settings.enabled &&
@@ -852,6 +855,7 @@ private fun readerSetupScript(
     initialFragment: String?,
     settings: ReaderSettings,
     fontFaceUrl: String?,
+    fontRenderSpec: ReaderFontRenderSpec?,
     systemDark: Boolean,
     scanNonJapaneseText: Boolean,
     scanMultiWordPhrases: Boolean,
@@ -880,6 +884,7 @@ private fun readerSetupScript(
     val css = ReaderContentStyles.css(
         settings = settings,
         fontFaceUrl = fontFaceUrl,
+        fontRenderSpec = fontRenderSpec,
         systemDark = systemDark,
         sasayakiTextColor = sasayakiTextColor,
         sasayakiBackgroundColor = sasayakiBackgroundColor,

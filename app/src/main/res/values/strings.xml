@@ -38,7 +38,7 @@
     <string name="dialog_error_title">Error</string>
     <string name="import_select_epub_book">Select a .epub EPUB book file.</string>
     <string name="import_select_srt_subtitle">Select a .srt subtitle file.</string>
-    <string name="import_select_audiobook">Select a .mp3 or .m4b audiobook file.</string>
+    <string name="import_select_audiobook">Select a .mp3, .m4b, or .opus audiobook file.</string>
     <string name="import_select_audio_database">Select a .db audio database file.</string>
     <string name="import_select_dictionary_archive">Select a .zip dictionary archive file.</string>
     <string name="import_select_hoshi_backup">Select a .hoshi Hoshi backup file.</string>
@@ -186,6 +186,10 @@
     <string name="bookshelf_no_shelf" comment="Shelf picker empty value, intentionally matching generic none.">None</string>
     <string name="bookshelf_delete_selected_books">Delete selected books</string>
     <string name="bookshelf_manage_shelves">Manage Shelves</string>
+    <string name="bookshelf_covers">Covers</string>
+    <string name="bookshelf_cover_mode_show">Show</string>
+    <string name="bookshelf_cover_mode_blur">Blur</string>
+    <string name="bookshelf_cover_mode_hide">Hide</string>
     <string name="bookshelf_import_epub">Import EPUB</string>
     <string name="bookshelf_sync">Sync</string>
     <string name="bookshelf_move">Move</string>
@@ -229,7 +233,12 @@
     <string name="dictionary_importing_named_format">Importing %1$s</string>
     <string name="dictionary_importing_default">Importing dictionary</string>
     <string name="dictionary_download_recommended">Download Recommended Dictionaries</string>
-    <string name="dictionary_supported_archive_types">Yomitan term, frequency, and pitch dictionaries (.zip) are supported</string>
+    <string name="dictionary_download_stroke_order_font">Download Stroke Order Font</string>
+    <string name="dictionary_stroke_order_font_dialog_title">Download Font</string>
+    <string name="dictionary_stroke_order_font_dialog_message">This will download and automatically import the Kanji stroke order font (17 MB).</string>
+    <string name="dictionary_stroke_order_font_downloading">Downloading and importing the stroke order font…</string>
+    <string name="dictionary_stroke_order_font_download_failed">Couldn’t download and import the stroke order font. Check your connection and try again.</string>
+    <string name="dictionary_supported_archive_types">Yomitan term, frequency, pitch, and Kanji dictionaries (.zip) are supported</string>
     <string name="dictionary_default_tab">Default to Dictionary Tab</string>
     <string name="dictionary_empty_type_format">No %1$s Dictionaries</string>
     <string name="dictionary_updates_section" comment="Dictionary settings section label for installed dictionary update controls; intentionally matches the About update section label.">Updates</string>
@@ -249,6 +258,13 @@
     <string name="dictionary_type_term">Term</string>
     <string name="dictionary_type_frequency">Frequency</string>
     <string name="dictionary_type_pitch">Pitch</string>
+    <string name="dictionary_type_kanji">Kanji</string>
+    <string name="dictionary_category_none" comment="Dictionary category for uncategorized term dictionaries, intentionally matching generic none.">None</string>
+    <string name="dictionary_category_monolingual">Monolingual</string>
+    <string name="dictionary_category_bilingual">Bilingual</string>
+    <string name="dictionary_category_exclude">Exclude</string>
+    <string name="dictionary_category_update_failed">Failed to update the dictionary category.</string>
+    <string name="anki_categorize_dictionaries">Categorize dictionaries</string>
     <string name="dictionary_custom_css">Custom CSS</string>
     <string name="dictionary_import_action">Import Dictionary</string>
     <string name="dictionary_delete_action">Delete Dictionary</string>
@@ -324,6 +340,7 @@
     <string name="bookshelf_profile_automatic">Automatic</string>
     <string name="bookshelf_profile_automatic_uses_format">Uses %1$s</string>
     <string name="reader_behavior_volume_keys_turn_pages">Volume Keys Turn Pages</string>
+    <string name="reader_behavior_volume_keys_navigate_popup_terms">Volume Keys Navigate Popup Terms</string>
     <string name="reader_behavior_volume_keys_seek_sasayaki">Volume Keys Seek Sasayaki</string>
     <string name="reader_behavior_reverse_volume_key_direction">Reverse Volume Key Direction</string>
     <string name="reader_behavior_edge_swipe_controls">Edge Swipe Brightness &amp; Volume</string>
@@ -393,7 +410,7 @@
     <string name="reader_appearance_display">Display</string>
     <string name="reader_appearance_progress">Progress</string>
     <string name="reader_appearance_popup">Popup</string>
-    <string name="reader_appearance_theme_system">System</string>
+    <string name="reader_appearance_theme_system" comment="Reader theme option, intentionally matching the font-library System section label.">System</string>
     <string name="reader_appearance_theme_light">Light</string>
     <string name="reader_appearance_theme_dark">Dark</string>
     <string name="reader_appearance_theme_sepia">Sepia</string>
@@ -419,8 +436,22 @@
     <string name="reader_appearance_vertical">Vertical</string>
     <string name="reader_appearance_horizontal">Horizontal</string>
     <string name="reader_appearance_font" comment="Reader font setting, intentionally matching dictionary custom CSS font.">Font</string>
-    <string name="reader_appearance_font_publisher">Publisher</string>
-    <string name="reader_appearance_font_file" comment="Fallback filename label, intentionally matching font setting labels.">font</string>
+    <string name="reader_appearance_font_publisher">Publisher Font</string>
+    <string name="reader_appearance_font_system_serif">System Serif</string>
+    <string name="reader_appearance_font_system_sans_serif">System Sans Serif</string>
+    <string name="reader_appearance_font_imported">Imported</string>
+    <string name="reader_appearance_font_variant">Variant</string>
+    <string name="reader_appearance_font_variant_publisher">Determined by publisher</string>
+    <string name="reader_appearance_font_variant_format">%1$s (%2$d)</string>
+    <string name="reader_appearance_font_download_size_format">Download · %1$s</string>
+    <string name="reader_appearance_font_downloading_item_format">%1$s · Downloading %2$d%%</string>
+    <string name="reader_appearance_font_download_failed">Couldn’t download and verify this font. Check your connection and try again.</string>
+    <string name="reader_appearance_font_import_failed">This font could not be imported. Use a valid TTF, OTF, WOFF, or WOFF2 file.</string>
+    <string name="reader_appearance_font_category_serif">Serif / Mincho</string>
+    <string name="reader_appearance_font_category_sans">Sans serif / Gothic</string>
+    <string name="reader_appearance_font_category_rounded">Rounded</string>
+    <string name="reader_appearance_font_category_handwriting">Handwriting / Body</string>
+    <string name="reader_appearance_font_retry">Retry</string>
     <string name="reader_appearance_import_font">Import Font</string>
     <string name="reader_appearance_importing" comment="Generic import progress label, intentionally shared with ッツ backup import.">Importing...</string>
     <string name="reader_appearance_font_size">Font Size</string>
@@ -441,6 +472,9 @@
     <string name="reader_visual_novel_click_advance">Tap Blank Area to Advance</string>
     <string name="reader_visual_novel_merge_cross_screen_sasayaki_cues">Keep Sasayaki Text Together</string>
     <string name="reader_appearance_chapter_swipe_distance">Chapter Swipe Distance</string>
+    <string name="reader_appearance_page_swipe_threshold">Page Swipe Threshold</string>
+    <string name="reader_appearance_page_swipe_threshold_value">%1$d px</string>
+    <string name="reader_appearance_page_swipe_disabled" comment="Paginated and VN Reader swipe-threshold value; intentionally matches other off labels.">Off</string>
     <string name="reader_appearance_horizontal_padding">Horizontal Padding</string>
     <string name="reader_appearance_vertical_padding">Vertical Padding</string>
     <string name="reader_appearance_top_safe_area">Top Safe Area</string>
@@ -619,9 +653,10 @@
     <string name="audio_move_source_up">Move source up</string>
     <string name="audio_move_source_down">Move source down</string>
     <string name="audio_delete_source">Delete source</string>
-    <string name="audio_local_source_order">Local database source order</string>
+    <string name="audio_local_source_order">Local database sources</string>
     <string name="audio_move_local_source_up">Move local audio source up</string>
     <string name="audio_move_local_source_down">Move local audio source down</string>
+    <string name="audio_local_source_save_failed">Unable to save local audio source settings.</string>
     <string name="anki_fetch_decks_ankiconnect">Fetch decks and note types from AnkiConnect.</string>
     <string name="anki_fetch_decks_ankidroid">Fetch decks and note types from AnkiDroid.</string>
     <string name="anki_open_app_settings">Open App Settings</string>
@@ -632,11 +667,31 @@
     <string name="anki_check_duplicates_all_models">Check for duplicates across all models</string>
     <string name="anki_duplicate_check_scope">Duplicate Check Scope</string>
     <string name="anki_compact_glossaries" comment="Anki setting label, intentionally matching dictionary compact glossaries.">Compact Glossaries</string>
+    <string name="anki_embed_media">Embed media</string>
     <string name="anki_droid_force_sync">Sync AnkiDroid after adding card</string>
     <string name="anki_droid_force_sync_description">Starts AnkiDroid sync after a card is added. AnkiDroid may ignore syncs run more often than every 5 minutes.</string>
     <string name="anki_fields">Fields</string>
     <string name="anki_tags">Tags</string>
     <string name="anki_handlebar">Handlebar</string>
+    <string name="anki_format">Card Format</string>
+    <string name="anki_format_default_name">Format %1$d</string>
+    <string name="anki_add_format">Add Card Format</string>
+    <string name="anki_duplicate_format">Duplicate This Format</string>
+    <string name="anki_delete_format_title">Delete “%1$s”?</string>
+    <string name="anki_delete_format_confirmation">This permanently deletes the card format and its field mappings from Hoshi.</string>
+    <string name="anki_format_name">Format Name</string>
+    <string name="anki_format_icon">Icon</string>
+    <string name="anki_icon_square">Square</string>
+    <string name="anki_icon_square_small">Small square</string>
+    <string name="anki_icon_circle">Circle</string>
+    <string name="anki_icon_circle_small">Small circle</string>
+    <string name="anki_icon_diamond">Diamond</string>
+    <string name="anki_icon_diamond_small">Small diamond</string>
+    <string name="anki_disable_show_notes">Hide note search buttons</string>
+    <string name="anki_selected_glossary_fallback">{selected-glossary} Fallback</string>
+    <string name="anki_show_all_handlebars">Show all handlebars</string>
+    <string name="anki_fetch_confirm_title">Reset card formats?</string>
+    <string name="anki_fetch_confirm_message">Fetching decks and models resets every card format to the default deck, first model, and its default field mappings. Names, icons, and tags are kept.</string>
     <string name="anki_duplicate_scope_collection">Collection</string>
     <string name="anki_duplicate_scope_deck" comment="Duplicate scope label, intentionally matching Anki deck selector label.">Deck</string>
     <string name="anki_duplicate_scope_deck_root">Deck Root</string>
@@ -646,6 +701,8 @@
     <string name="anki_connect_api_key_configured">Configured</string>
     <string name="anki_connect_use">Use AnkiConnect</string>
     <string name="anki_connect_use_description">This replaces AnkiDroid requests with AnkiConnect JSON requests.</string>
+    <string name="anki_connect_setup_warning_title">Most users do not need AnkiConnect</string>
+    <string name="anki_connect_setup_warning_message">Hoshi can fetch decks and note types and create cards directly through AnkiDroid with no extra setup.\n\nAnkiConnect is intended only for users who run their own instance and understand how to configure it. Once enabled, it replaces AnkiDroid; incorrect setup will prevent Hoshi from fetching decks and note types or creating cards. Unless you know you need it, leave this switch off.</string>
     <string name="anki_connect_address_help">Use HTTPS for internet hosts. HTTP is accepted only for localhost and private network addresses.</string>
     <string name="anki_connect_connection">Connection</string>
     <string name="anki_connect_connected" comment="AnkiConnect connection state, intentionally matching sync connection state.">Connected</string>
@@ -756,7 +813,7 @@
     <string name="sasayaki_remove_audio">Remove</string>
     <string name="sasayaki_storage_copied">Copied to app storage. The original audiobook file can be deleted.</string>
     <string name="sasayaki_storage_linked">Linked to the external audiobook file. Keep the original file available.</string>
-    <string name="sasayaki_storage_select_audio">Select an .mp3 or .m4b audiobook</string>
+    <string name="sasayaki_storage_select_audio">Select a .mp3, .m4b, or .opus audiobook</string>
     <string name="sasayaki_subtitle_match">Subtitle Match</string>
     <string name="sasayaki_no_subtitle_match">No match</string>
     <string name="sasayaki_no_chapters">No chapters found in this audiobook.</string>
@@ -764,7 +821,7 @@
     <string name="sasayaki_current_chapter">Current chapter</string>
     <string name="sasayaki_skip_cue">1 sentence</string>
     <string name="sasayaki_skip_seconds_format">%1$d seconds</string>
-    <string name="sasayaki_settings_description">Open the Reader Sasayaki menu to load an .mp3 or .m4b audiobook. Subtitle matching is available from the Resources tab when you have a matching .srt file.</string>
+    <string name="sasayaki_settings_description">Open the Reader Sasayaki menu to load a .mp3, .m4b, or .opus audiobook. Subtitle matching is available from the Resources tab when you have a matching .srt file.</string>
     <string name="sasayaki_select_srt_file">Select an .srt subtitle file.</string>
     <string name="sasayaki_selected_srt">Selected SRT</string>
     <string name="sasayaki_open_srt_failed">Unable to open selected SRT.</string>

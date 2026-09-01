@@ -5,6 +5,7 @@ import java.nio.file.Files
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import moe.antimony.hoshi.dictionary.DictionaryCategory
 import moe.antimony.hoshi.ui.UiText
 import moe.antimony.hoshi.features.audio.LocalAudioRepository
 import org.junit.Assert.assertEquals
@@ -133,6 +134,83 @@ class AnkiRepositoryBackendSelectionTest {
         assertFalse(ankiDroid.addNoteCalled)
         assertTrue(ankiConnect.addNoteCalled)
         assertEquals(1, ankiConnect.syncCalls)
+    }
+
+    @Test
+    fun mineEntryRendersCategoryHandlebarsFromTheCurrentTermDictionarySnapshot() = runBlocking {
+        val deck = AnkiDeck(10L, "Mining")
+        val noteType = AnkiNoteType(20L, "Basic", listOf("Front"))
+        val backend = RecordingBackend(decks = listOf(deck), noteTypes = listOf(noteType))
+        val repository = repository(
+            backend = backend,
+            settingsRepository = InMemoryAnkiSettingsRepository(
+                AnkiSettings(
+                    selectedDeckId = deck.id,
+                    selectedDeckName = deck.name,
+                    selectedNoteTypeId = noteType.id,
+                    selectedNoteTypeName = noteType.name,
+                    availableDecks = listOf(deck),
+                    availableNoteTypes = listOf(noteType),
+                    fieldMappings = mapOf("Front" to "{bilingual-definition}"),
+                ),
+            ),
+            loadTermDictionaries = {
+                listOf(AnkiTermDictionary("JMdict", DictionaryCategory.Bilingual))
+            },
+        )
+
+        assertTrue(
+            repository.mineEntry(
+                rawPayload = """{"expression":"言葉","singleGlossaries":"{\"JMdict\":\"translation\"}"}""",
+                context = AnkiMiningContext(sentence = "言葉を調べる。"),
+                decks = emptyList(),
+                noteTypes = emptyList(),
+            ),
+        )
+
+        assertEquals(mapOf("Front" to "translation"), backend.lastFields)
+    }
+
+    @Test
+    fun mineEntryCapturesTermDictionaryCategoriesBeforeBackendWorkCanSwitchProfiles() = runBlocking {
+        val deck = AnkiDeck(10L, "Mining")
+        val noteType = AnkiNoteType(20L, "Basic", listOf("Front"))
+        var currentDictionaries = listOf(
+            AnkiTermDictionary("国語辞典", DictionaryCategory.Monolingual),
+        )
+        val backend = RecordingBackend(
+            decks = listOf(deck),
+            noteTypes = listOf(noteType),
+            onFetchDecks = {
+                currentDictionaries = listOf(
+                    AnkiTermDictionary("JMdict", DictionaryCategory.Bilingual),
+                )
+            },
+        )
+        val repository = repository(
+            backend = backend,
+            settingsRepository = InMemoryAnkiSettingsRepository(
+                AnkiSettings(
+                    selectedDeckId = deck.id,
+                    selectedDeckName = deck.name,
+                    selectedNoteTypeId = noteType.id,
+                    selectedNoteTypeName = noteType.name,
+                    fieldMappings = mapOf("Front" to "{monolingual-definition}"),
+                ),
+            ),
+            loadTermDictionaries = { currentDictionaries },
+        )
+
+        assertTrue(
+            repository.mineEntry(
+                rawPayload = """{"expression":"言葉","singleGlossaries":"{\"国語辞典\":\"definition\",\"JMdict\":\"translation\"}"}""",
+                context = AnkiMiningContext(sentence = "言葉を調べる。"),
+                decks = emptyList(),
+                noteTypes = emptyList(),
+            ),
+        )
+
+        assertEquals(mapOf("Front" to "definition"), backend.lastFields)
     }
 
     @Test
@@ -275,6 +353,177 @@ class AnkiRepositoryBackendSelectionTest {
 
         assertEquals(0, ankiDroid.duplicateCalls)
         assertEquals(1, ankiConnect.duplicateCalls)
+    }
+
+    @Test
+    fun mineEntryUsesOnlyTheRequestedCardFormatAndRejectsDeletedIds() = runBlocking {
+        val wordDeck = AnkiDeck(10L, "Words")
+        val sentenceDeck = AnkiDeck(11L, "Sentences")
+        val noteType = AnkiNoteType(20L, "Basic", listOf("Front", "Back"))
+        val backend = RecordingBackend(
+            decks = listOf(wordDeck, sentenceDeck),
+            noteTypes = listOf(noteType),
+        )
+        val repository = repository(
+            backend = backend,
+            settingsRepository = InMemoryAnkiSettingsRepository(
+                AnkiSettings(
+                    availableDecks = listOf(wordDeck, sentenceDeck),
+                    availableNoteTypes = listOf(noteType),
+                    cardFormats = listOf(
+                        AnkiCardFormat(
+                            id = "word",
+                            name = "Word",
+                            selectedDeckId = wordDeck.id,
+                            selectedNoteTypeId = noteType.id,
+                            fieldMappings = mapOf("Front" to "{expression}"),
+                            tags = "word-tag",
+                        ),
+                        AnkiCardFormat(
+                            id = "sentence",
+                            name = "Sentence",
+                            selectedDeckId = sentenceDeck.id,
+                            selectedNoteTypeId = noteType.id,
+                            fieldMappings = mapOf("Front" to "{sentence}", "Back" to "{expression}"),
+                            tags = "sentence-tag extra",
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertTrue(
+            repository.mineEntry(
+                formatId = "sentence",
+                rawPayload = """{"expression":"食べる","matched":"食べる"}""",
+                context = AnkiMiningContext(sentence = "パンを食べる。", sentenceOffset = 3),
+                decks = emptyList(),
+                noteTypes = emptyList(),
+            ),
+        )
+        assertEquals(sentenceDeck, backend.lastDeck)
+        assertEquals(setOf("sentence-tag", "extra"), backend.lastTags)
+        assertEquals("パンを<b>食べる</b>。", backend.lastFields["Front"])
+        assertEquals("食べる", backend.lastFields["Back"])
+
+        assertFalse(
+            repository.mineEntry(
+                formatId = "deleted",
+                rawPayload = """{"expression":"食べる"}""",
+                context = AnkiMiningContext(sentence = "食べる"),
+                decks = emptyList(),
+                noteTypes = emptyList(),
+            ),
+        )
+    }
+
+    @Test
+    fun duplicateStatesResolveEachFormatsFirstFieldHandlebar() = runBlocking {
+        val deck = AnkiDeck(10L, "Mining")
+        val noteType = AnkiNoteType(20L, "Basic", listOf("Front"))
+        val backend = RecordingBackend(
+            decks = listOf(deck),
+            noteTypes = listOf(noteType),
+            duplicateKeys = setOf("たべる"),
+        )
+        val repository = repository(
+            backend = backend,
+            settingsRepository = InMemoryAnkiSettingsRepository(
+                AnkiSettings(
+                    availableDecks = listOf(deck),
+                    availableNoteTypes = listOf(noteType),
+                    cardFormats = listOf(
+                        AnkiCardFormat(
+                            id = "expression",
+                            name = "Expression",
+                            selectedDeckId = deck.id,
+                            selectedNoteTypeId = noteType.id,
+                            fieldMappings = mapOf("Front" to "{expression}"),
+                        ),
+                        AnkiCardFormat(
+                            id = "reading",
+                            name = "Reading",
+                            selectedDeckId = deck.id,
+                            selectedNoteTypeId = noteType.id,
+                            fieldMappings = mapOf("Front" to "{reading}"),
+                        ),
+                        AnkiCardFormat(
+                            id = "invalid",
+                            name = "Invalid",
+                            selectedDeckId = deck.id,
+                            selectedNoteTypeId = noteType.id,
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(
+            mapOf("expression" to false, "reading" to true, "invalid" to false),
+            repository.duplicateStates(
+                valuesByHandlebar = mapOf("{expression}" to "食べる", "{reading}" to "たべる"),
+                decks = emptyList(),
+                noteTypes = emptyList(),
+            ),
+        )
+    }
+
+    @Test
+    fun unavailableBackendReturnsNoDuplicateStatesAndNeverEnablesAnotherFormat() = runBlocking {
+        val repository = repository(
+            backend = RecordingBackend(available = false),
+            settingsRepository = InMemoryAnkiSettingsRepository(
+                AnkiSettings(cardFormats = listOf(AnkiCardFormat(id = "format", name = "Default"))),
+            ),
+        )
+
+        assertEquals(
+            emptyMap<String, Boolean>(),
+            repository.duplicateStates(mapOf("{expression}" to "猫"), emptyList(), emptyList()),
+        )
+    }
+
+    @Test
+    fun showNotesUsesRequestedFormatsFirstFieldAndRejectsDeletedIds() = runBlocking {
+        val deck = AnkiDeck(10L, "Mining")
+        val noteType = AnkiNoteType(20L, "Basic", listOf("Front"))
+        val backend = RecordingBackend(decks = listOf(deck), noteTypes = listOf(noteType))
+        val repository = repository(
+            backend = backend,
+            settingsRepository = InMemoryAnkiSettingsRepository(
+                AnkiSettings(
+                    availableDecks = listOf(deck),
+                    availableNoteTypes = listOf(noteType),
+                    cardFormats = listOf(
+                        AnkiCardFormat(
+                            id = "reading",
+                            name = "Reading",
+                            selectedDeckId = deck.id,
+                            selectedNoteTypeId = noteType.id,
+                            fieldMappings = mapOf("Front" to "{reading}"),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        assertTrue(
+            repository.showNotes(
+                formatId = "reading",
+                valuesByHandlebar = mapOf("{expression}" to "食べる", "{reading}" to "たべる"),
+                decks = emptyList(),
+                noteTypes = emptyList(),
+            ),
+        )
+        assertEquals("たべる", backend.lastOpenNotesKey)
+        assertFalse(
+            repository.showNotes(
+                formatId = "deleted",
+                valuesByHandlebar = mapOf("{reading}" to "たべる"),
+                decks = emptyList(),
+                noteTypes = emptyList(),
+            ),
+        )
     }
 
     @Test
@@ -525,6 +774,7 @@ class AnkiRepositoryBackendSelectionTest {
         backend: AnkiBackend = RecordingBackend(),
         settingsRepository: InMemoryAnkiSettingsRepository = InMemoryAnkiSettingsRepository(),
         ankiConnectBackendFactory: (String, String) -> AnkiBackend = { _, _ -> RecordingBackend() },
+        loadTermDictionaries: () -> List<AnkiTermDictionary> = { emptyList() },
     ): AnkiRepository {
         val cacheDir = Files.createTempDirectory("hoshi-anki-cache").toFile()
         return AnkiRepository(
@@ -535,6 +785,7 @@ class AnkiRepositoryBackendSelectionTest {
             settingsRepository = settingsRepository,
             localAudioRepository = LocalAudioRepository(Files.createTempDirectory("hoshi-anki-test").toFile()),
             ankiConnectBackendFactory = ankiConnectBackendFactory,
+            loadTermDictionaries = loadTermDictionaries,
         )
     }
 
@@ -557,7 +808,9 @@ class AnkiRepositoryBackendSelectionTest {
         private val decks: List<AnkiDeck> = listOf(AnkiDeck(1L, "Default")),
         private val noteTypes: List<AnkiNoteType> = listOf(AnkiNoteType(2L, "Basic", listOf("Front"))),
         private val duplicate: Boolean = false,
+        private val duplicateKeys: Set<String> = emptySet(),
         private val addNoteResult: Boolean = true,
+        private val onFetchDecks: () -> Unit = {},
     ) : AnkiBackend {
         var fetchDecksCalls = 0
             private set
@@ -577,11 +830,18 @@ class AnkiRepositoryBackendSelectionTest {
             private set
         var lastFields: Map<String, String> = emptyMap()
             private set
+        var lastDeck: AnkiDeck? = null
+            private set
+        var lastTags: Set<String> = emptySet()
+            private set
+        var lastOpenNotesKey: String = ""
+            private set
 
         override fun isAvailable(): Boolean = available
 
         override fun fetchDecks(): List<AnkiDeck> {
             fetchDecksCalls += 1
+            onFetchDecks()
             return decks
         }
 
@@ -595,7 +855,7 @@ class AnkiRepositoryBackendSelectionTest {
             checkDuplicatesAcrossAllModels: Boolean,
         ): Boolean {
             duplicateCalls += 1
-            return duplicate
+            return duplicate || key in duplicateKeys
         }
 
         override fun addNote(
@@ -608,7 +868,9 @@ class AnkiRepositoryBackendSelectionTest {
             checkDuplicatesAcrossAllModels: Boolean,
         ): Boolean {
             addNoteCalled = true
+            lastDeck = deck
             lastFields = fieldsByName
+            lastTags = tags
             return addNoteResult
         }
 
@@ -628,6 +890,17 @@ class AnkiRepositoryBackendSelectionTest {
 
         override fun sync(): Boolean {
             syncCalls += 1
+            return true
+        }
+
+        override fun openNotes(
+            deck: AnkiDeck,
+            noteType: AnkiNoteType,
+            key: String,
+            duplicateScope: AnkiDuplicateScope,
+            checkDuplicatesAcrossAllModels: Boolean,
+        ): Boolean {
+            lastOpenNotesKey = key
             return true
         }
     }

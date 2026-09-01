@@ -77,6 +77,7 @@ internal object ReaderContentStyles {
     fun styleTag(
         settings: ReaderSettings = ReaderSettings(),
         fontFaceUrl: String? = null,
+        fontRenderSpec: ReaderFontRenderSpec? = null,
         systemDark: Boolean = false,
         sasayakiTextColor: Long = 0xFF000000,
         sasayakiBackgroundColor: Long = 0x6687CEEB,
@@ -87,6 +88,7 @@ internal object ReaderContentStyles {
         css(
             settings = settings,
             fontFaceUrl = fontFaceUrl,
+            fontRenderSpec = fontRenderSpec,
             systemDark = systemDark,
             sasayakiTextColor = sasayakiTextColor,
             sasayakiBackgroundColor = sasayakiBackgroundColor,
@@ -99,6 +101,7 @@ internal object ReaderContentStyles {
     fun css(
         settings: ReaderSettings = ReaderSettings(),
         fontFaceUrl: String? = null,
+        fontRenderSpec: ReaderFontRenderSpec? = null,
         systemDark: Boolean = false,
         sasayakiTextColor: Long = 0xFF000000,
         sasayakiBackgroundColor: Long = 0x6687CEEB,
@@ -109,22 +112,56 @@ internal object ReaderContentStyles {
         val textColor = settings.textColorCss(systemDark)
         val backgroundColor = settings.backgroundColorCss(systemDark)
         val normalizedFont = settings.selectedFont
-        val fontFaceFamily = normalizedFont.cssString()
-        val bodyFontFamilyCss = if (ReaderFontManager.isPublisherFont(normalizedFont)) {
+        val publisherFont = fontRenderSpec?.publisherFont == true || ReaderFontManager.isPublisherFont(normalizedFont)
+        val effectiveFontFamily = fontRenderSpec?.cssFamily ?: normalizedFont
+        val fontFaceFamily = effectiveFontFamily.cssString()
+        val bodyFontFamilyCss = if (publisherFont) {
             ""
         } else {
-            "font-family: ${normalizedFont.readerCssFontFamily(contentLanguageProfile)} !important;"
+            "font-family: ${effectiveFontFamily.readerCssFontFamily(contentLanguageProfile)} !important;"
         }
-        val fontFaceCss = fontFaceUrl
-            ?.takeUnless { ReaderFontManager.isPublisherFont(normalizedFont) }
-            ?.let { url ->
+        val bodyFontVariantCss = if (publisherFont || fontRenderSpec == null) {
+            ""
+        } else {
+            val variation = fontRenderSpec.variationSettings.toSortedMap().entries
+                .joinToString(", ") { (tag, value) -> "'$tag' ${value.cssVariationNumber()}" }
+                .takeIf(String::isNotEmpty)
+                ?.let { "font-variation-settings: $it !important;" }
+                .orEmpty()
             """
-            @font-face {
-                font-family: $fontFaceFamily;
-                src: url('${url.cssSingleQuotedUrl()}');
-            }
+            font-weight: ${fontRenderSpec.weight} !important;
+            font-style: ${if (fontRenderSpec.italic) "italic" else "normal"} !important;
+            $variation
             """.trimIndent()
-        }.orEmpty()
+        }
+        val fontFaceCss = if (fontRenderSpec != null && !publisherFont) {
+            fontRenderSpec.faces
+                .distinctBy { face -> Triple(face.url, face.variableWeightRange, face.italic) }
+                .joinToString("\n") { face ->
+                    val weight = face.variableWeightRange?.let { "${it.first} ${it.last}" }
+                        ?: face.weight.toString()
+                    """
+                    @font-face {
+                        font-family: $fontFaceFamily;
+                        src: url('${face.url.cssSingleQuotedUrl()}');
+                        font-weight: $weight;
+                        font-style: ${if (face.italic) "italic" else "normal"};
+                        font-display: swap;
+                    }
+                    """.trimIndent()
+                }
+        } else {
+            fontFaceUrl
+                ?.takeUnless { publisherFont }
+                ?.let { url ->
+                    """
+                    @font-face {
+                        font-family: $fontFaceFamily;
+                        src: url('${url.cssSingleQuotedUrl()}');
+                    }
+                    """.trimIndent()
+                }.orEmpty()
+        }
         val textSpacingCss = if (settings.layoutAdvanced) {
             """
             line-height: ${settings.lineHeight} !important;
@@ -223,6 +260,7 @@ internal object ReaderContentStyles {
                 }
                 body {
                     $bodyFontFamilyCss
+                    $bodyFontVariantCss
                     font-size: ${settings.fontSize}px !important;
                     -webkit-text-size-adjust: none !important;
                     $textSpacingCss
@@ -248,6 +286,7 @@ internal object ReaderContentStyles {
                 }
                 body {
                     $bodyFontFamilyCss
+                    $bodyFontVariantCss
                     font-size: ${settings.fontSize}px !important;
                     -webkit-text-size-adjust: none !important;
                     $textSpacingCss
@@ -304,6 +343,7 @@ internal object ReaderContentStyles {
                 }
                 body {
                     $bodyFontFamilyCss
+                    $bodyFontVariantCss
                     font-size: ${settings.fontSize}px !important;
                     -webkit-text-size-adjust: none !important;
                     $textSpacingCss
@@ -381,6 +421,9 @@ private fun String.cssSingleQuotedUrl(): String =
 
 private fun Double.cssLetterSpacingEm(): String =
     String.format(java.util.Locale.US, "%.2f", this / 100.0)
+
+private fun Float.cssVariationNumber(): String =
+    if (this % 1f == 0f) toInt().toString() else toString()
 
 internal fun Long.toReaderCssColor(includeAlpha: Boolean = false): String = when {
     includeAlpha && (this ushr 24) != 0xFFL -> {

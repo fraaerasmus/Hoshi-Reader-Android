@@ -33,6 +33,7 @@ Hoshi Reader Android 是 Hoshi Reader 的 Android/Kotlin/Jetpack Compose 原生�
 - Storage：已有 iOS 兼容 sidecar JSON 必须保持兼容。
 - Reader：保留 WebView 阅读和查词；本地 WebView 资源优先使用 `WebViewAssetLoader` 或仓库已有安全加载路径；不要启用宽泛 file URL 访问，例如 `allowUniversalAccessFromFileURLs`。
 - Reader JS/CSS：长期 reader web 代码放在 `app/src/main/assets/hoshi-web`；不要新增大段 Kotlin 字符串脚本。Kotlin 侧只保留小型 typed command、参数转义、asset 加载、动态配置填充和桥接调用。
+- Reader popup 坐标：`popup.js` 的 `hoshiPopupGeometry` 是 CSS `zoom` 下 popup 坐标换算、滚动位置和元素对齐的唯一入口。popup 代码不得把 `offsetTop` 等未缩放 layout 坐标与 `scrollTop` / `getBoundingClientRect()` 等视觉滚动坐标混用，也不得另写缩放补偿。
 - Reader web 共享语义：`reader-text-semantics.js` 是三种 reader mode 共享的文本 normalization、
   matchable/raw 计数和 matchable-character 判断入口；`reader-dom-text.js` 是 paginated/continuous
   共享的 live DOM ruby/text normalization 入口；`reader-media-semantics.js` 是三种 reader mode
@@ -68,6 +69,7 @@ Hoshi Reader Android 是 Hoshi Reader 的 Android/Kotlin/Jetpack Compose 原生�
 
 ## 用户可见 UI
 
+- 本项目不以 Android 无障碍服务或屏幕阅读器（包括 TalkBack）为支持目标。除非用户明确要求，设计、实现、审查和验收时不要为无障碍专门增加或要求 `contentDescription`、Compose accessibility semantics、TalkBack 选中状态或播报、无障碍焦点/遍历顺序及其他屏幕阅读器适配；不得仅因缺少这些适配将变更判定为存在缺陷。已有无障碍专用代码也不属于必须保留的兼容行为，可在确认不影响普通用户交互后删除，以减少代码量和维护负担。
 - 所有用户可见 UI 字符串必须使用 Android 本地化资源。
 - Compose 使用 `stringResource()` / `pluralStringResource()`。
 - 非 UI 层发出的可见消息应使用 `UiText` 或等价资源引用，不应持有 `Context`。

@@ -3,6 +3,7 @@ package moe.antimony.hoshi.epub
 import android.content.ContentResolver
 import android.net.Uri
 import java.io.File
+import java.io.InputStream
 import java.time.Instant
 import java.util.zip.CRC32
 import java.util.zip.ZipEntry
@@ -412,7 +413,7 @@ class BookFileDataSource(
     }
 
     suspend fun createBookDirectoryForImportedTitle(title: String): File {
-        val safeTitle = title.sanitizeImportedBookTitle()
+        val safeTitle = title.toImportedBookStorageName()
         require(safeTitle.isNotBlank()) { "EPUB title is empty" }
         return createBookDirectory(safeTitle)
     }
@@ -497,49 +498,43 @@ class BookImportDataSource(
 ) {
     suspend fun importBook(contentResolver: ContentResolver, uri: Uri): File {
         val displayName = contentResolver.validateImportFile(uri, ImportFileType.Epub)
-        return importBook(displayName) { contentResolver.openInputStream(uri) }
+        contentResolver.openInputStream(uri).use { input ->
+            importBook(
+                displayName = displayName,
+                input = requireNotNull(input) { "Unable to open selected EPUB" },
+            )
+        }
     }
 
     /** Imports an EPUB already on disk (e.g. an OPDS download) through the same byte-preserving path as the picker. */
     suspend fun importBook(file: File, displayName: String): File {
         if (!ImportFileType.Epub.matchesDisplayName(displayName)) throw ImportFileType.Epub.unsupportedFileError(displayName)
-        return importBook(displayName) { file.inputStream() }
+        return file.inputStream().use { input -> importBook(displayName = displayName, input = input) }
     }
 
-    private suspend fun importBook(displayName: String, openInput: () -> java.io.InputStream?): File = withContext(ioDispatcher) {
+    internal suspend fun importBook(displayName: String, input: InputStream): File = withContext(ioDispatcher) {
         val fallbackTitle = displayName
             .substringBeforeLast('.', missingDelimiterValue = displayName)
             .takeIf { it.isNotBlank() }
         val importRoot = File(filesDir, "ImportTemp/${UUID.randomUUID()}").canonicalFile
         val archiveFile = importRoot.resolve("source.epub").canonicalFile
         val extractedRoot = importRoot.resolve("extracted").canonicalFile
-        openInput().use { input ->
-            requireNotNull(input) { "Unable to open selected EPUB" }
-            runCatching {
-                importRoot.mkdirs()
-                archiveFile.outputStream().use { output -> input.copyTo(output) }
-                archiveExtractor.extract(archiveFile, extractedRoot)
-            }.onFailure {
-                importRoot.deleteRecursively()
-                throw it
-            }
-        }
-        val parsedBook = runCatching { parser.parse(extractedRoot, fallbackTitle = fallbackTitle) }
-            .onFailure { importRoot.deleteRecursively() }
-            .getOrThrow()
-        val targetRoot = fileDataSource.createBookDirectoryForImportedTitle(parsedBook.title)
-        if (targetRoot.listFiles()?.isNotEmpty() == true) {
-            importRoot.deleteRecursively()
-            targetRoot
-        } else {
-            try {
+        try {
+            importRoot.mkdirs()
+            archiveFile.outputStream().use { output -> input.copyTo(output) }
+            archiveExtractor.extract(archiveFile, extractedRoot)
+            val parsedBook = parser.parse(extractedRoot, fallbackTitle = fallbackTitle)
+            val targetRoot = fileDataSource.createBookDirectoryForImportedTitle(parsedBook.title)
+            if (targetRoot.listFiles()?.isNotEmpty() == true) {
+                targetRoot
+            } else {
                 targetRoot.mkdirs()
                 val packedEpub = targetRoot.resolve("${targetRoot.name}.epub")
                 archiveFile.copyTo(packedEpub, overwrite = true)
                 targetRoot
-            } finally {
-                importRoot.deleteRecursively()
             }
+        } finally {
+            importRoot.deleteRecursively()
         }
     }
 }
@@ -725,11 +720,6 @@ private val bookSidecarFileNames = setOf(
     SASAYAKI_MATCH_FILE_NAME,
     SASAYAKI_PLAYBACK_FILE_NAME,
 )
-
-private fun String.sanitizeImportedBookTitle(): String =
-    split(Regex("[\\\\/:*?\"<>|\\n\\r\\u0000-\\u001F]"))
-        .joinToString("_")
-        .trim()
 
 private fun String.sanitizeRootFileName(): String =
     split(Regex("[\\\\/:*?\"<>|\\n\\r\\u0000-\\u001F]"))

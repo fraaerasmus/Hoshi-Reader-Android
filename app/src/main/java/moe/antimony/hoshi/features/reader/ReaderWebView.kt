@@ -82,8 +82,7 @@ import moe.antimony.hoshi.features.dictionary.openPopupExternalLink
 import moe.antimony.hoshi.features.dictionary.withLookupPopupVisualOptions
 import moe.antimony.hoshi.features.sasayaki.BookSasayakiPlaybackRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiAudioRepository
-import moe.antimony.hoshi.features.sasayaki.SasayakiAudiobookChapter
-import moe.antimony.hoshi.features.sasayaki.SasayakiAudiobookMetadata
+import moe.antimony.hoshi.features.sasayaki.SasayakiAudiobookInfo
 import moe.antimony.hoshi.features.sasayaki.SasayakiCueRange
 import moe.antimony.hoshi.features.sasayaki.SasayakiCueRevealSource
 import moe.antimony.hoshi.features.sasayaki.SasayakiPlayer
@@ -122,6 +121,7 @@ fun ReaderWebView(
     val appContainer = LocalHoshiUiDependencies.current
     val scope = rememberCoroutineScope()
     val fontManager = appContainer.readerFontManager
+    val fontLibraryState by fontManager.libraryState.collectAsStateWithLifecycle()
     val readerImageResourceBridge = remember(book, fontManager) {
         ReaderWebResourceBridge(book, fontManager)
     }
@@ -164,11 +164,8 @@ fun ReaderWebView(
         isSasayakiPlaybackLoaded = true
     }
     val sasayakiAudioRepository = remember(bookRoot) { bookRoot?.let(::SasayakiAudioRepository) }
-    var sasayakiAudiobookChapters by remember(bookRoot) {
-        mutableStateOf<List<SasayakiAudiobookChapter>>(emptyList())
-    }
-    var sasayakiAudiobookMetadata by remember(bookRoot) {
-        mutableStateOf(SasayakiAudiobookMetadata.Empty)
+    var sasayakiAudiobookInfo by remember(bookRoot) {
+        mutableStateOf(SasayakiAudiobookInfo.Empty)
     }
     val sasayakiCoverFile = remember(bookCoverFile) {
         bookCoverFile?.takeIf { it.isFile }
@@ -248,6 +245,7 @@ fun ReaderWebView(
         audioSettings,
         ankiUiState.popupSettings,
         fontManager,
+        fontLibraryState.revision,
         effectiveSettings.popupScale,
         popupContentLanguageProfile,
     ) {
@@ -779,13 +777,18 @@ fun ReaderWebView(
                         sasayakiAudioPath = sasayakiPlayer?.exportCueAudio(cue, contextPopup.state.selection.sentence)?.absolutePath,
                     )
                 } ?: contextPopup.state.ankiContext
-                ankiViewModel.mineEntryAsync(message.payloadJson, ankiContext) { mined ->
+                ankiViewModel.mineEntryAsync(message.formatId, message.payloadJson, ankiContext) { mined ->
                     replyReaderPopupMessage(message.popupId, messageId, mined.toString())
                 }
             }
             is ReaderLookupPopupBridgeMessage.DuplicateCheck -> {
-                ankiViewModel.duplicateCheckAsync(message.expression) { isDuplicate ->
-                    replyReaderPopupMessage(message.popupId, message.messageId ?: return@duplicateCheckAsync, isDuplicate.toString())
+                ankiViewModel.duplicateStatesAsync(message.valuesByHandlebar) { states ->
+                    replyReaderPopupMessage(message.popupId, message.messageId ?: return@duplicateStatesAsync, readerPopupBooleanMapJson(states))
+                }
+            }
+            is ReaderLookupPopupBridgeMessage.ShowNotes -> {
+                ankiViewModel.showNotesAsync(message.formatId, message.valuesByHandlebar) { shown ->
+                    replyReaderPopupMessage(message.popupId, message.messageId ?: return@showNotesAsync, shown.toString())
                 }
             }
             is ReaderLookupPopupBridgeMessage.LookupRedirect -> {
@@ -814,6 +817,23 @@ fun ReaderWebView(
                         )
                 }
                 replyReaderPopupMessage(message.popupId, message.messageId ?: return, results.size.toString())
+            }
+            is ReaderLookupPopupBridgeMessage.KanjiRedirect -> {
+                val result = dictionaryRepository.lookupKanji(message.kanji)
+                replyReaderPopupMessage(
+                    message.popupId,
+                    message.messageId ?: return,
+                    if (result.entries.isEmpty()) "null" else LookupPopupHtml.kanjiJsonString(result),
+                )
+            }
+            is ReaderLookupPopupBridgeMessage.KanjiRedirectCommitted -> {
+                val current = readerPopupHistories[message.popupId] ?: ReaderPopupHistoryCounts()
+                readerPopupHistories = readerPopupHistories + (
+                    message.popupId to current.copy(
+                        backCount = current.backCount + 1,
+                        forwardCount = 0,
+                    )
+                )
             }
             is ReaderLookupPopupBridgeMessage.GetEntry -> {
                 val entry = popupById(message.popupId)?.state?.results?.getOrNull(message.index)
@@ -1418,19 +1438,12 @@ fun ReaderWebView(
     ) {
         val repository = sasayakiAudioRepository
         val playback = currentSasayakiPlayback
-        sasayakiAudiobookChapters = if (repository != null && playback != null) {
+        sasayakiAudiobookInfo = if (repository != null && playback != null) {
             withContext(Dispatchers.IO) {
-                repository.audiobookChapters(playback, context.contentResolver)
+                repository.inspectAudiobook(playback, context)
             }
         } else {
-            emptyList()
-        }
-        sasayakiAudiobookMetadata = if (repository != null && playback != null) {
-            withContext(Dispatchers.IO) {
-                repository.audiobookMetadata(playback, context)
-            }
-        } else {
-            SasayakiAudiobookMetadata.Empty
+            SasayakiAudiobookInfo.Empty
         }
     }
     DisposableEffect(Unit) {
@@ -1491,12 +1504,23 @@ fun ReaderWebView(
             sasayakiEnabled = sasayakiSettings.enabled,
             hasSasayakiAudio = sasayakiPlayer?.hasAudio == true,
             textEditorFocused = textEditorFocused,
+            hasLookupPopup = stateHolder.lookupPopups.isNotEmpty(),
         )
         if (!keyEvent.consumed) return@rememberUpdatedState false
         when (val action = keyEvent.action) {
             is ReaderHardwareKeyAction.ReaderNavigation -> navigateReaderPage(action.direction)
             ReaderHardwareKeyAction.SasayakiTogglePlayback -> {
                 sasayakiPlayer?.togglePlayback()
+            }
+            is ReaderHardwareKeyAction.PopupTermNavigation -> {
+                val direction = when (action.direction) {
+                    PopupTermNavigationDirection.Previous -> "previous"
+                    PopupTermNavigationDirection.Next -> "next"
+                }
+                webView?.evaluateJavascript(
+                    "window.hoshiReaderPopupHost && window.hoshiReaderPopupHost.navigateTopTerm('$direction')",
+                    null,
+                )
             }
             ReaderHardwareKeyAction.SasayakiSeekBackward -> {
                 sasayakiPlayer?.previousCue()
@@ -1989,7 +2013,7 @@ fun ReaderWebView(
                     stateHolder.openSasayakiFromMenu(
                         sasayakiDefaultSheetTab(
                             hasAudio = sasayakiPlayer?.hasAudio == true,
-                            hasChapters = sasayakiAudiobookChapters.isNotEmpty(),
+                            hasChapters = sasayakiAudiobookInfo.chapters.isNotEmpty(),
                         ),
                     )
                 }
@@ -2058,7 +2082,7 @@ fun ReaderWebView(
                 settings = sasayakiSettings,
                 bookTitle = book.title,
                 bookCoverFile = sasayakiCoverFile,
-                audiobookMetadata = sasayakiAudiobookMetadata,
+                audiobookInfo = sasayakiAudiobookInfo,
                 subtitleMatchData = sasayakiSheetMatchData,
                 matchDependencies = bookEntry?.let { entry ->
                     SasayakiMatchDependencies(
@@ -2067,7 +2091,6 @@ fun ReaderWebView(
                         epubBookParser = appContainer.epubBookParser,
                     )
                 },
-                chapters = sasayakiAudiobookChapters,
                 selectedTab = stateHolder.selectedSasayakiTab,
                 onSelectedTabChange = stateHolder::selectSasayakiTab,
                 onSubtitleMatchUpdated = { matchData ->

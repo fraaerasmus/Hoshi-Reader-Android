@@ -5,6 +5,7 @@ import vm from 'node:vm';
 
 const readerPaginatedUrl = new URL('../../main/assets/hoshi-web/reader/reader-paginated.js', import.meta.url);
 const readerContinuousUrl = new URL('../../main/assets/hoshi-web/reader/reader-continuous.js', import.meta.url);
+const readerViewportUrl = new URL('../../main/assets/hoshi-web/reader/reader-viewport.js', import.meta.url);
 const readerSasayakiUrl = new URL('../../main/assets/hoshi-web/reader/reader-sasayaki.js', import.meta.url);
 const readerTextSemanticsUrl = new URL('../../main/assets/hoshi-web/reader/reader-text-semantics.js', import.meta.url);
 const readerDomTextUrl = new URL('../../main/assets/hoshi-web/reader/reader-dom-text.js', import.meta.url);
@@ -26,6 +27,7 @@ function readerSource(url, options = {}) {
     const readerSasayaki = fs.readFileSync(readerSasayakiUrl, 'utf8');
     return fs.readFileSync(url, 'utf8')
         .replace('__HOSHI_HIGHLIGHTS_SCRIPT__', options.highlightsScript ?? '')
+        .replace('__HOSHI_READER_VIEWPORT_SCRIPT__', fs.readFileSync(readerViewportUrl, 'utf8'))
         .replace('__HOSHI_READER_SASAYAKI_SCRIPT__', readerSasayaki)
         .replace('__HOSHI_READER_TEXT_SEMANTICS_SCRIPT__', options.textSemanticsScript ?? readerTextSemanticsSource())
         .replace('__HOSHI_READER_DOM_TEXT_SCRIPT__', options.domTextScript ?? readerDomTextSource())
@@ -1125,6 +1127,27 @@ test('paginated Sasayaki media stop plan lists every image page before target cu
         Array.from(stops, (stop) => stop.scroll),
         [800, 1_600],
     );
+});
+
+test('paginated Sasayaki media stop plan ignores wide inline gaiji', () => {
+    const body = new TestElement('body');
+    body.scrollHeight = 2_400;
+    body.scrollWidth = 480;
+    body.scrollTop = 0;
+    body.scrollLeft = 0;
+    body.appendChild(new TestText('一'));
+    const gaijiWide = imgAt(900, 1_000);
+    gaijiWide.classList.add('gaiji-wide');
+    body.appendChild(gaijiWide);
+    const target = new TestText('二三');
+    target.rects = [testRect(1_700, 1_730)];
+    body.appendChild(target);
+    const { reader } = loadReader(body, readerPaginatedUrl);
+    reader.pageHeight = 800;
+
+    const stops = reader.sasayakiMediaStopsBeforeCue({ id: 'cue', start: 1, length: 2 });
+
+    assert.deepEqual(Array.from(stops), []);
 });
 
 test('paginated Sasayaki media stop plan includes the current image page before target cue', () => {

@@ -79,6 +79,7 @@ internal interface BookshelfRepository {
     suspend fun setBookProfile(entry: BookEntry, profileId: String?)
     suspend fun changeSort(sortOption: BookSortOption)
     suspend fun changeShowReading(showReading: Boolean)
+    suspend fun changeCoverMode(coverMode: BookshelfCoverMode)
     suspend fun rebuildLookupQuery()
     suspend fun syncBook(
         entry: BookEntry,
@@ -303,6 +304,10 @@ internal class AndroidBookshelfRepository @Inject constructor(
         settingsRepository.update { it.copy(showReading = showReading) }
     }
 
+    override suspend fun changeCoverMode(coverMode: BookshelfCoverMode) {
+        settingsRepository.update { it.copy(coverMode = coverMode) }
+    }
+
     override suspend fun rebuildLookupQuery() {
         dictionaryRepository.rebuildLookupQuery()
     }
@@ -336,6 +341,7 @@ internal class AndroidBookshelfRepository @Inject constructor(
             epub = bookRepository.epubFile(root, previous)?.name ?: previous?.epub,
             profileId = previous?.profileId,
             bookLanguage = previous?.bookLanguage ?: parsedBook.language,
+            author = parsedBook.author ?: previous?.author,
         )
         bookRepository.saveMetadata(root, metadata)
     }

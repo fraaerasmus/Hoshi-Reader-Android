@@ -1,5 +1,7 @@
 package de.manhhao.hoshi
 
+// NOTE: constructed by the kaihouguide JNI engine; keep the constructor exactly.
+// `kanjiCount` is a computed adapter — the kaihouguide engine has no kanji dictionaries.
 class ImportResult(
     val success: Boolean,
     val title: String,
@@ -8,7 +10,9 @@ class ImportResult(
     val freqCount: Long,
     val pitchCount: Long,
     val mediaCount: Long,
-)
+) {
+    val kanjiCount: Long get() = 0
+}
 
 class DictionaryStyle(
     val dictName: String,
@@ -32,15 +36,58 @@ class FrequencyEntry(
     val frequencies: Array<Frequency>,
 )
 
-// NOTE: constructed by the kaihouguide JNI engine; keep the constructor (dictName,
-// pitchPositions) exactly. `transcriptions` is a computed adapter so upstream's
-// app code compiles — the kaihouguide engine has no IPA transcriptions.
+class Pitch(
+    val position: Int,
+    val pattern: String,
+    val nasal: IntArray,
+    val devoice: IntArray,
+)
+
+// NOTE: constructed by the kaihouguide JNI engine; keep the primary constructor (dictName,
+// pitchPositions) exactly. `pitches`/`transcriptions` are computed adapters so upstream's
+// complete-pitch popup code compiles — the kaihouguide engine only has downstep positions
+// and no IPA transcriptions. The secondary constructor exists for upstream's tests.
 class PitchEntry(
     val dictName: String,
     val pitchPositions: IntArray,
 ) {
-    val transcriptions: Array<String> get() = emptyArray()
+    private var explicitPitches: Array<Pitch>? = null
+    private var explicitTranscriptions: Array<String>? = null
+
+    constructor(
+        dictName: String,
+        pitches: Array<Pitch>,
+        transcriptions: Array<String>,
+    ) : this(dictName, IntArray(pitches.size) { pitches[it].position }) {
+        explicitPitches = pitches
+        explicitTranscriptions = transcriptions
+    }
+
+    val pitches: Array<Pitch>
+        get() = explicitPitches
+            ?: Array(pitchPositions.size) { Pitch(position = pitchPositions[it], pattern = "", nasal = IntArray(0), devoice = IntArray(0)) }
+
+    val transcriptions: Array<String> get() = explicitTranscriptions ?: emptyArray()
 }
+
+class KanjiStat(
+    val key: String,
+    val value: String,
+)
+
+class KanjiEntry(
+    val dictName: String,
+    val onyomi: String,
+    val kunyomi: String,
+    val tags: String,
+    val definitions: Array<String>,
+    val stats: Array<KanjiStat>,
+)
+
+class KanjiResult(
+    val character: String,
+    val entries: Array<KanjiEntry>,
+)
 
 class TermResult(
     val expression: String,
@@ -105,6 +152,17 @@ object HoshiDicts {
         freqPaths: Array<String>,
         pitchPaths: Array<String>,
     )
+
+    // Kanji dictionaries are an upstream-engine feature; the kaihouguide bridge ignores them.
+    fun rebuildQuery(
+        session: Long,
+        termPaths: Array<String>,
+        freqPaths: Array<String>,
+        pitchPaths: Array<String>,
+        @Suppress("UNUSED_PARAMETER") kanjiPaths: Array<String>,
+    ) = rebuildQuery(session, termPaths, freqPaths, pitchPaths)
+
+    fun queryKanji(session: Long, kanji: String): KanjiResult = KanjiResult(kanji, emptyArray())
 
     external fun setLookupLanguage(session: Long, language: String)
     external fun lookup(session: Long, text: String, maxResults: Int, scanLength: Int): Array<LookupResult>

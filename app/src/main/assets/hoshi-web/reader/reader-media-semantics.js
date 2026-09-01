@@ -1,16 +1,103 @@
 (function(global) {
   'use strict';
 
+  var SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
+  var GAIJI_TEXT_COLOR_FILTER_ID = 'hoshi-gaiji-text-color-filter';
+
   function documentForNode(node) {
     return (node && node.ownerDocument) || global.document || (typeof document !== 'undefined' ? document : null);
   }
 
   function isGaijiImage(img) {
-    return !!(img && img.classList && (img.classList.contains('gaiji') || img.classList.contains('gaiji-line')));
+    return !!(img && img.classList && (
+      img.classList.contains('gaiji') ||
+      img.classList.contains('gaiji-line') ||
+      img.classList.contains('gaiji-wide')
+    ));
   }
 
   function isLargeImage(img) {
     return Number(img && img.naturalWidth || 0) > 256 || Number(img && img.naturalHeight || 0) > 256;
+  }
+
+  function appendSvgElement(parent, tagName, attributes) {
+    var element = parent.ownerDocument.createElementNS(SVG_NAMESPACE, tagName);
+    Object.keys(attributes || {}).forEach(function(name) {
+      element.setAttribute(name, attributes[name]);
+    });
+    parent.appendChild(element);
+    return element;
+  }
+
+  function ensureGaijiTextColorFilter(doc) {
+    if (!doc || !doc.documentElement || !doc.createElementNS) return;
+    if (doc.getElementById && doc.getElementById(GAIJI_TEXT_COLOR_FILTER_ID)) return;
+
+    var svg = doc.createElementNS(SVG_NAMESPACE, 'svg');
+    svg.setAttribute('width', '0');
+    svg.setAttribute('height', '0');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    svg.setAttribute(
+      'style',
+      'position: absolute !important; width: 0 !important; height: 0 !important; ' +
+        'overflow: hidden !important; pointer-events: none !important'
+    );
+
+    var filter = appendSvgElement(svg, 'filter', {
+      id: GAIJI_TEXT_COLOR_FILTER_ID,
+      x: '-10%',
+      y: '-10%',
+      width: '120%',
+      height: '120%',
+      'color-interpolation-filters': 'sRGB'
+    });
+    appendSvgElement(filter, 'feColorMatrix', {
+      'in': 'SourceGraphic',
+      result: 'inverseLuminance',
+      type: 'matrix',
+      values: '0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -0.2126 -0.7152 -0.0722 0 1'
+    });
+    appendSvgElement(filter, 'feComposite', {
+      'in': 'inverseLuminance',
+      in2: 'SourceAlpha',
+      operator: 'in',
+      result: 'glyphMask'
+    });
+    var componentTransfer = appendSvgElement(filter, 'feComponentTransfer', {
+      'in': 'glyphMask',
+      result: 'solidStrokeMask'
+    });
+    appendSvgElement(componentTransfer, 'feFuncA', {
+      type: 'linear',
+      slope: '1.1'
+    });
+    appendSvgElement(filter, 'feFlood', {
+      result: 'textColor',
+      style: 'flood-color: var(--hoshi-text-color)'
+    });
+    appendSvgElement(filter, 'feComposite', {
+      'in': 'textColor',
+      in2: 'solidStrokeMask',
+      operator: 'in'
+    });
+    doc.documentElement.appendChild(svg);
+  }
+
+  function replaceFailedGaiji(img) {
+    if (!isGaijiImage(img) || !img.parentNode) return;
+    var doc = documentForNode(img);
+    if (!doc || !doc.createElement) return;
+    var alt = (img.getAttribute && img.getAttribute('alt')) || '';
+    if (!alt.trim()) return;
+    var fallback = doc.createElement('span');
+    fallback.className = 'hoshi-gaiji-fallback';
+    if (Array.from(alt.trim()).length === 1) {
+      fallback.classList.add('hoshi-gaiji-fallback-single');
+    }
+    fallback.setAttribute('data-hoshi-gaiji-alt', alt);
+    img.parentNode.insertBefore(fallback, img);
+    img.parentNode.removeChild(img);
   }
 
   function imageSource(img) {
@@ -88,24 +175,27 @@
       }
       if (resolve) resolve();
     };
+    var fail = function() {
+      replaceFailedGaiji(img);
+      if (resolve) resolve();
+    };
     if (img.complete) {
       if ((Number(img.naturalWidth) || 0) > 0) {
         mark();
-      } else if (resolve) {
-        resolve();
+      } else {
+        fail();
       }
       return;
     }
     img.onload = mark;
-    if (resolve) {
-      img.onerror = function() { resolve(); };
-    }
+    img.onerror = fail;
   }
 
   function setupReaderImages(scope, options) {
     options = options || {};
     scope = scope || global.document || (typeof document !== 'undefined' ? document : null);
     if (!scope || !scope.querySelectorAll) return Promise.resolve();
+    ensureGaijiTextColorFilter(documentForNode(scope));
     setupSvgImages(scope, options);
     var images = Array.from(scope.querySelectorAll('img'));
     var waitForImages = options.waitForImages !== false;

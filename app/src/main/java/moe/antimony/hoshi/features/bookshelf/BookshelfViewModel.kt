@@ -162,6 +162,7 @@ internal class BookshelfViewModel : ViewModel {
         }
         runLoading(
             errorPrefix = UiText.Resource(R.string.bookshelf_import_failed),
+            preferErrorPrefix = true,
             onComplete = { importGate.finish(importKey) },
             blockingProgressMessage = displayName
                 ?.takeIf { it.isNotBlank() }
@@ -542,6 +543,13 @@ internal class BookshelfViewModel : ViewModel {
         }
     }
 
+    fun changeCoverMode(coverMode: BookshelfCoverMode) {
+        _uiState.update { it.copy(coverMode = coverMode) }
+        workScope.launch {
+            repository.changeCoverMode(coverMode)
+        }
+    }
+
     fun startSelecting() {
         _uiState.update { it.copy(isSelecting = true, selectedBookIds = emptySet()) }
     }
@@ -721,6 +729,7 @@ internal class BookshelfViewModel : ViewModel {
                 ),
                 sortOption = result.settings.sortOption,
                 showReading = result.settings.showReading,
+                coverMode = result.settings.coverMode,
                 selectedBookIds = validSelectedIds,
                 hasLoadedBooks = true,
                 isLoading = false,
@@ -814,6 +823,7 @@ internal class BookshelfViewModel : ViewModel {
 
     private fun runLoading(
         errorPrefix: UiText,
+        preferErrorPrefix: Boolean = false,
         onComplete: () -> Unit = {},
         blockingProgressMessage: UiText? = null,
         replaceShelfWithLoading: Boolean = true,
@@ -833,7 +843,11 @@ internal class BookshelfViewModel : ViewModel {
             } catch (error: Throwable) {
                 _uiState.update {
                     it.copy(
-                        errorMessage = error.localizedMessage?.let(UiText::Literal) ?: errorPrefix,
+                        errorMessage = if (preferErrorPrefix) {
+                            errorPrefix
+                        } else {
+                            error.localizedMessage?.let(UiText::Literal) ?: errorPrefix
+                        },
                     )
                 }
             } finally {
