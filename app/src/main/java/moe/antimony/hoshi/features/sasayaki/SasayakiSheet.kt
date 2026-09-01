@@ -210,7 +210,7 @@ internal fun SasayakiSheet(
                     SasayakiSheetTab.Settings -> SasayakiSettingsTab(
                         player = player,
                         settings = settings,
-                        chapters = chapters,
+                        chapters = audiobookInfo.chapters,
                         skipActionMenuExpanded = skipActionMenuExpanded,
                         onSkipActionMenuExpandedChange = { skipActionMenuExpanded = it },
                         onSettingsChange = onSettingsChange,

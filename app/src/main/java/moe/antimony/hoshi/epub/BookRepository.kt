@@ -498,7 +498,7 @@ class BookImportDataSource(
 ) {
     suspend fun importBook(contentResolver: ContentResolver, uri: Uri): File {
         val displayName = contentResolver.validateImportFile(uri, ImportFileType.Epub)
-        contentResolver.openInputStream(uri).use { input ->
+        return contentResolver.openInputStream(uri).use { input ->
             importBook(
                 displayName = displayName,
                 input = requireNotNull(input) { "Unable to open selected EPUB" },

@@ -101,6 +101,27 @@ a strong bias toward adopting upstream:
 
 ## History log
 
+### 2026-09-01 — Merge upstream post-v1.3.3
+
+Merged upstream through `c10f17a` (v1.3.3 plus its follow-up fixes): Anki card formats
+and term categories, Kanji dictionaries with complete pitch data, recommended font
+families, bookshelf cover privacy modes, gaiji rendering fixes, the XHTML viewport fix,
+swipe threshold, popup term navigation via volume keys, and `hoshi://search` deep links —
+all taken as-is. The fork's reader features (two-page view, edge-swipe brightness/volume,
+Sasayaki hardware keys) were re-threaded onto upstream's new touch listener and key
+handling, and the fork's font-manager cache layer was dropped in favour of upstream's
+family/variant library.
+
+The dictionary-engine seam grew: the kaihouguide bridge has no Kanji dictionaries or
+H/L pitch patterns, so `HoshiDicts.kt` now carries computed `pitches`/`kanjiCount`
+adapters, a Kotlin `rebuildQuery` overload that ignores kanji paths, and a stub
+`queryKanji`, keeping upstream's popup code compiling against our engine.
+
+Just before the merge two fork features landed on upstream-owned files: KOReader
+progress sync (kosync, `features/kosync/`, hooked into the reader route) and OPDS
+catalog import (`features/opds/`, hooked into the bookshelf import menu and the
+byte-preserving EPUB import path). Both survived the merge without conflicts.
+
 ### 2026-06-21 — Merge upstream v1.2.2
 
 Merged upstream through **v1.2.2** (`60a5263`) — reader in-book search, Android 8.0/8.1
