@@ -37,6 +37,7 @@ import moe.antimony.hoshi.features.backup.BackupSettingsView
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.reader.ReaderStatisticsSettingsView
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsView
+import moe.antimony.hoshi.features.kosync.KosyncSettingsView
 import moe.antimony.hoshi.features.sync.SyncSettingsView
 import moe.antimony.hoshi.features.wallpaper.BookCoverWallpaperSettingsView
 
@@ -82,6 +83,13 @@ fun AdvancedSettingsView(
     }
     if (destination == AdvancedDestination.Syncing) {
         SyncSettingsView(
+            onClose = { destination = null },
+            modifier = modifier,
+        )
+        return
+    }
+    if (destination == AdvancedDestination.KoreaderSync) {
+        KosyncSettingsView(
             onClose = { destination = null },
             modifier = modifier,
         )
@@ -155,6 +163,7 @@ internal enum class AdvancedDestination {
     Sasayaki,
     Backup,
     Syncing,
+    KoreaderSync,
     AnkiConnect,
     BookCoverWallpaper,
 }
@@ -208,6 +217,11 @@ internal fun advancedSettingsSections(): List<AdvancedSettingsSection> =
                 AdvancedSettingsRow(
                     titleRes = R.string.sync_ttu_sync,
                     destination = AdvancedDestination.Syncing,
+                    icon = AdvancedSettingsIcon.Cloud,
+                ),
+                AdvancedSettingsRow(
+                    titleRes = R.string.kosync_title,
+                    destination = AdvancedDestination.KoreaderSync,
                     icon = AdvancedSettingsIcon.Cloud,
                 ),
                 AdvancedSettingsRow(

@@ -531,6 +531,17 @@
     <string name="sync_status_connected" comment="Sync connection state, intentionally matching AnkiConnect connection state.">Connected</string>
     <string name="sync_status_not_connected" comment="Sync connection state, intentionally matching AnkiConnect connection state.">Not connected</string>
     <string name="sync_status_missing_configuration">OAuth client not configured</string>
+    <string name="kosync_title">KOReader Sync</string>
+    <string name="kosync_description">Sync your reading position with a KOReader progress sync (kosync) server, alongside ッツ Sync.</string>
+    <string name="kosync_section_account">Account</string>
+    <string name="kosync_server">Server</string>
+    <string name="kosync_username">Username</string>
+    <string name="kosync_password">Password</string>
+    <string name="kosync_login">Log in</string>
+    <string name="kosync_login_failed_format">Login failed: %1$s</string>
+    <string name="kosync_auto_sync_description">Pull progress when a book opens or returns to the foreground, and push after you read.</string>
+    <string name="kosync_push">Push progress to KOReader</string>
+    <string name="kosync_push_description">Send your position whenever it is saved; KOReader opens at the same paragraph.</string>
     <string name="update_downloaded_title">Update Downloaded</string>
     <string name="update_downloaded_message_format" comment="Downloaded update prompt message, intentionally matching About update status.">Update %1$s has been downloaded.</string>
     <string name="update_available_title">Update Available</string>

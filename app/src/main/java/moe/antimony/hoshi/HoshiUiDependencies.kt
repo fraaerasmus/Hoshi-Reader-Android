@@ -21,6 +21,8 @@ import moe.antimony.hoshi.features.statistics.StatisticsDateProvider
 import moe.antimony.hoshi.features.storage.StorageCleanupRepository
 import moe.antimony.hoshi.features.sync.DeviceCodeDriveAuthorizer
 import moe.antimony.hoshi.features.sync.SyncManager
+import moe.antimony.hoshi.features.kosync.KosyncManager
+import moe.antimony.hoshi.features.kosync.KosyncSettingsRepository
 import moe.antimony.hoshi.features.sync.SyncSettingsRepository
 import moe.antimony.hoshi.features.update.AndroidUpdateDownloadManager
 import moe.antimony.hoshi.features.update.UpdateCheckService
@@ -42,6 +44,8 @@ internal class HoshiUiDependencies @Inject constructor(
     private val sasayakiPlaybackServiceRuntimeProvider: Lazy<SasayakiPlaybackServiceRuntime>,
     private val statisticsDateProviderProvider: Lazy<StatisticsDateProvider>,
     private val syncSettingsRepositoryProvider: Lazy<SyncSettingsRepository>,
+    private val kosyncSettingsRepositoryProvider: Lazy<KosyncSettingsRepository>,
+    private val kosyncManagerProvider: Lazy<KosyncManager>,
     private val updateSettingsRepositoryProvider: Lazy<UpdateSettingsRepository>,
     private val updateDownloadStoreProvider: Lazy<UpdateDownloadStore>,
     private val epubBookParserProvider: Lazy<EpubBookParser>,
@@ -69,6 +73,8 @@ internal class HoshiUiDependencies @Inject constructor(
     val sasayakiPlaybackServiceRuntime: SasayakiPlaybackServiceRuntime get() = sasayakiPlaybackServiceRuntimeProvider.get()
     val statisticsDateProvider: StatisticsDateProvider get() = statisticsDateProviderProvider.get()
     val syncSettingsRepository: SyncSettingsRepository get() = syncSettingsRepositoryProvider.get()
+    val kosyncSettingsRepository: KosyncSettingsRepository get() = kosyncSettingsRepositoryProvider.get()
+    val kosyncManager: KosyncManager get() = kosyncManagerProvider.get()
     val updateSettingsRepository: UpdateSettingsRepository get() = updateSettingsRepositoryProvider.get()
     val updateDownloadStore: UpdateDownloadStore get() = updateDownloadStoreProvider.get()
     val epubBookParser: EpubBookParser get() = epubBookParserProvider.get()

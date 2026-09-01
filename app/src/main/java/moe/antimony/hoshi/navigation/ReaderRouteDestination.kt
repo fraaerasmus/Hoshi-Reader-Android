@@ -34,6 +34,8 @@ import kotlinx.coroutines.flow.first
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.BookMetadata
+import moe.antimony.hoshi.epub.EpubBook
+import moe.antimony.hoshi.features.kosync.KosyncResult
 import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
 import moe.antimony.hoshi.features.sync.SyncDirection
 import moe.antimony.hoshi.features.sync.SyncResult
@@ -59,6 +61,8 @@ internal fun ReaderRouteDestination(
         stringResource(R.string.book_cover_wallpaper_ireader_not_selected_error)
     val syncSettings = appContainer.syncSettingsRepository.settings.collectAsLoadedSettings()
     val sasayakiSettings = appContainer.sasayakiSettingsRepository.settings.collectAsLoadedSettings()
+    val kosyncSettings = appContainer.kosyncSettingsRepository.settings.collectAsLoadedSettings()
+    val kosyncAutoSync = kosyncSettings?.let { it.enabled && it.autoSyncEnabled } == true
     val autoSyncState = ReaderRouteAutoSyncState(
         syncSettings = syncSettings,
         sasayakiSettings = sasayakiSettings,
@@ -94,6 +98,10 @@ internal fun ReaderRouteDestination(
                         importOnly = true,
                     )
                 }
+            }
+            val initialKosync = kosyncSettings ?: appContainer.kosyncSettingsRepository.settings.first()
+            if (initialKosync.enabled && initialKosync.autoSyncEnabled) {
+                runCatching { appContainer.kosyncManager.pull(entry) }
             }
         }
         value = loaded.activateProfileAndPrepareRender(
@@ -136,48 +144,70 @@ internal fun ReaderRouteDestination(
         }
     }
 
-    suspend fun exportBook(entry: BookEntry) {
-        runCatching {
-            val currentSyncSettings = syncSettings ?: appContainer.syncSettingsRepository.settings.first()
-            appContainer.syncManager.syncBook(
-                entry = entry,
-                direction = SyncDirection.ExportToTtu,
-                syncStats = readerSettings.statisticsSyncEnabled,
-                statsSyncMode = readerSettings.statisticsSyncMode,
-                syncAudioBook = autoSyncState.shouldSyncAudioBook,
-                syncBookData = currentSyncSettings.uploadBooks,
-            )
-        }.onSuccess { result ->
-            Log.d(ReaderAutoSyncLogTag, "Reader auto export finished: ${result::class.java.simpleName}")
-        }.onFailure { error ->
-            Log.w(ReaderAutoSyncLogTag, "Reader auto export failed.", error)
+    suspend fun exportBook(entry: BookEntry, book: EpubBook) {
+        if (autoSyncState.isReaderAutoSyncEnabled) {
+            runCatching {
+                val currentSyncSettings = syncSettings ?: appContainer.syncSettingsRepository.settings.first()
+                appContainer.syncManager.syncBook(
+                    entry = entry,
+                    direction = SyncDirection.ExportToTtu,
+                    syncStats = readerSettings.statisticsSyncEnabled,
+                    statsSyncMode = readerSettings.statisticsSyncMode,
+                    syncAudioBook = autoSyncState.shouldSyncAudioBook,
+                    syncBookData = currentSyncSettings.uploadBooks,
+                )
+            }.onSuccess { result ->
+                Log.d(ReaderAutoSyncLogTag, "Reader auto export finished: ${result::class.java.simpleName}")
+            }.onFailure { error ->
+                Log.w(ReaderAutoSyncLogTag, "Reader auto export failed.", error)
+            }
+        }
+        if (kosyncAutoSync) {
+            runCatching { appContainer.kosyncManager.push(entry, book) }
+                .onSuccess { result ->
+                    Log.d(ReaderAutoSyncLogTag, "Reader kosync push finished: ${result::class.java.simpleName}")
+                }
+                .onFailure { error ->
+                    Log.w(ReaderAutoSyncLogTag, "Reader kosync push failed.", error)
+                }
         }
     }
 
-    fun scheduleExport(entry: BookEntry) {
-        autoSyncExportController.scheduleExport(autoSyncState.isReaderAutoSyncEnabled) {
-            exportBook(entry)
+    val anyAutoSyncEnabled = autoSyncState.isReaderAutoSyncEnabled || kosyncAutoSync
+
+    fun scheduleExport(entry: BookEntry, book: EpubBook) {
+        autoSyncExportController.scheduleExport(anyAutoSyncEnabled) {
+            exportBook(entry, book)
         }
     }
 
     fun flushExport() {
-        autoSyncExportController.flushExport(autoSyncState.isReaderAutoSyncEnabled)
+        autoSyncExportController.flushExport(anyAutoSyncEnabled)
     }
 
     fun importOnForeground(entry: BookEntry) {
-        if (!autoSyncState.isReaderAutoSyncEnabled) return
+        if (!anyAutoSyncEnabled) return
         bookmarkScope.launch {
-            val result = runCatching {
-                appContainer.syncManager.syncBook(
-                    entry = entry,
-                    direction = null,
-                    syncStats = readerSettings.statisticsSyncEnabled,
-                    statsSyncMode = readerSettings.statisticsSyncMode,
-                    syncAudioBook = autoSyncState.shouldSyncAudioBook,
-                    importOnly = true,
-                )
-            }.getOrNull()
-            if (result is SyncResult.Imported) {
+            val result = if (autoSyncState.isReaderAutoSyncEnabled) {
+                runCatching {
+                    appContainer.syncManager.syncBook(
+                        entry = entry,
+                        direction = null,
+                        syncStats = readerSettings.statisticsSyncEnabled,
+                        statsSyncMode = readerSettings.statisticsSyncMode,
+                        syncAudioBook = autoSyncState.shouldSyncAudioBook,
+                        importOnly = true,
+                    )
+                }.getOrNull()
+            } else {
+                null
+            }
+            val kosyncResult = if (kosyncAutoSync) {
+                runCatching { appContainer.kosyncManager.pull(entry) }.getOrNull()
+            } else {
+                null
+            }
+            if (result is SyncResult.Imported || kosyncResult is KosyncResult.Pulled) {
                 reloadKey += 1
             }
         }
@@ -232,7 +262,7 @@ internal fun ReaderRouteDestination(
                                 onBookmarkSaved = onBookmarkSaved,
                             )
                         }
-                        scheduleExport(readyState.entry)
+                        scheduleExport(readyState.entry, readyState.book)
                     },
                     onFlushAutoSyncExport = ::flushExport,
                     onForegroundAutoSyncImport = { importOnForeground(readyState.entry) },

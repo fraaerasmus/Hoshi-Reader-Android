@@ -529,6 +529,17 @@
     <string name="sync_status_connected" comment="Sync connection state, intentionally matching AnkiConnect connection state.">已连接</string>
     <string name="sync_status_not_connected" comment="Sync connection state, intentionally matching AnkiConnect connection state.">未连接</string>
     <string name="sync_status_missing_configuration">尚未配置 OAuth 客户端</string>
+    <string name="kosync_title">KOReader 同步</string>
+    <string name="kosync_description">与 KOReader 进度同步（kosync）服务器同步阅读位置，可与 ッツ 同步同时使用。</string>
+    <string name="kosync_section_account">账户</string>
+    <string name="kosync_server">服务器</string>
+    <string name="kosync_username">用户名</string>
+    <string name="kosync_password">密码</string>
+    <string name="kosync_login">登录</string>
+    <string name="kosync_login_failed_format">登录失败：%1$s</string>
+    <string name="kosync_auto_sync_description">打开书籍或返回前台时拉取进度，阅读后推送进度。</string>
+    <string name="kosync_push">推送进度到 KOReader</string>
+    <string name="kosync_push_description">保存位置时即发送；KOReader 会打开到同一段落。</string>
     <string name="update_downloaded_title">更新已下载</string>
     <string name="update_downloaded_message_format" comment="Downloaded update prompt message, intentionally matching About update status.">更新 %1$s 已下载。</string>
     <string name="update_available_title">有可用更新</string>

@@ -47,6 +47,7 @@ import moe.antimony.hoshi.features.dictionary.DictionarySettingsRepository
 import moe.antimony.hoshi.features.reader.ReaderSettingsRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsRepository
 import moe.antimony.hoshi.features.sync.DeviceCodeDriveAuthorizer
+import moe.antimony.hoshi.features.kosync.KosyncSettingsRepository
 import moe.antimony.hoshi.features.sync.SyncSettingsRepository
 import moe.antimony.hoshi.features.update.UpdateSettingsRepository
 import moe.antimony.hoshi.profiles.ProfileRepository
@@ -67,6 +68,7 @@ class SettingsBackupRepository @Inject constructor(
     private val ankiBackupStore: PreferenceBackupStore,
     private val bookshelfSettingsRepository: BookshelfSettingsRepository,
     private val syncSettingsRepository: SyncSettingsRepository,
+    private val kosyncSettingsRepository: KosyncSettingsRepository,
     private val updateSettingsRepository: UpdateSettingsRepository,
     private val driveAuthorizer: DeviceCodeDriveAuthorizer,
     private val profileRepository: ProfileRepository,
@@ -100,6 +102,7 @@ class SettingsBackupRepository @Inject constructor(
         val anki = ankiBackupStore.exportEntries()
         val bookshelf = bookshelfSettingsRepository.exportEntries()
         val sync = syncSettingsRepository.exportEntries()
+        val kosync = kosyncSettingsRepository.exportEntries()
         val update = updateSettingsRepository.exportEntries()
         val driveCredentials = driveAuthorizer.exportCredentials()
         val profiles = profileRepository.exportProfilesBackup()
@@ -118,6 +121,7 @@ class SettingsBackupRepository @Inject constructor(
                     put(STORE_ANKI, anki)
                     put(STORE_BOOKSHELF, bookshelf)
                     put(STORE_SYNC, sync)
+                    put(STORE_KOSYNC, kosync)
                     put(STORE_UPDATE, update)
                 },
             )
@@ -125,6 +129,7 @@ class SettingsBackupRepository @Inject constructor(
                 KEY_CREDENTIALS,
                 buildJsonObject {
                     put(CREDENTIAL_DRIVE, driveCredentials)
+                    put(CREDENTIAL_KOSYNC, kosyncSettingsRepository.exportCredentials())
                 },
             )
             put(KEY_PROFILES, profiles)
@@ -140,10 +145,13 @@ class SettingsBackupRepository @Inject constructor(
         stores.store(STORE_ANKI)?.let { ankiBackupStore.importEntries(it) }
         stores.store(STORE_BOOKSHELF)?.let { bookshelfSettingsRepository.importEntries(it) }
         stores.store(STORE_SYNC)?.let { syncSettingsRepository.importEntries(it) }
+        stores.store(STORE_KOSYNC)?.let { kosyncSettingsRepository.importEntries(it) }
         stores.store(STORE_UPDATE)?.let { updateSettingsRepository.importEntries(it) }
 
         envelope[KEY_CREDENTIALS]?.jsonObject?.store(CREDENTIAL_DRIVE)
             ?.let { driveAuthorizer.importCredentials(it) }
+        envelope[KEY_CREDENTIALS]?.jsonObject?.store(CREDENTIAL_KOSYNC)
+            ?.let { kosyncSettingsRepository.importCredentials(it) }
 
         envelope[KEY_PROFILES]?.jsonObject?.let { profileRepository.importProfilesBackup(it) }
     }
@@ -169,8 +177,10 @@ class SettingsBackupRepository @Inject constructor(
         const val STORE_ANKI = "anki"
         const val STORE_BOOKSHELF = "bookshelf"
         const val STORE_SYNC = "sync"
+        const val STORE_KOSYNC = "kosync"
         const val STORE_UPDATE = "update"
         const val CREDENTIAL_DRIVE = "drive"
+        const val CREDENTIAL_KOSYNC = "kosync"
 
         val JSON = Json {
             prettyPrint = true
