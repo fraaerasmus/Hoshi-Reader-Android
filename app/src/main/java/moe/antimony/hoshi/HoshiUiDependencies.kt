@@ -16,6 +16,7 @@ import moe.antimony.hoshi.features.dictionary.DictionarySettingsRepository
 import moe.antimony.hoshi.features.reader.ReaderFontManager
 import moe.antimony.hoshi.features.reader.ReaderSettingsRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiPlaybackServiceRuntime
+import moe.antimony.hoshi.features.sasayaki.SasayakiPositionSync
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsRepository
 import moe.antimony.hoshi.features.statistics.StatisticsDateProvider
 import moe.antimony.hoshi.features.storage.StorageCleanupRepository
@@ -43,6 +44,7 @@ internal class HoshiUiDependencies @Inject constructor(
     private val audioSettingsRepositoryProvider: Lazy<AudioSettingsRepository>,
     private val sasayakiSettingsRepositoryProvider: Lazy<SasayakiSettingsRepository>,
     private val sasayakiPlaybackServiceRuntimeProvider: Lazy<SasayakiPlaybackServiceRuntime>,
+    private val sasayakiPositionSyncProvider: Lazy<SasayakiPositionSync>,
     private val statisticsDateProviderProvider: Lazy<StatisticsDateProvider>,
     private val syncSettingsRepositoryProvider: Lazy<SyncSettingsRepository>,
     private val kosyncSettingsRepositoryProvider: Lazy<KosyncSettingsRepository>,
@@ -73,6 +75,7 @@ internal class HoshiUiDependencies @Inject constructor(
     val audioSettingsRepository: AudioSettingsRepository get() = audioSettingsRepositoryProvider.get()
     val sasayakiSettingsRepository: SasayakiSettingsRepository get() = sasayakiSettingsRepositoryProvider.get()
     val sasayakiPlaybackServiceRuntime: SasayakiPlaybackServiceRuntime get() = sasayakiPlaybackServiceRuntimeProvider.get()
+    val sasayakiPositionSync: SasayakiPositionSync get() = sasayakiPositionSyncProvider.get()
     val statisticsDateProvider: StatisticsDateProvider get() = statisticsDateProviderProvider.get()
     val syncSettingsRepository: SyncSettingsRepository get() = syncSettingsRepositoryProvider.get()
     val kosyncSettingsRepository: KosyncSettingsRepository get() = kosyncSettingsRepositoryProvider.get()

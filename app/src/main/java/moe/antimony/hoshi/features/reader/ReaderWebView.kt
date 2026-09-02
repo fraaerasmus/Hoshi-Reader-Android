@@ -3,6 +3,8 @@ package moe.antimony.hoshi.features.reader
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.webkit.WebView
 import android.view.InputDevice
@@ -81,6 +83,7 @@ import moe.antimony.hoshi.features.dictionary.dismissPopupAt
 import moe.antimony.hoshi.features.dictionary.openPopupExternalLink
 import moe.antimony.hoshi.features.dictionary.withLookupPopupVisualOptions
 import moe.antimony.hoshi.features.sasayaki.BookSasayakiPlaybackRepository
+import moe.antimony.hoshi.features.sasayaki.BookmarkSyncingSasayakiPlaybackRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiAudioRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiAudiobookInfo
 import moe.antimony.hoshi.features.sasayaki.SasayakiCueRange
@@ -1409,7 +1412,14 @@ fun ReaderWebView(
             SasayakiPlayer(
                 bookId = bookId,
                 bookRoot = bookRoot,
-                playbackRepository = BookSasayakiPlaybackRepository(bookRoot, bookRepository),
+                playbackRepository = BookmarkSyncingSasayakiPlaybackRepository(
+                    delegate = BookSasayakiPlaybackRepository(bookRoot, bookRepository),
+                    bookInfo = book.bookInfo,
+                    matchProvider = { sasayakiMatchData },
+                    onReaderPosition = { chapterIndex, progress ->
+                        Handler(Looper.getMainLooper()).post { onSaveBookmark(chapterIndex, progress, null) }
+                    },
+                ),
                 bookTitle = book.title,
                 bookCoverFile = sasayakiCoverFile,
                 matchData = sasayakiMatchData,

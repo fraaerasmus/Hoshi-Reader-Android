@@ -163,6 +163,9 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
     fun activePlaybackBookId(): String? =
         activeBookId.takeIf { activeController?.hasAudio == true }
 
+    fun activePlayback(bookId: String): SasayakiPlaybackControllerContract? =
+        activeController?.takeIf { activeBookId == bookId && it.hasAudio }
+
     fun playbackReturnPendingIntent(): PendingIntent =
         sasayakiPlaybackReturnPendingIntent(appContext, activeBookId)
 

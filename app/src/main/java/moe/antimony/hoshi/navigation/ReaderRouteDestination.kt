@@ -103,6 +103,10 @@ internal fun ReaderRouteDestination(
             if (initialKosync.enabled && initialKosync.autoSyncEnabled) {
                 runCatching { appContainer.kosyncManager.pull(entry) }
             }
+            runCatching { appContainer.sasayakiPositionSync.alignAudioToBookmark(entry) }
+            if (initialKosync.enabled && initialKosync.autoSyncEnabled && initialKosync.pushEnabled) {
+                runCatching { appContainer.kosyncManager.push(entry) }
+            }
         }
         value = loaded.activateProfileAndPrepareRender(
             activateForBook = { metadata ->
@@ -208,6 +212,7 @@ internal fun ReaderRouteDestination(
                 null
             }
             if (result is SyncResult.Imported || kosyncResult is KosyncResult.Pulled) {
+                runCatching { appContainer.sasayakiPositionSync.alignAudioToBookmark(entry) }
                 reloadKey += 1
             }
         }
