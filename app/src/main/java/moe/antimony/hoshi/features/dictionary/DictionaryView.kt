@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -624,6 +625,7 @@ fun DictionaryView(
                                         inactiveContentColor = colorScheme.onSurface,
                                         inactiveBorderColor = colorScheme.outline,
                                     ),
+                                    contentPadding = PaddingValues(horizontal = 0.dp),
                                     icon = {},
                                 ) {
                                     Text(stringResource(type.displayNameRes))
@@ -1345,6 +1347,7 @@ private fun DictionaryCustomCssView(
     val fontNames = remember(fontManager, fontLibraryState.revision) { fontManager.allFontNames() }
     var fontMenuExpanded by remember { mutableStateOf(false) }
     var selectorMenuExpanded by remember { mutableStateOf(false) }
+    var customCssResetState by remember { mutableStateOf(DictionaryCustomCssResetState()) }
     var cssFieldValue by remember {
         mutableStateOf(
             TextFieldValue(
@@ -1361,6 +1364,45 @@ private fun DictionaryCustomCssView(
                 selection = TextRange(settings.customCSS.length),
             )
         }
+    }
+
+    fun dispatchCustomCssReset(action: DictionaryCustomCssResetAction) {
+        val nextState = dictionaryCustomCssResetStateAfter(customCssResetState, action)
+        customCssResetState = nextState
+        if (!nextState.shouldClearCss) return
+
+        customCssResetState = nextState.copy(shouldClearCss = false)
+        val clearedValue = TextFieldValue(text = "", selection = TextRange.Zero)
+        cssFieldValue = clearedValue
+        onSettingsChange { it.copy(customCSS = clearedValue.text) }
+    }
+
+    if (customCssResetState.isConfirmationVisible) {
+        AlertDialog(
+            onDismissRequest = {
+                dispatchCustomCssReset(DictionaryCustomCssResetAction.Dismiss)
+            },
+            title = { Text(stringResource(R.string.dictionary_custom_css_reset_title)) },
+            text = { Text(stringResource(R.string.dictionary_custom_css_reset_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        dispatchCustomCssReset(DictionaryCustomCssResetAction.Confirm)
+                    },
+                ) {
+                    Text(stringResource(R.string.action_reset))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        dispatchCustomCssReset(DictionaryCustomCssResetAction.Dismiss)
+                    },
+                ) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
     }
 
     fun insertCssText(text: String) {
@@ -1383,7 +1425,11 @@ private fun DictionaryCustomCssView(
                 title = { Text(stringResource(R.string.dictionary_custom_css)) },
                 navigationIcon = { HoshiIconBackButton(onClose) },
                 actions = {
-                    TextButton(onClick = { onSettingsChange { it.copy(customCSS = "") } }) {
+                    TextButton(
+                        onClick = {
+                            dispatchCustomCssReset(DictionaryCustomCssResetAction.RequestConfirmation)
+                        },
+                    ) {
                         Text(stringResource(R.string.action_reset))
                     }
                 },

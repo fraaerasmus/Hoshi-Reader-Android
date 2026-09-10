@@ -266,6 +266,8 @@
     <string name="dictionary_category_update_failed">Failed to update the dictionary category.</string>
     <string name="anki_categorize_dictionaries">Categorize dictionaries</string>
     <string name="dictionary_custom_css">Custom CSS</string>
+    <string name="dictionary_custom_css_reset_title">Reset Custom CSS?</string>
+    <string name="dictionary_custom_css_reset_message">This will clear your custom CSS.</string>
     <string name="dictionary_import_action">Import Dictionary</string>
     <string name="dictionary_delete_action">Delete Dictionary</string>
     <string name="dictionary_reorder_action">Reorder Dictionary</string>
@@ -833,10 +835,8 @@
     <string name="sasayaki_selected_srt">Selected SRT</string>
     <string name="sasayaki_open_srt_failed">Unable to open selected SRT.</string>
     <string name="sasayaki_match_failed">Failed to match Sasayaki subtitles.</string>
-    <string name="sasayaki_match_title">Match</string>
     <string name="sasayaki_file">File</string>
     <string name="sasayaki_no_file_selected">No file selected</string>
-    <string name="sasayaki_search_window">Search Window</string>
     <string name="sasayaki_matching">Matching...</string>
     <string name="settings_book_cover_wallpaper">Book Cover Lock Screen</string>
     <string name="settings_book_cover_wallpaper_subtitle">Show the current book cover when the device is locked or sleeping</string>

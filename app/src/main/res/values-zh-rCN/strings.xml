@@ -264,6 +264,8 @@
     <string name="dictionary_category_update_failed">更新辞典分类失败。</string>
     <string name="anki_categorize_dictionaries">辞典分类</string>
     <string name="dictionary_custom_css">自定义 CSS</string>
+    <string name="dictionary_custom_css_reset_title">重置自定义 CSS？</string>
+    <string name="dictionary_custom_css_reset_message">这将清空你的自定义 CSS。</string>
     <string name="dictionary_import_action">导入辞典</string>
     <string name="dictionary_delete_action">删除辞典</string>
     <string name="dictionary_reorder_action">重新排序辞典</string>
@@ -831,10 +833,8 @@
     <string name="sasayaki_selected_srt">已选择 SRT</string>
     <string name="sasayaki_open_srt_failed">无法打开所选 SRT。</string>
     <string name="sasayaki_match_failed">无法匹配有声书字幕。</string>
-    <string name="sasayaki_match_title">匹配</string>
     <string name="sasayaki_file">文件</string>
     <string name="sasayaki_no_file_selected">未选择文件</string>
-    <string name="sasayaki_search_window">搜索窗口</string>
     <string name="sasayaki_matching">正在匹配...</string>
     <string name="settings_book_cover_wallpaper">书籍封面锁屏</string>
     <string name="settings_book_cover_wallpaper_subtitle">锁屏或休眠时显示当前书籍封面</string>

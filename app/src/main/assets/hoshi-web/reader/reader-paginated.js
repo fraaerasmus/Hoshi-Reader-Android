@@ -2,6 +2,7 @@ __HOSHI_READER_VIEWPORT_SCRIPT__
 __HOSHI_READER_TEXT_SEMANTICS_SCRIPT__
 __HOSHI_READER_DOM_TEXT_SCRIPT__
 __HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__
+__HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__
 
 window.hoshiReader = {
   pageHeight: 0,
@@ -704,13 +705,21 @@ window.hoshiReader.initialize = function() {
   window.hoshiReader.ensureTwoPageParityFiller();
   window.hoshiReader.normalizeRubyTextNodes();
   window.hoshiReader.stabilizeRubyAdjacentTextNodes();
-  var imageSetupComplete = imageSetupPromise.then(function() {
+  var imageSetupComplete = Promise.all([
+    // Fork: don't block first paint on multi-MB web fonts; fall back after ~120ms.
+    Promise.race([
+      Promise.resolve(document.fonts && document.fonts.ready),
+      new Promise(function (r) { setTimeout(r, 120); })
+    ]),
+    imageSetupPromise
+  ]).then(function() {
     if (!images.length) return;
     return new Promise(function(resolve) { setTimeout(resolve, 50); });
   });
   // Reveal chapter-start opens after first paint; don't wait on image decode.
   if (__HOSHI_INITIAL_FRAGMENT_LITERAL__ === null && __HOSHI_INITIAL_PROGRESS__ <= 0) {
     requestAnimationFrame(function() {
+      window.hoshiReaderLayoutSemantics.sanitizeInlineBlocks(document, window.hoshiReader.isVertical());
       window.hoshiReader.buildNodeOffsets();
       __HOSHI_RESTORE_SCRIPTS__
     });
@@ -720,6 +729,7 @@ window.hoshiReader.initialize = function() {
     return;
   }
   imageSetupComplete.then(function() {
+    window.hoshiReaderLayoutSemantics.sanitizeInlineBlocks(document, window.hoshiReader.isVertical());
     window.hoshiReader.ensureTwoPageParityFiller();
     window.hoshiReader.buildNodeOffsets();
     __HOSHI_RESTORE_SCRIPTS__

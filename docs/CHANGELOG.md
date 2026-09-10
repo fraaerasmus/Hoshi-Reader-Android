@@ -33,19 +33,32 @@ fork adds on top of upstream live in [FORK_CHANGELOG.md](FORK_CHANGELOG.md).
 
 ### Fixed
 
+- Ask for confirmation before resetting Dictionary custom CSS to prevent
+  accidental clearing.
+- Keep text and images reachable in every Reader mode when publisher CSS wraps
+  paragraphs or empty layout struts in oversized inline blocks.
+- Restore book files and covers from iOS Books backups when equivalent Unicode
+  paths use different composed forms.
+- Match Sasayaki subtitles immediately after selecting an SRT, including unique
+  cues immediately before the stable starting sequence, combined-volume EPUBs,
+  and large text gaps, without requiring Search Window tuning or a separate
+  Match action.
 - Import EPUB and TTU bookdata with multibyte titles that exceed Android's
   filename byte limit while preserving the complete visible title and cleaning
   temporary EPUB data after failed imports.
-- Keep wide inline gaiji at the publisher's text-relative size, render inline
-  gaiji strokes with the active Reader text color while blending away their
-  image backgrounds in standard and custom themes, and exclude gaiji from
-  image navigation.
+- Keep wide inline gaiji at the publisher's text-relative size, recognize any
+  publisher class containing `gaiji`, and render gaiji plus transparent
+  monochrome images embedded in text with the active Reader text color while
+  blending away their image backgrounds in standard and custom themes and
+  excluding gaiji from image navigation.
 - Use EPUB fallback text for failed inline gaiji images, while retaining a
   broken-image marker and its inline space when no fallback text is available.
 - Open EPUB pages that use paired XHTML viewport metadata instead of remaining
   on the Reader loading screen.
 - Keep oversized lookup popup frames fully inside the visible screen so their
   bottom border and all scrollable content remain reachable.
+- Keep the Dictionary type selector's `Frequency` label on one line on compact
+  screens.
 - Prefer Arial throughout lookup popups before Android's Japanese font fallback
   so pitch-accent markers stay aligned with their reading, and keep pitch
   dictionary labels intact when compact entries wrap.
