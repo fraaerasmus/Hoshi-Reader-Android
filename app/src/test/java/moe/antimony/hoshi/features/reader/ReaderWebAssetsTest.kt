@@ -21,6 +21,7 @@ class ReaderWebAssetsTest {
             readerTextSemanticsJs = "",
             readerDomTextJs = "",
             readerMediaSemanticsJs = "",
+            readerLayoutSemanticsJs = "",
             readerVnContentStreamJs = "",
             readerVnRangeMapJs = "",
             readerVnSelectionProjectionJs = "",
