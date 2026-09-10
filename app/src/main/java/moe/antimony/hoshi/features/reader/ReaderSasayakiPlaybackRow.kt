@@ -154,8 +154,10 @@ private fun Modifier.sasayakiScrub(
             } ?: return@awaitEachGesture
             currentOnSteps.value(tracker.steps)
             val completed = horizontalDrag(start.id) { change ->
+                // Read the delta before consuming: a consumed change reports zero movement.
+                val dx = change.positionChange().x
                 change.consume()
-                if (tracker.onDrag(change.positionChange().x)) {
+                if (tracker.onDrag(dx)) {
                     haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
                     currentOnSteps.value(tracker.steps)
                 }
