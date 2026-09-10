@@ -211,6 +211,11 @@ class SasayakiPlayerFacadeTest {
             commands += "previousCue"
         }
 
+        override fun skipPreview(steps: Int): SasayakiSkipPreview {
+            commands += "skipPreview:$steps"
+            return SasayakiSkipPreview(targetTime = currentTime, cue = null, secondsPerStep = null)
+        }
+
         override fun skipForward(seconds: Int) {
             commands += "skipForward:$seconds"
         }

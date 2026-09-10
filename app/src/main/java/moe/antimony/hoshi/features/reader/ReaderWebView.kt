@@ -1719,6 +1719,23 @@ fun ReaderWebView(
             ReaderSasayakiBottomSkipButtonAction.Forward -> sasayakiPlayer?.nextCue()
         }
     }
+    var sasayakiScrubHud by remember { mutableStateOf<ReaderSasayakiScrubHudState?>(null) }
+    fun previewSasayakiScrub(dragSteps: Int) {
+        val player = sasayakiPlayer ?: return
+        val steps = readerSasayakiScrubSignedSteps(dragSteps, sasayakiBottomSkipButtonActions)
+        val preview = player.skipPreview(steps)
+        sasayakiScrubHud = ReaderSasayakiScrubHudState(
+            steps = steps,
+            secondsPerStep = preview.secondsPerStep,
+            cueText = preview.cue?.text,
+        )
+    }
+    fun commitSasayakiScrub(dragSteps: Int) {
+        sasayakiScrubHud = null
+        val player = sasayakiPlayer ?: return
+        val steps = readerSasayakiScrubSignedSteps(dragSteps, sasayakiBottomSkipButtonActions)
+        if (steps != 0) player.seekTo(player.skipPreview(steps).targetTime)
+    }
     val showSasayakiTopToggle = sasayakiSettings.enabled &&
         sasayakiSettings.showReaderToggle &&
         (sasayakiPlayer?.hasAudio == true || sasayakiPlaybackData.hasStoredAudioSource())
@@ -1999,6 +2016,10 @@ fun ReaderWebView(
             onSasayakiSkipBackward = { performSasayakiBottomSkipAction(sasayakiBottomSkipButtonActions.left) },
             onSasayakiTogglePlayback = { sasayakiPlayer?.togglePlayback() },
             onSasayakiSkipForward = { performSasayakiBottomSkipAction(sasayakiBottomSkipButtonActions.right) },
+            sasayakiScrubEnabled = sasayakiSettings.dragPlaybackControlsToScrub,
+            onSasayakiScrubSteps = ::previewSasayakiScrub,
+            onSasayakiScrubEnd = ::commitSasayakiScrub,
+            onSasayakiScrubCancel = { sasayakiScrubHud = null },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
         if (chromeVisibility.showBottomChrome) ReaderBottomChrome(
@@ -2135,6 +2156,7 @@ fun ReaderWebView(
             )
         }
         ReaderEdgeAdjustHud(controller = edgeAdjust)
+        ReaderSasayakiScrubHud(state = sasayakiScrubHud)
         webView?.let { _ -> Unit }
     }
 }

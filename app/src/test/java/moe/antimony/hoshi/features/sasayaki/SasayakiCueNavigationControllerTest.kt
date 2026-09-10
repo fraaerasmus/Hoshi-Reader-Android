@@ -140,4 +140,15 @@ class SasayakiCueNavigationControllerTest {
 
         assertEquals(8.0, navigation.nextCueSeekTime(currentTime = 3.0, delay = 0.0) ?: -1.0, 0.0)
     }
+
+    @Test
+    fun cueSeekTimeForStepsChainsCuesAndStopsAtTheEnds() {
+        val navigation = SasayakiCueNavigationController(match)
+
+        assertEquals(22.5, navigation.cueSeekTimeForSteps(currentTime = 10.5, delay = 0.5, steps = 2), 0.0)
+        assertEquals(22.5, navigation.cueSeekTimeForSteps(currentTime = 10.5, delay = 0.5, steps = 5), 0.0)
+        assertEquals(10.5, navigation.cueSeekTimeForSteps(currentTime = 22.5, delay = 0.5, steps = -2), 0.0)
+        assertEquals(0.5, navigation.cueSeekTimeForSteps(currentTime = 22.5, delay = 0.5, steps = -4), 0.0)
+        assertEquals(16.0, navigation.cueSeekTimeForSteps(currentTime = 16.0, delay = 0.5, steps = 0), 0.0)
+    }
 }

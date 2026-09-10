@@ -121,6 +121,8 @@ class SasayakiPlayer private constructor(
         controller.seekTo(seconds)
     }
 
+    internal fun skipPreview(steps: Int): SasayakiSkipPreview = controller.skipPreview(steps)
+
     fun updateMatchData(matchData: SasayakiMatchData?) {
         controller.updateMatchData(matchData)
     }

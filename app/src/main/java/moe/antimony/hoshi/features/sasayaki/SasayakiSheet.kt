@@ -762,6 +762,11 @@ private fun SasayakiSettingsTab(
                 checked = settings.reverseVerticalReaderSkipButtons,
                 onCheckedChange = { onSettingsChange(settings.copy(reverseVerticalReaderSkipButtons = it)) },
             )
+            SasayakiSettingsSwitchRow(
+                label = stringResource(R.string.sasayaki_drag_playback_controls_to_scrub),
+                checked = settings.dragPlaybackControlsToScrub,
+                onCheckedChange = { onSettingsChange(settings.copy(dragPlaybackControlsToScrub = it)) },
+            )
         }
         SasayakiSettingsActionRow(
             label = stringResource(R.string.sasayaki_skip_action),

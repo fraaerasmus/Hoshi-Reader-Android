@@ -3,6 +3,8 @@ package moe.antimony.hoshi.features.reader
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -20,11 +22,15 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -33,6 +39,7 @@ import moe.antimony.hoshi.R
 
 private const val SASAYAKI_SKIP_HOLD_INITIAL_DELAY_MS = 350L
 private const val SASAYAKI_SKIP_HOLD_REPEAT_INTERVAL_MS = 150L
+private const val SASAYAKI_SCRUB_STEP_DP = 40
 
 /**
  * Fork feature: the reader's bottom Sasayaki playback row. Kept in its own file so an upstream
@@ -48,12 +55,27 @@ internal fun ReaderSasayakiPlaybackRow(
     onSkipBackward: () -> Unit,
     onTogglePlayback: () -> Unit,
     onSkipForward: () -> Unit,
+    scrubEnabled: Boolean,
+    onScrubSteps: (Int) -> Unit,
+    onScrubEnd: (Int) -> Unit,
+    onScrubCancel: () -> Unit,
 ) {
     if (!controls.visible) return
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(controls.rowHeightDp.dp),
+            .height(controls.rowHeightDp.dp)
+            .then(
+                if (scrubEnabled) {
+                    Modifier.sasayakiScrub(
+                        onSteps = onScrubSteps,
+                        onEnd = onScrubEnd,
+                        onCancel = onScrubCancel,
+                    )
+                } else {
+                    Modifier
+                },
+            ),
     ) {
         Box(
             modifier = Modifier
@@ -100,6 +122,44 @@ internal fun ReaderSasayakiPlaybackRow(
                 onClick = onSkipForward,
                 holdRepeat = true,
             )
+        }
+    }
+}
+
+/**
+ * Horizontal drag anywhere on the row (buttons included) scrubs by steps. Consuming the drag
+ * cancels the child button press/hold-repeat and the safe-area tap, so a plain tap is unchanged.
+ * [onSteps] gets the drag-direction step count (+ rightward); [onEnd] fires once on release.
+ */
+@Composable
+private fun Modifier.sasayakiScrub(
+    onSteps: (Int) -> Unit,
+    onEnd: (Int) -> Unit,
+    onCancel: () -> Unit,
+): Modifier {
+    val stepPx = with(LocalDensity.current) { SASAYAKI_SCRUB_STEP_DP.dp.toPx() }
+    val haptic = LocalHapticFeedback.current
+    val currentOnSteps = rememberUpdatedState(onSteps)
+    val currentOnEnd = rememberUpdatedState(onEnd)
+    val currentOnCancel = rememberUpdatedState(onCancel)
+    return pointerInput(stepPx) {
+        val tracker = ReaderSasayakiScrubGestureTracker(stepPx)
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            tracker.reset()
+            val start = awaitHorizontalTouchSlopOrCancellation(down.id) { change, overSlop ->
+                change.consume()
+                tracker.onDrag(overSlop)
+            } ?: return@awaitEachGesture
+            currentOnSteps.value(tracker.steps)
+            val completed = horizontalDrag(start.id) { change ->
+                change.consume()
+                if (tracker.onDrag(change.positionChange().x)) {
+                    haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+                    currentOnSteps.value(tracker.steps)
+                }
+            }
+            if (completed) currentOnEnd.value(tracker.steps) else currentOnCancel.value()
         }
     }
 }

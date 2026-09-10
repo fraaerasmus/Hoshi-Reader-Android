@@ -40,12 +40,20 @@ internal interface SasayakiPlaybackControllerContract {
     fun skipForward(seconds: Int)
     fun skipBackward(seconds: Int)
     fun seekTo(seconds: Double)
+    fun skipPreview(steps: Int): SasayakiSkipPreview
     fun updateMatchData(matchData: SasayakiMatchData?)
     fun findCue(chapterIndex: Int, offset: Int): SasayakiMatch?
     fun playCue(cue: SasayakiMatch, stop: Boolean)
     fun exportCueAudio(cue: SasayakiMatch, sentence: String): File?
     fun release()
 }
+
+/** Where [steps] skip-button presses would land, without seeking. [secondsPerStep] is null in cue mode. */
+internal data class SasayakiSkipPreview(
+    val targetTime: Double,
+    val cue: SasayakiMatch?,
+    val secondsPerStep: Int?,
+)
 
 internal class SasayakiPlaybackController(
     context: Context,
@@ -283,6 +291,21 @@ internal class SasayakiPlaybackController(
                 isPlaying = continuePlayback,
             )
         }
+    }
+
+    override fun skipPreview(steps: Int): SasayakiSkipPreview {
+        val seconds = readerSkipButtonAction.seconds ?: SasayakiCueFallbackSkipSeconds.takeUnless { hasCues }
+        val target = if (seconds == null) {
+            cueNavigation.cueSeekTimeForSteps(currentTime = currentTime, delay = delay, steps = steps)
+        } else {
+            val raw = currentTime + steps * seconds
+            if (duration > 0.0) raw.coerceIn(0.0, duration) else raw.coerceAtLeast(0.0)
+        }
+        return SasayakiSkipPreview(
+            targetTime = target,
+            cue = cueNavigation.cueAtPlaybackTime(target, delay),
+            secondsPerStep = seconds,
+        )
     }
 
     override fun updateMatchData(matchData: SasayakiMatchData?) {

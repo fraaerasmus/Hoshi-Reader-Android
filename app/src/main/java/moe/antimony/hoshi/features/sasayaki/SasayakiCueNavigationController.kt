@@ -3,6 +3,7 @@ package moe.antimony.hoshi.features.sasayaki
 import moe.antimony.hoshi.epub.SasayakiMatchData
 import moe.antimony.hoshi.epub.SasayakiMatch
 
+import kotlin.math.abs
 import kotlin.math.max
 
 class SasayakiCueNavigationController(matchData: SasayakiMatchData?) {
@@ -30,6 +31,23 @@ class SasayakiCueNavigationController(matchData: SasayakiMatchData?) {
         val anchor = timeline.cueAt(playbackTime)?.startTime ?: playbackTime
         val previous = timeline.previousCue(before = anchor) ?: 0.0
         return previous + delay
+    }
+
+    /** Seek time after moving [steps] cues (negative = backward) from [currentTime], stopping at either end. */
+    fun cueSeekTimeForSteps(
+        currentTime: Double,
+        delay: Double,
+        steps: Int,
+    ): Double {
+        var time = currentTime
+        repeat(abs(steps)) {
+            time = if (steps > 0) {
+                nextCueSeekTime(currentTime = time, delay = delay) ?: return time
+            } else {
+                previousCueSeekTime(currentTime = time, delay = delay)
+            }
+        }
+        return time
     }
 
     fun cueAtPlaybackTime(time: Double, delay: Double): SasayakiMatch? =

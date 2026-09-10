@@ -163,6 +163,20 @@ fun SasayakiSettingsView(
                                     )
                                 },
                             )
+                            SettingsDivider()
+                            ListItem(
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                headlineContent = { Text(stringResource(R.string.sasayaki_drag_playback_controls_to_scrub)) },
+                                supportingContent = { Text(stringResource(R.string.sasayaki_drag_playback_controls_to_scrub_help)) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = loadedSettings.dragPlaybackControlsToScrub,
+                                        onCheckedChange = {
+                                            save(loadedSettings.copy(dragPlaybackControlsToScrub = it))
+                                        },
+                                    )
+                                },
+                            )
                         }
                         SettingsDivider()
                         ListItem(

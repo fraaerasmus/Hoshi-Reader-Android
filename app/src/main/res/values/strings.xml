@@ -795,6 +795,13 @@
     <string name="sasayaki_skip_action">Skip Action</string>
     <string name="sasayaki_reverse_vertical_skip_buttons">Reverse in Vertical</string>
     <string name="sasayaki_reverse_vertical_skip_buttons_help">In vertical writing, swap only the bottom reader skip button actions.</string>
+    <string name="sasayaki_drag_playback_controls_to_scrub">Drag to Scrub</string>
+    <string name="sasayaki_drag_playback_controls_to_scrub_help">Drag left or right on the bottom playback controls to skip several steps at once; the audio moves when you let go.</string>
+    <plurals name="sasayaki_scrub_sentences">
+        <item quantity="one">%1$s sentence</item>
+        <item quantity="other">%1$s sentences</item>
+    </plurals>
+    <string name="sasayaki_scrub_seconds">%1$s s</string>
     <string name="sasayaki_playback">Playback</string>
     <string name="sasayaki_light_theme">Light Theme</string>
     <string name="sasayaki_dark_theme">Dark Theme</string>

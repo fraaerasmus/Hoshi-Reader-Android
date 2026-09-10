@@ -580,6 +580,10 @@ internal fun ReaderBottomSafeProgress(
     onSasayakiSkipBackward: () -> Unit,
     onSasayakiTogglePlayback: () -> Unit,
     onSasayakiSkipForward: () -> Unit,
+    sasayakiScrubEnabled: Boolean,
+    onSasayakiScrubSteps: (Int) -> Unit,
+    onSasayakiScrubEnd: (Int) -> Unit,
+    onSasayakiScrubCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val progress = readerBottomSafeProgressText(
@@ -601,6 +605,10 @@ internal fun ReaderBottomSafeProgress(
             onSkipBackward = onSasayakiSkipBackward,
             onTogglePlayback = onSasayakiTogglePlayback,
             onSkipForward = onSasayakiSkipForward,
+            scrubEnabled = sasayakiScrubEnabled,
+            onScrubSteps = onSasayakiScrubSteps,
+            onScrubEnd = onSasayakiScrubEnd,
+            onScrubCancel = onSasayakiScrubCancel,
         )
         Box(
             modifier = Modifier

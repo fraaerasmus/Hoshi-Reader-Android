@@ -793,6 +793,13 @@
     <string name="sasayaki_skip_action">跳转操作</string>
     <string name="sasayaki_reverse_vertical_skip_buttons">纵排时反转</string>
     <string name="sasayaki_reverse_vertical_skip_buttons_help">纵排阅读时，仅交换阅读器底部跳转按钮的实际操作。</string>
+    <string name="sasayaki_drag_playback_controls_to_scrub">拖动快进/后退</string>
+    <string name="sasayaki_drag_playback_controls_to_scrub_help">在底部播放控件上左右拖动可一次跳转多步；松手后音频才会移动。</string>
+    <plurals name="sasayaki_scrub_sentences">
+        <item quantity="one">%1$s 句</item>
+        <item quantity="other">%1$s 句</item>
+    </plurals>
+    <string name="sasayaki_scrub_seconds">%1$s 秒</string>
     <string name="sasayaki_playback">播放</string>
     <string name="sasayaki_light_theme">浅色主题</string>
     <string name="sasayaki_dark_theme">深色主题</string>
