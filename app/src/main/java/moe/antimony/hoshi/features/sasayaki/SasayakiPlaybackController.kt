@@ -41,6 +41,8 @@ internal interface SasayakiPlaybackControllerContract {
     fun skipBackward(seconds: Int)
     fun seekTo(seconds: Double)
     fun skipPreview(steps: Int): SasayakiSkipPreview
+    fun startSpeedBoost(): Float?
+    fun endSpeedBoost()
     fun updateMatchData(matchData: SasayakiMatchData?)
     fun findCue(chapterIndex: Int, offset: Int): SasayakiMatch?
     fun playCue(cue: SasayakiMatch, stop: Boolean)
@@ -136,6 +138,9 @@ internal class SasayakiPlaybackController(
     private val cuePresentation = SasayakiCuePresentationState()
     private var autoPageHoldResumePending = false
     private var hasCues = matchData?.matches?.isNotEmpty() == true
+    // Hold-to-boost: engine-only rate override so the saved rate is never touched.
+    private var speedBoostRate: Float? = null
+    private var speedBoostWasPlaying = false
 
     override val playback: SasayakiPlaybackData get() = playbackPersistence.playback
     override val currentTime: Double get() = playbackState.currentTime
@@ -308,6 +313,28 @@ internal class SasayakiPlaybackController(
         )
     }
 
+    /** Plays at the boosted rate until [endSpeedBoost]; starts playback if paused. Returns the rate, or null if ignored. */
+    override fun startSpeedBoost(): Float? {
+        if (speedBoostRate != null || !hasAudio) return null
+        val boosted = sasayakiBoostedRate(rate)
+        speedBoostRate = boosted
+        speedBoostWasPlaying = isPlaying
+        if (isPlaying) {
+            playbackLifecycle.setRate(boosted)
+        } else {
+            togglePlayback()
+        }
+        return boosted
+    }
+
+    override fun endSpeedBoost() {
+        if (speedBoostRate == null) return
+        speedBoostRate = null
+        playbackLifecycle.setRate(rate)
+        // Unconditional so a release during engine preparation also cancels the deferred start.
+        if (!speedBoostWasPlaying) pausePlayback(restoreTemporaryPosition = false)
+    }
+
     override fun updateMatchData(matchData: SasayakiMatchData?) {
         clearAutoPageHoldResume()
         this.matchData = matchData
@@ -389,7 +416,7 @@ internal class SasayakiPlaybackController(
 
     private fun startPreparedPlayback(updateCueAfterStart: Boolean = true): Boolean {
         val started = playbackCommands.start(
-            rate = rate,
+            rate = speedBoostRate ?: rate,
             beforeStart = {},
             markPlayedOnce = cuePresentation::markPlayedOnce,
             afterMarkedPlaying = {
@@ -552,6 +579,7 @@ internal class SasayakiPlaybackController(
     }
 
     private fun teardownPlayer(clearCue: Boolean) {
+        speedBoostRate = null
         deferredPlaybackCommand.cancel()
         onForegroundPlaybackRequestedChanged(false)
         pausePlayback(restoreTemporaryPosition = true)

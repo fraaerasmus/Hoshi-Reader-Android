@@ -804,6 +804,8 @@
         <item quantity="other">%1$s sentences</item>
     </plurals>
     <string name="sasayaki_scrub_seconds">%1$s s</string>
+    <string name="sasayaki_hold_playback_controls_to_boost">Hold to Speed Up</string>
+    <string name="sasayaki_hold_playback_controls_to_boost_help">Press and hold the play button or the empty part of the bottom playback controls (or Space / K on a keyboard) to play at double speed until you let go.</string>
     <string name="sasayaki_playback">Playback</string>
     <string name="sasayaki_light_theme">Light Theme</string>
     <string name="sasayaki_dark_theme">Dark Theme</string>

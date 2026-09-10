@@ -767,6 +767,11 @@ private fun SasayakiSettingsTab(
                 checked = settings.dragPlaybackControlsToScrub,
                 onCheckedChange = { onSettingsChange(settings.copy(dragPlaybackControlsToScrub = it)) },
             )
+            SasayakiSettingsSwitchRow(
+                label = stringResource(R.string.sasayaki_hold_playback_controls_to_boost),
+                checked = settings.holdPlaybackControlsToBoost,
+                onCheckedChange = { onSettingsChange(settings.copy(holdPlaybackControlsToBoost = it)) },
+            )
         }
         SasayakiSettingsActionRow(
             label = stringResource(R.string.sasayaki_skip_action),

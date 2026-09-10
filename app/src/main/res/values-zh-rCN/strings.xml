@@ -802,6 +802,8 @@
         <item quantity="other">%1$s 句</item>
     </plurals>
     <string name="sasayaki_scrub_seconds">%1$s 秒</string>
+    <string name="sasayaki_hold_playback_controls_to_boost">长按加速</string>
+    <string name="sasayaki_hold_playback_controls_to_boost_help">长按播放按钮或底部播放控件的空白处（键盘上按住空格或 K）以双倍速度播放，松手后恢复。</string>
     <string name="sasayaki_playback">播放</string>
     <string name="sasayaki_light_theme">浅色主题</string>
     <string name="sasayaki_dark_theme">深色主题</string>

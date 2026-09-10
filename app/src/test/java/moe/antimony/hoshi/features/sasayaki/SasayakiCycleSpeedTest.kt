@@ -16,6 +16,15 @@ class SasayakiCycleSpeedTest {
     }
 
     @Test
+    fun boostDoublesTheSavedRateUpToTheSliderMaximum() {
+        assertEquals(2.0f, sasayakiBoostedRate(1.0f), 0f)
+        assertEquals(2.5f, sasayakiBoostedRate(1.25f), 0f)
+        assertEquals(3.0f, sasayakiBoostedRate(1.5f), 0f)
+        assertEquals(3.0f, sasayakiBoostedRate(2.0f), 0f)
+        assertEquals(3.0f, sasayakiBoostedRate(3.0f), 0f)
+    }
+
+    @Test
     fun snapsSliderValuesOntoTheNextStep() {
         assertEquals(1.0f, sasayakiNextCycleSpeed(0.5f), 0f)
         assertEquals(1.25f, sasayakiNextCycleSpeed(1.1f), 0f)

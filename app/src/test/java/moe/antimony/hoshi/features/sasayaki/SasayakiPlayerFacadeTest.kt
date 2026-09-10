@@ -216,6 +216,15 @@ class SasayakiPlayerFacadeTest {
             return SasayakiSkipPreview(targetTime = currentTime, cue = null, secondsPerStep = null)
         }
 
+        override fun startSpeedBoost(): Float? {
+            commands += "startSpeedBoost"
+            return 2f
+        }
+
+        override fun endSpeedBoost() {
+            commands += "endSpeedBoost"
+        }
+
         override fun skipForward(seconds: Int) {
             commands += "skipForward:$seconds"
         }

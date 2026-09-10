@@ -584,6 +584,9 @@ internal fun ReaderBottomSafeProgress(
     onSasayakiScrubSteps: (Int) -> Unit,
     onSasayakiScrubEnd: (Int) -> Unit,
     onSasayakiScrubCancel: () -> Unit,
+    sasayakiHoldEnabled: Boolean,
+    onSasayakiHoldStart: () -> Unit,
+    onSasayakiHoldEnd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val progress = readerBottomSafeProgressText(
@@ -609,6 +612,9 @@ internal fun ReaderBottomSafeProgress(
             onScrubSteps = onSasayakiScrubSteps,
             onScrubEnd = onSasayakiScrubEnd,
             onScrubCancel = onSasayakiScrubCancel,
+            holdEnabled = sasayakiHoldEnabled,
+            onHoldStart = onSasayakiHoldStart,
+            onHoldEnd = onSasayakiHoldEnd,
         )
         Box(
             modifier = Modifier

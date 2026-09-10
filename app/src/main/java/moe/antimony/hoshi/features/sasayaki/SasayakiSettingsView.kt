@@ -177,6 +177,20 @@ fun SasayakiSettingsView(
                                     )
                                 },
                             )
+                            SettingsDivider()
+                            ListItem(
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                headlineContent = { Text(stringResource(R.string.sasayaki_hold_playback_controls_to_boost)) },
+                                supportingContent = { Text(stringResource(R.string.sasayaki_hold_playback_controls_to_boost_help)) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = loadedSettings.holdPlaybackControlsToBoost,
+                                        onCheckedChange = {
+                                            save(loadedSettings.copy(holdPlaybackControlsToBoost = it))
+                                        },
+                                    )
+                                },
+                            )
                         }
                         SettingsDivider()
                         ListItem(

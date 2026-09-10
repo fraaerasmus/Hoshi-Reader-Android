@@ -606,6 +606,40 @@ class ReaderHardwareKeyNavigationTest {
     }
 
     @Test
+    fun playKeysDecideTapVersusHoldOnReleaseWhenHoldToBoostIsOn() {
+        val settings = ReaderSettings()
+        fun action(action: Int, repeatCount: Int) = readerHardwareKeyEventForKeyEvent(
+            keyCode = KeyEvent.KEYCODE_SPACE,
+            action = action,
+            repeatCount = repeatCount,
+            settings = settings,
+            sasayakiEnabled = true,
+            hasSasayakiAudio = true,
+            sasayakiHoldToBoost = true,
+        )
+
+        val down = action(KeyEvent.ACTION_DOWN, 0)
+        assertTrue(down.consumed)
+        assertNull(down.action)
+        assertEquals(ReaderHardwareKeyAction.SasayakiHoldBoostStart, action(KeyEvent.ACTION_DOWN, 1).action)
+        assertNull(action(KeyEvent.ACTION_DOWN, 2).action)
+        assertEquals(ReaderHardwareKeyAction.SasayakiPlayKeyReleased, action(KeyEvent.ACTION_UP, 0).action)
+        // Seek keys are unaffected by the hold setting.
+        assertEquals(
+            ReaderHardwareKeyAction.SasayakiSeekForward,
+            readerHardwareKeyActionForKeyEvent(
+                keyCode = KeyEvent.KEYCODE_L,
+                action = KeyEvent.ACTION_DOWN,
+                repeatCount = 0,
+                settings = settings,
+                sasayakiEnabled = true,
+                hasSasayakiAudio = true,
+                sasayakiHoldToBoost = true,
+            ),
+        )
+    }
+
+    @Test
     fun enabledVolumeKeysConsumeKeyUpWithoutAction() {
         val settings = ReaderSettings(volumeKeysTurnPages = true)
 

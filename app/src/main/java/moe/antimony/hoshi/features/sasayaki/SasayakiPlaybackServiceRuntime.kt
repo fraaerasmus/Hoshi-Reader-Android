@@ -58,6 +58,10 @@ internal fun sasayakiNextCycleSpeed(rate: Float): Float {
     return speeds.firstOrNull { it > rate + 0.01f } ?: speeds.first()
 }
 
+/** Hold-to-boost target: double the saved rate, capped at the sheet slider's maximum. */
+internal fun sasayakiBoostedRate(rate: Float): Float =
+    (rate * 2f).coerceAtMost(SasayakiSpeedSliderRange.endInclusive)
+
 /**
  * Media3 speed glyph for the current rate (glyphs exist up to 2.0x; above that
  * falls back to the generic speed icon).

@@ -43,6 +43,7 @@ data class SasayakiSettings(
     val readerSkipButtonAction: SasayakiReaderSkipButtonAction = SasayakiReaderSkipButtonAction.Cue,
     val reverseVerticalReaderSkipButtons: Boolean = false,
     val dragPlaybackControlsToScrub: Boolean = true,
+    val holdPlaybackControlsToBoost: Boolean = true,
     val copyAudiobookToPrivateStorage: Boolean = false,
     val autoScroll: Boolean = true,
     val autoPause: Boolean = true,
@@ -91,6 +92,7 @@ class SasayakiSettingsStore(context: Context) : SasayakiSettingsLegacySource {
             ),
             reverseVerticalReaderSkipButtons = preferences.getBoolean(KEY_REVERSE_VERTICAL_READER_SKIP_BUTTONS, false),
             dragPlaybackControlsToScrub = preferences.getBoolean(KEY_DRAG_PLAYBACK_CONTROLS_TO_SCRUB, true),
+            holdPlaybackControlsToBoost = preferences.getBoolean(KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST, true),
             copyAudiobookToPrivateStorage = preferences.getBoolean(KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE, false),
             autoScroll = preferences.getBoolean(KEY_AUTO_SCROLL, true),
             autoPause = preferences.getBoolean(KEY_AUTO_PAUSE, true),
@@ -112,6 +114,7 @@ class SasayakiSettingsStore(context: Context) : SasayakiSettingsLegacySource {
             .putString(KEY_READER_SKIP_BUTTON_ACTION, settings.readerSkipButtonAction.name)
             .putBoolean(KEY_REVERSE_VERTICAL_READER_SKIP_BUTTONS, settings.reverseVerticalReaderSkipButtons)
             .putBoolean(KEY_DRAG_PLAYBACK_CONTROLS_TO_SCRUB, settings.dragPlaybackControlsToScrub)
+            .putBoolean(KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST, settings.holdPlaybackControlsToBoost)
             .putBoolean(KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE, settings.copyAudiobookToPrivateStorage)
             .putBoolean(KEY_AUTO_SCROLL, settings.autoScroll)
             .putBoolean(KEY_AUTO_PAUSE, settings.autoPause)
@@ -131,6 +134,7 @@ class SasayakiSettingsStore(context: Context) : SasayakiSettingsLegacySource {
         const val KEY_READER_SKIP_BUTTON_ACTION = "sasayakiReaderSkipButtonAction"
         const val KEY_REVERSE_VERTICAL_READER_SKIP_BUTTONS = "sasayakiReverseVerticalReaderSkipButtons"
         const val KEY_DRAG_PLAYBACK_CONTROLS_TO_SCRUB = "sasayakiDragPlaybackControlsToScrub"
+        const val KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST = "sasayakiHoldPlaybackControlsToBoost"
         const val KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE = "sasayakiCopyAudiobookToPrivateStorage"
         const val KEY_AUTO_SCROLL = "sasayakiAutoScroll"
         const val KEY_AUTO_PAUSE = "sasayakiAutoPause"
@@ -190,6 +194,7 @@ class SasayakiSettingsRepository(
             readerSkipButtonAction = SasayakiReaderSkipButtonAction.fromStorage(this[KEY_READER_SKIP_BUTTON_ACTION]),
             reverseVerticalReaderSkipButtons = this[KEY_REVERSE_VERTICAL_READER_SKIP_BUTTONS] ?: false,
             dragPlaybackControlsToScrub = this[KEY_DRAG_PLAYBACK_CONTROLS_TO_SCRUB] ?: true,
+            holdPlaybackControlsToBoost = this[KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST] ?: true,
             copyAudiobookToPrivateStorage = this[KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE] ?: false,
             autoScroll = this[KEY_AUTO_SCROLL] ?: true,
             autoPause = this[KEY_AUTO_PAUSE] ?: true,
@@ -210,6 +215,7 @@ class SasayakiSettingsRepository(
         this[KEY_READER_SKIP_BUTTON_ACTION] = settings.readerSkipButtonAction.name
         this[KEY_REVERSE_VERTICAL_READER_SKIP_BUTTONS] = settings.reverseVerticalReaderSkipButtons
         this[KEY_DRAG_PLAYBACK_CONTROLS_TO_SCRUB] = settings.dragPlaybackControlsToScrub
+        this[KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST] = settings.holdPlaybackControlsToBoost
         this[KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE] = settings.copyAudiobookToPrivateStorage
         this[KEY_AUTO_SCROLL] = settings.autoScroll
         this[KEY_AUTO_PAUSE] = settings.autoPause
@@ -235,6 +241,8 @@ class SasayakiSettingsRepository(
             booleanPreferencesKey("sasayakiReverseVerticalReaderSkipButtons")
         private val KEY_DRAG_PLAYBACK_CONTROLS_TO_SCRUB =
             booleanPreferencesKey("sasayakiDragPlaybackControlsToScrub")
+        private val KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST =
+            booleanPreferencesKey("sasayakiHoldPlaybackControlsToBoost")
         private val KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE =
             booleanPreferencesKey("sasayakiCopyAudiobookToPrivateStorage")
         private val KEY_AUTO_SCROLL = booleanPreferencesKey("sasayakiAutoScroll")

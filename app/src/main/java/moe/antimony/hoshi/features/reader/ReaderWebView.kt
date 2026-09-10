@@ -1515,6 +1515,7 @@ fun ReaderWebView(
             hasSasayakiAudio = sasayakiPlayer?.hasAudio == true,
             textEditorFocused = textEditorFocused,
             hasLookupPopup = stateHolder.lookupPopups.isNotEmpty(),
+            sasayakiHoldToBoost = sasayakiSettings.holdPlaybackControlsToBoost,
         )
         if (!keyEvent.consumed) return@rememberUpdatedState false
         when (val action = keyEvent.action) {
@@ -1537,6 +1538,18 @@ fun ReaderWebView(
             }
             ReaderHardwareKeyAction.SasayakiSeekForward -> {
                 sasayakiPlayer?.nextCue()
+            }
+            ReaderHardwareKeyAction.SasayakiHoldBoostStart -> {
+                sasayakiKeyBoosting[0] = true
+                startSasayakiBoost()
+            }
+            ReaderHardwareKeyAction.SasayakiPlayKeyReleased -> {
+                if (sasayakiKeyBoosting[0]) {
+                    sasayakiKeyBoosting[0] = false
+                    endSasayakiBoost()
+                } else {
+                    sasayakiPlayer?.togglePlayback()
+                }
             }
             null -> Unit
         }
@@ -1736,6 +1749,15 @@ fun ReaderWebView(
         val steps = readerSasayakiScrubSignedSteps(dragSteps, sasayakiBottomSkipButtonActions)
         if (steps != 0) player.seekTo(player.skipPreview(steps).targetTime)
     }
+    var sasayakiBoostRate by remember { mutableStateOf<Float?>(null) }
+    fun startSasayakiBoost() {
+        sasayakiPlayer?.startSpeedBoost()?.let { sasayakiBoostRate = it }
+    }
+    fun endSasayakiBoost() {
+        sasayakiBoostRate = null
+        sasayakiPlayer?.endSpeedBoost()
+    }
+    val sasayakiKeyBoosting = remember { booleanArrayOf(false) }
     val showSasayakiTopToggle = sasayakiSettings.enabled &&
         sasayakiSettings.showReaderToggle &&
         (sasayakiPlayer?.hasAudio == true || sasayakiPlaybackData.hasStoredAudioSource())
@@ -2020,6 +2042,9 @@ fun ReaderWebView(
             onSasayakiScrubSteps = ::previewSasayakiScrub,
             onSasayakiScrubEnd = ::commitSasayakiScrub,
             onSasayakiScrubCancel = { sasayakiScrubHud = null },
+            sasayakiHoldEnabled = sasayakiSettings.holdPlaybackControlsToBoost,
+            onSasayakiHoldStart = ::startSasayakiBoost,
+            onSasayakiHoldEnd = ::endSasayakiBoost,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
         if (chromeVisibility.showBottomChrome) ReaderBottomChrome(
@@ -2157,6 +2182,7 @@ fun ReaderWebView(
         }
         ReaderEdgeAdjustHud(controller = edgeAdjust)
         ReaderSasayakiScrubHud(state = sasayakiScrubHud)
+        ReaderSasayakiBoostHud(rate = sasayakiBoostRate)
         webView?.let { _ -> Unit }
     }
 }

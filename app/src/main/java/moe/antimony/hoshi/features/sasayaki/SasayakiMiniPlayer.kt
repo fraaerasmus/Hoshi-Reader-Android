@@ -103,7 +103,7 @@ internal fun SasayakiMiniPlayer(
                     modifier = Modifier.weight(1f),
                 )
                 TextButton(onClick = { runtime.cycleSpeed() }) {
-                    Text(formatSpeed(snapshot.speed))
+                    Text(sasayakiSpeedLabel(snapshot.speed))
                 }
                 IconButton(onClick = { runtime.skipBackward() }) {
                     Icon(Icons.Rounded.FastRewind, contentDescription = stringResource(R.string.sasayaki_previous_cue))
@@ -132,7 +132,7 @@ internal fun SasayakiMiniPlayer(
     }
 }
 
-private fun formatSpeed(speed: Float): String {
+internal fun sasayakiSpeedLabel(speed: Float): String {
     val text = if (speed % 1f == 0f) {
         speed.toInt().toString()
     } else {

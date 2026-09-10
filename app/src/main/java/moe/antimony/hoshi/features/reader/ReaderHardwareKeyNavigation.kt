@@ -13,6 +13,10 @@ internal sealed interface ReaderHardwareKeyAction {
     data class PopupTermNavigation(val direction: PopupTermNavigationDirection) : ReaderHardwareKeyAction
     data object SasayakiSeekForward : ReaderHardwareKeyAction
     data object SasayakiSeekBackward : ReaderHardwareKeyAction
+    /** Play key auto-repeat began: hold-to-boost should start. */
+    data object SasayakiHoldBoostStart : ReaderHardwareKeyAction
+    /** Play key released: end a running boost, else toggle playback. */
+    data object SasayakiPlayKeyReleased : ReaderHardwareKeyAction
 }
 
 internal data class ReaderHardwareKeyEventResult(
@@ -44,6 +48,7 @@ internal fun readerHardwareKeyActionForKeyEvent(
     hasSasayakiAudio: Boolean,
     textEditorFocused: Boolean = false,
     hasLookupPopup: Boolean = false,
+    sasayakiHoldToBoost: Boolean = false,
 ): ReaderHardwareKeyAction? =
     readerHardwareKeyEventForKeyEvent(
         keyCode = keyCode,
@@ -54,6 +59,7 @@ internal fun readerHardwareKeyActionForKeyEvent(
         hasSasayakiAudio = hasSasayakiAudio,
         textEditorFocused = textEditorFocused,
         hasLookupPopup = hasLookupPopup,
+        sasayakiHoldToBoost = sasayakiHoldToBoost,
     ).action
 
 internal fun readerHardwareKeyEventForKeyEvent(
@@ -65,6 +71,7 @@ internal fun readerHardwareKeyEventForKeyEvent(
     hasSasayakiAudio: Boolean,
     textEditorFocused: Boolean = false,
     hasLookupPopup: Boolean = false,
+    sasayakiHoldToBoost: Boolean = false,
 ): ReaderHardwareKeyEventResult {
     return when (keyCode) {
         KeyEvent.KEYCODE_PAGE_DOWN -> pageKeyResult(
@@ -100,6 +107,7 @@ internal fun readerHardwareKeyEventForKeyEvent(
             sasayakiEnabled = sasayakiEnabled,
             hasSasayakiAudio = hasSasayakiAudio,
             textEditorFocused = textEditorFocused,
+            holdToBoost = sasayakiHoldToBoost,
         )
         else -> ReaderHardwareKeyEventResult(consumed = false)
     }
@@ -112,9 +120,19 @@ private fun sasayakiKeyboardResult(
     sasayakiEnabled: Boolean,
     hasSasayakiAudio: Boolean,
     textEditorFocused: Boolean,
+    holdToBoost: Boolean,
 ): ReaderHardwareKeyEventResult {
     if (textEditorFocused || !sasayakiEnabled || !hasSasayakiAudio) {
         return ReaderHardwareKeyEventResult(consumed = false)
+    }
+    if (holdToBoost && (keyCode == KeyEvent.KEYCODE_SPACE || keyCode == KeyEvent.KEYCODE_K)) {
+        // Tap vs hold is decided on key-up; the first auto-repeat marks a hold.
+        val holdAction = when {
+            action == KeyEvent.ACTION_UP -> ReaderHardwareKeyAction.SasayakiPlayKeyReleased
+            action == KeyEvent.ACTION_DOWN && repeatCount == 1 -> ReaderHardwareKeyAction.SasayakiHoldBoostStart
+            else -> null
+        }
+        return ReaderHardwareKeyEventResult(consumed = true, action = holdAction)
     }
     val keyAction = when (keyCode) {
         KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_K -> ReaderHardwareKeyAction.SasayakiTogglePlayback

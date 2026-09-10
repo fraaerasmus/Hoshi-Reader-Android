@@ -1,6 +1,8 @@
 package moe.antimony.hoshi.features.reader
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
@@ -47,6 +49,7 @@ private const val SASAYAKI_SCRUB_STEP_DP = 40
  * rewrite of [ReaderBottomSafeProgress] conflicts on one call site, not this block. Emits nothing
  * when [controls] are hidden.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun ReaderSasayakiPlaybackRow(
     controls: ReaderSasayakiBottomPlaybackControls,
@@ -60,8 +63,12 @@ internal fun ReaderSasayakiPlaybackRow(
     onScrubSteps: (Int) -> Unit,
     onScrubEnd: (Int) -> Unit,
     onScrubCancel: () -> Unit,
+    holdEnabled: Boolean,
+    onHoldStart: () -> Unit,
+    onHoldEnd: () -> Unit,
 ) {
     if (!controls.visible) return
+    val onLongClick = onHoldStart.takeIf { holdEnabled }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -81,7 +88,8 @@ internal fun ReaderSasayakiPlaybackRow(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(onClick = onTapSafeArea),
+                .sasayakiHoldRelease(onHoldEnd)
+                .combinedClickable(onClick = onTapSafeArea, onLongClick = onLongClick),
         )
         Row(
             modifier = Modifier
@@ -114,6 +122,8 @@ internal fun ReaderSasayakiPlaybackRow(
                     stringResource(R.string.sasayaki_play)
                 },
                 onClick = onTogglePlayback,
+                onLongClick = onLongClick,
+                onRelease = onHoldEnd,
             )
             ReaderSasayakiPlaybackButton(
                 controls = controls,
@@ -167,6 +177,7 @@ private fun Modifier.sasayakiScrub(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ReaderSasayakiPlaybackButton(
     controls: ReaderSasayakiBottomPlaybackControls,
@@ -175,6 +186,8 @@ private fun ReaderSasayakiPlaybackButton(
     contentDescription: String,
     onClick: () -> Unit,
     holdRepeat: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    onRelease: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     Box(
@@ -204,7 +217,14 @@ private fun ReaderSasayakiPlaybackButton(
                     Modifier
                 },
             )
-            .clickable(onClick = onClick),
+            .then(if (onRelease != null) Modifier.sasayakiHoldRelease(onRelease) else Modifier)
+            .then(
+                if (onLongClick != null) {
+                    Modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                } else {
+                    Modifier.clickable(onClick = onClick)
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Icon(

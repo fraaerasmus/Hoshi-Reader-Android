@@ -123,6 +123,12 @@ class SasayakiPlayer private constructor(
 
     internal fun skipPreview(steps: Int): SasayakiSkipPreview = controller.skipPreview(steps)
 
+    fun startSpeedBoost(): Float? = controller.startSpeedBoost()
+
+    fun endSpeedBoost() {
+        controller.endSpeedBoost()
+    }
+
     fun updateMatchData(matchData: SasayakiMatchData?) {
         controller.updateMatchData(matchData)
     }
