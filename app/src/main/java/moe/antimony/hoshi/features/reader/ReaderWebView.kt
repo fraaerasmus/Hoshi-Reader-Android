@@ -1480,6 +1480,15 @@ fun ReaderWebView(
             }
         }
     }
+    var sasayakiBoostRate by remember { mutableStateOf<Float?>(null) }
+    fun startSasayakiBoost() {
+        sasayakiPlayer?.startSpeedBoost()?.let { sasayakiBoostRate = it }
+    }
+    fun endSasayakiBoost() {
+        sasayakiBoostRate = null
+        sasayakiPlayer?.endSpeedBoost()
+    }
+    val sasayakiKeyBoosting = remember { booleanArrayOf(false) }
     val currentReaderKeyHandler = rememberUpdatedState<(KeyEvent) -> Boolean> { event ->
         val textEditorFocused = context.findActivity()?.currentFocus?.onCheckIsTextEditor() == true
         if (event.keyCode == KeyEvent.KEYCODE_SHIFT_LEFT || event.keyCode == KeyEvent.KEYCODE_SHIFT_RIGHT) {
@@ -1749,15 +1758,6 @@ fun ReaderWebView(
         val steps = readerSasayakiScrubSignedSteps(dragSteps, sasayakiBottomSkipButtonActions)
         if (steps != 0) player.seekTo(player.skipPreview(steps).targetTime)
     }
-    var sasayakiBoostRate by remember { mutableStateOf<Float?>(null) }
-    fun startSasayakiBoost() {
-        sasayakiPlayer?.startSpeedBoost()?.let { sasayakiBoostRate = it }
-    }
-    fun endSasayakiBoost() {
-        sasayakiBoostRate = null
-        sasayakiPlayer?.endSpeedBoost()
-    }
-    val sasayakiKeyBoosting = remember { booleanArrayOf(false) }
     val showSasayakiTopToggle = sasayakiSettings.enabled &&
         sasayakiSettings.showReaderToggle &&
         (sasayakiPlayer?.hasAudio == true || sasayakiPlaybackData.hasStoredAudioSource())
