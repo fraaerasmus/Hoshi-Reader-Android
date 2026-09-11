@@ -25,7 +25,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -266,7 +266,7 @@ private fun BookSyncBackendRow(
 ) {
     val comparison = status?.comparison
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        val resources = LocalContext.current.resources
+        val resources = LocalResources.current
         Column(modifier = Modifier.weight(1f)) {
             Text(backend.displayName, style = MaterialTheme.typography.titleSmall)
             val chip = status?.error?.resolve(resources) ?: stringResource(syncComparisonChipLabel(comparison))

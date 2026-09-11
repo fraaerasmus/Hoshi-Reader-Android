@@ -79,3 +79,13 @@ jobs:
       - name: Test, lint, and assemble debug APK
         shell: bash
         run: ./gradlew --no-daemon test lint assembleDebug
+
+      - name: Print full lint reports on failure
+        if: failure()
+        shell: bash
+        run: |
+          for report in app/build/intermediates/lint_intermediate_text_report/*/*/lint-results-*.txt; do
+            if [[ -f "${report}" ]]; then
+              cat "${report}"
+            fi
+          done

@@ -23,7 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import moe.antimony.hoshi.R
@@ -77,7 +77,7 @@ internal fun ReaderRouteDestination(
         syncSettings = syncSettings,
         sasayakiSettings = sasayakiSettings,
     )
-    val context = LocalContext.current
+    val resources = LocalResources.current
     val bookmarkScope = rememberCoroutineScope()
     var reloadKey by remember(bookId) { mutableIntStateOf(0) }
     var pendingSyncJump by remember(bookId) { mutableStateOf<ReaderSyncJump?>(null) }
@@ -206,16 +206,16 @@ internal fun ReaderRouteDestination(
         if (applied == null) {
             report.failures.firstOrNull()?.let { failure ->
                 readerSnackbarHostState.showSnackbar(
-                    context.getString(
+                    resources.getString(
                         R.string.reader_sync_failed_format,
                         failure.backend.displayName,
-                        failure.error.resolve(context.resources),
+                        failure.error.resolve(resources),
                     ),
                 )
             }
             return
         }
-        val message = context.getString(
+        val message = resources.getString(
             R.string.reader_synced_from_format,
             applied.backend.displayName,
             applied.percentage.toPercent(),
@@ -238,7 +238,7 @@ internal fun ReaderRouteDestination(
                 pendingSyncJump = plan.jump
                 val result = readerSnackbarHostState.showSnackbar(
                     message = message,
-                    actionLabel = context.getString(R.string.action_undo),
+                    actionLabel = resources.getString(R.string.action_undo),
                 )
                 if (result == SnackbarResult.ActionPerformed) {
                     plan.jump.origin?.let { pendingSyncJump = ReaderSyncJump(target = it, origin = null, seedOnly = false) }

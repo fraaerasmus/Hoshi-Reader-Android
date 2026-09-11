@@ -27,7 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -62,7 +62,7 @@ fun KosyncSettingsView(
     var isConnecting by remember { mutableStateOf(false) }
     val connectedLabel = stringResource(R.string.sync_status_connected)
     val failedFormat = stringResource(R.string.kosync_login_failed_format)
-    val resources = LocalContext.current.resources
+    val resources = LocalResources.current
     val syncStatus by appContainer.syncStatusRepository.status(SyncBackend.Kosync)
         .collectAsStateWithLifecycle(initialValue = SyncStatus())
 
