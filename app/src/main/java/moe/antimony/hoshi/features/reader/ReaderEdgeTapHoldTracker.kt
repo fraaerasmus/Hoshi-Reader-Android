@@ -45,7 +45,7 @@ internal class ReaderEdgeTapHoldTracker(
     private var holdCandidate = false
     private var tapCandidate = false
     private var lastTapEdge = ReaderEdgeSwipeGestureTracker.Edge.None
-    private var lastTapTimeMs = Long.MIN_VALUE
+    private var lastTapTimeMs = NO_TAP
 
     /** Returns true when a hold timer should be scheduled for this touch. */
     fun onDown(edge: ReaderEdgeSwipeGestureTracker.Edge, x: Float, y: Float, holdEnabled: Boolean, doubleTapEnabled: Boolean): Boolean {
@@ -80,8 +80,8 @@ internal class ReaderEdgeTapHoldTracker(
     fun onUp(timeMs: Long): Result {
         val result = when {
             isHolding -> Result.HoldEnd
-            tapCandidate && lastTapEdge == edge && timeMs - lastTapTimeMs <= doubleTapTimeoutMs -> {
-                lastTapTimeMs = Long.MIN_VALUE
+            tapCandidate && lastTapEdge == edge && lastTapTimeMs != NO_TAP && timeMs - lastTapTimeMs <= doubleTapTimeoutMs -> {
+                lastTapTimeMs = NO_TAP
                 Result.DoubleTap(edge)
             }
             tapCandidate -> {
@@ -102,6 +102,11 @@ internal class ReaderEdgeTapHoldTracker(
         isHolding = false
         holdCandidate = false
         tapCandidate = false
+    }
+
+    private companion object {
+        // A sentinel instead of Long.MIN_VALUE: subtracting MIN_VALUE overflows and made every third tap a double-tap.
+        const val NO_TAP = -1L
     }
 }
 
