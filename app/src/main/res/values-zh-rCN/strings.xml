@@ -13,7 +13,7 @@
     <string name="action_import" comment="Generic import action label.">导入</string>
     <string name="action_export">导出</string>
     <string name="action_update">更新</string>
-    <string name="action_download">下载</string>
+    <string name="action_download" comment="Generic download action label.">下载</string>
     <string name="action_install">安装</string>
     <string name="action_later">稍后</string>
     <string name="action_skip">跳过</string>
@@ -191,7 +191,7 @@
     <string name="bookshelf_cover_mode_blur">模糊</string>
     <string name="bookshelf_cover_mode_hide">隐藏</string>
     <string name="bookshelf_import_epub">导入 EPUB</string>
-    <string name="bookshelf_sync">同步</string>
+    <string name="bookshelf_sync" comment="Bookshelf action to sync the selected book.">同步</string>
     <string name="bookshelf_sync_details">同步…</string>
     <string name="bookshelf_move">移动</string>
     <string name="bookshelf_mark_read">标记已读</string>
@@ -587,11 +587,11 @@
     <string name="sync_outcome_up_to_date_format">%1$s：已是最新</string>
     <string name="reader_synced_from_format">已从 %1$s 同步 · %2$d%%</string>
     <string name="reader_sync_failed_format">%1$s：%2$s</string>
-    <string name="reader_sync">同步</string>
+    <string name="reader_sync" comment="Reader menu entry for the current book sync controls.">同步</string>
     <string name="sync_sheet_local_position">本机</string>
     <string name="sync_sheet_saved_format">保存于 %1$s</string>
     <string name="sync_sheet_sync_all">立即同步全部</string>
-    <string name="sync_sheet_audiobook">有声书</string>
+    <string name="sync_sheet_audiobook" comment="Sync panel section heading for audiobook and reading position controls.">有声书</string>
     <string name="sync_sheet_move_audio_to_text">将音频移到阅读位置</string>
     <string name="sync_sheet_move_text_to_audio">将阅读位置移到音频</string>
     <string name="sync_sheet_recent_positions">最近位置</string>
@@ -617,15 +617,15 @@
     <string name="opds_title">OPDS 目录</string>
     <string name="opds_add_catalog">添加目录</string>
     <string name="opds_edit_catalog">编辑目录</string>
-    <string name="opds_catalog_name">名称</string>
+    <string name="opds_catalog_name" comment="Display name field for a saved OPDS catalog.">名称</string>
     <string name="opds_catalog_url">目录地址</string>
     <string name="opds_no_catalogs">尚无目录。点击 + 添加 calibre 内容服务器的 /opds 地址。</string>
-    <string name="opds_remove">移除</string>
+    <string name="opds_remove" comment="Action to remove a saved OPDS catalog.">移除</string>
     <string name="opds_remove_confirmation_format">移除目录 %1$s？</string>
-    <string name="opds_search">搜索</string>
+    <string name="opds_search" comment="Action to search an OPDS catalog, distinct from a search field placeholder or reader tab.">搜索</string>
     <string name="opds_search_hint">搜索目录</string>
     <string name="opds_load_more">加载更多</string>
-    <string name="opds_download">下载</string>
+    <string name="opds_download" comment="Action to download a book from an OPDS catalog.">下载</string>
     <string name="opds_no_epub">无 EPUB</string>
     <string name="opds_empty_feed">这里没有内容。</string>
     <string name="opds_error_format">无法加载目录：%1$s</string>
@@ -670,7 +670,7 @@
     <string name="advanced_sasayaki_subtitle">配合已匹配的有声书字幕阅读</string>
     <string name="audio_sources">来源</string>
     <string name="audio_add_source">添加来源</string>
-    <string name="audio_name">名称</string>
+    <string name="audio_name" comment="Name label in audio source management.">名称</string>
     <string name="audio_url">URL</string>
     <string name="audio_yomitan_json_supported">支持 Yomitan JSON 音频来源</string>
     <string name="audio_auto_play_on_lookup">查词时自动播放</string>
@@ -854,9 +854,9 @@
     <string name="sasayaki_tab_resources">资源</string>
     <string name="sasayaki_tab_chapters" comment="Sasayaki audiobook chapter-list tab label; intentionally matches the Reader chapters label.">章节</string>
     <string name="sasayaki_tab_settings" comment="Sasayaki sheet tab label, intentionally matching settings page titles.">设置</string>
-    <string name="sasayaki_audiobook_resource">有声书</string>
+    <string name="sasayaki_audiobook_resource" comment="Audiobook resource row in Sasayaki settings.">有声书</string>
     <string name="sasayaki_audiobook_cover">有声书封面</string>
-    <string name="sasayaki_remove_audio">移除</string>
+    <string name="sasayaki_remove_audio" comment="Action to remove the current book audiobook source.">移除</string>
     <string name="sasayaki_storage_copied">已复制到应用存储。原始有声书文件可以删除。</string>
     <string name="sasayaki_storage_linked">已链接到外部有声书文件。请保留原始文件可用。</string>
     <string name="sasayaki_storage_select_audio">选择 .mp3、.m4b 或 .opus 有声书</string>

@@ -13,7 +13,7 @@
     <string name="action_import" comment="Generic import action label.">Import</string>
     <string name="action_export">Export</string>
     <string name="action_update">Update</string>
-    <string name="action_download">Download</string>
+    <string name="action_download" comment="Generic download action label.">Download</string>
     <string name="action_install">Install</string>
     <string name="action_later">Later</string>
     <string name="action_skip">Skip</string>
@@ -193,7 +193,7 @@
     <string name="bookshelf_cover_mode_blur">Blur</string>
     <string name="bookshelf_cover_mode_hide">Hide</string>
     <string name="bookshelf_import_epub">Import EPUB</string>
-    <string name="bookshelf_sync">Sync</string>
+    <string name="bookshelf_sync" comment="Bookshelf action to sync the selected book.">Sync</string>
     <string name="bookshelf_sync_details">Sync…</string>
     <string name="bookshelf_move">Move</string>
     <string name="bookshelf_mark_read">Mark Read</string>
@@ -589,11 +589,11 @@
     <string name="sync_outcome_up_to_date_format">%1$s: already synced</string>
     <string name="reader_synced_from_format">Synced from %1$s · %2$d%%</string>
     <string name="reader_sync_failed_format">%1$s: %2$s</string>
-    <string name="reader_sync">Sync</string>
+    <string name="reader_sync" comment="Reader menu entry for the current book sync controls.">Sync</string>
     <string name="sync_sheet_local_position">This device</string>
     <string name="sync_sheet_saved_format">Saved %1$s</string>
     <string name="sync_sheet_sync_all">Sync all now</string>
-    <string name="sync_sheet_audiobook">Audiobook</string>
+    <string name="sync_sheet_audiobook" comment="Sync panel section heading for audiobook and reading position controls.">Audiobook</string>
     <string name="sync_sheet_move_audio_to_text">Move audio to reading position</string>
     <string name="sync_sheet_move_text_to_audio">Move reading position to audio</string>
     <string name="sync_sheet_recent_positions">Recent positions</string>
@@ -619,15 +619,15 @@
     <string name="opds_title">OPDS Catalogs</string>
     <string name="opds_add_catalog">Add catalog</string>
     <string name="opds_edit_catalog">Edit catalog</string>
-    <string name="opds_catalog_name">Name</string>
+    <string name="opds_catalog_name" comment="Display name field for a saved OPDS catalog.">Name</string>
     <string name="opds_catalog_url">Catalog URL</string>
     <string name="opds_no_catalogs">No catalogs yet. Add your calibre content server\'s /opds address with the + button.</string>
-    <string name="opds_remove">Remove</string>
+    <string name="opds_remove" comment="Action to remove a saved OPDS catalog.">Remove</string>
     <string name="opds_remove_confirmation_format">Remove catalog %1$s?</string>
-    <string name="opds_search">Search</string>
+    <string name="opds_search" comment="Action to search an OPDS catalog, distinct from a search field placeholder or reader tab.">Search</string>
     <string name="opds_search_hint">Search catalog</string>
     <string name="opds_load_more">Load more</string>
-    <string name="opds_download">Download</string>
+    <string name="opds_download" comment="Action to download a book from an OPDS catalog.">Download</string>
     <string name="opds_no_epub">No EPUB</string>
     <string name="opds_empty_feed">Nothing here.</string>
     <string name="opds_error_format">Could not load catalog: %1$s</string>
@@ -672,7 +672,7 @@
     <string name="advanced_sasayaki_subtitle">Read along with matched audiobook subtitles</string>
     <string name="audio_sources">Sources</string>
     <string name="audio_add_source">Add Source</string>
-    <string name="audio_name">Name</string>
+    <string name="audio_name" comment="Name label in audio source management.">Name</string>
     <string name="audio_url">URL</string>
     <string name="audio_yomitan_json_supported">Yomitan JSON audio sources are supported</string>
     <string name="audio_auto_play_on_lookup">Auto-play on Lookup</string>
@@ -856,9 +856,9 @@
     <string name="sasayaki_tab_resources">Resources</string>
     <string name="sasayaki_tab_chapters" comment="Sasayaki audiobook chapter-list tab label; intentionally matches the Reader chapters label.">Chapters</string>
     <string name="sasayaki_tab_settings" comment="Sasayaki sheet tab label, intentionally matching settings page titles.">Settings</string>
-    <string name="sasayaki_audiobook_resource">Audiobook</string>
+    <string name="sasayaki_audiobook_resource" comment="Audiobook resource row in Sasayaki settings.">Audiobook</string>
     <string name="sasayaki_audiobook_cover">Audiobook cover</string>
-    <string name="sasayaki_remove_audio">Remove</string>
+    <string name="sasayaki_remove_audio" comment="Action to remove the current book audiobook source.">Remove</string>
     <string name="sasayaki_storage_copied">Copied to app storage. The original audiobook file can be deleted.</string>
     <string name="sasayaki_storage_linked">Linked to the external audiobook file. Keep the original file available.</string>
     <string name="sasayaki_storage_select_audio">Select a .mp3, .m4b, or .opus audiobook</string>
