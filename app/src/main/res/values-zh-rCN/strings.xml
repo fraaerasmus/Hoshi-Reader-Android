@@ -716,6 +716,8 @@
     <string name="gestures_section_volume">音量键</string>
     <string name="gestures_volume_hold">长按音量键</string>
     <string name="gestures_section_mouse">鼠标</string>
+    <string name="gestures_mouse_selection_colors">选择后显示标注颜色</string>
+    <string name="gestures_mouse_selection_colors_help">用鼠标选择文字后在光标处显示标注颜色。系统自带的鼠标菜单（复制、翻译等）仍可通过右键打开。</string>
     <string name="gestures_mouse_side_click">点击两侧翻页</string>
     <string name="gestures_mouse_side_click_help">点击页面外侧五分之一区域翻页，而不是查询该处的词。滚轮始终可以翻页。</string>
     <string name="gestures_section_keyboard">键盘</string>

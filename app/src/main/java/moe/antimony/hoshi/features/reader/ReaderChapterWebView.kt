@@ -100,6 +100,7 @@ internal fun ChapterWebView(
     systemDark: Boolean,
     edgeGestures: ReaderEdgeGestureHandler,
     mouseSideClickTurnsPages: Boolean,
+    mouseSelectionShowsHighlightColors: Boolean,
     onBeforeRestoreVisible: (WebView) -> ReaderRestoreBeforeVisibleAction? = { null },
     modifier: Modifier = Modifier,
 ) {
@@ -123,6 +124,7 @@ internal fun ChapterWebView(
     val currentOnRestoreCompleted = rememberUpdatedState(onRestoreCompleted)
     val currentEdgeGestures = rememberUpdatedState(edgeGestures)
     val currentMouseSideClickTurnsPages = rememberUpdatedState(mouseSideClickTurnsPages)
+    val currentMouseSelectionShowsHighlightColors = rememberUpdatedState(mouseSelectionShowsHighlightColors)
     val currentOnBeforeRestoreVisible = rememberUpdatedState(onBeforeRestoreVisible)
     val context = LocalContext.current
     val readerWebAssets = remember(context) { ReaderWebAssets.load(context) }
@@ -334,6 +336,10 @@ internal fun ChapterWebView(
                 )
             }
             (webView as? HoshiReaderWebView)?.onWheelPage = null
+            fun showMouseSelectionColors(x: Float, y: Float) {
+                if (!currentMouseSelectionShowsHighlightColors.value) return
+                (webView as? HoshiReaderWebView)?.showHighlightColorsForMouseSelection(x, y)
+            }
             when (readerSettings.viewMode) {
                 ReaderViewMode.Continuous -> {
                     webView.setOnTouchListener(
@@ -342,6 +348,7 @@ internal fun ChapterWebView(
                             shouldIgnoreReaderGesture = ::shouldIgnoreReaderGestureEvent,
                             onTap = { x, y -> selectAt(x, y) { currentOnReaderTapOutside.value() } },
                             onScrollGesture = currentOnReaderInteraction.value,
+                            onMouseSelectionEnd = ::showMouseSelectionColors,
                             onNextChapter = {
                                 currentOnReaderInteraction.value()
                                 currentOnClearLookupPopup.value()
@@ -410,6 +417,7 @@ internal fun ChapterWebView(
                     readerPendingProgressSaveCallbacks.remove(webView)?.let(webView::removeCallbacks)
                     webView.setOnScrollChangeListener(null)
                     fun turnPage(direction: ReaderNavigationDirection) {
+                        (webView as? HoshiReaderWebView)?.dismissHighlightColors()
                         currentOnReaderInteraction.value()
                         currentOnClearLookupPopup.value()
                         webView.navigatePageForDirection(
@@ -427,6 +435,8 @@ internal fun ChapterWebView(
                         ) {
                             override fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean =
                                 shouldIgnoreReaderGestureEvent(event)
+
+                            override fun onMouseSelectionEnd(x: Float, y: Float) = showMouseSelectionColors(x, y)
 
                             override fun edgeZoneWidthDp(): Float = currentEdgeGestures.value.zoneWidthDp
 
@@ -767,6 +777,25 @@ private class HoshiReaderWebView(context: Context) : WebView(context) {
     private fun dismissHighlightColorPopup() {
         highlightColorPopup?.dismiss()
         highlightColorPopup = null
+    }
+
+    fun dismissHighlightColors() {
+        dismissHighlightColorPopup()
+    }
+
+    /**
+     * Chromium raises no selection toolbar for a mouse selection (its mouse menu is a dropdown of its own,
+     * which cannot carry our Highlight item), so the colour swatches come up at the cursor instead.
+     */
+    fun showHighlightColorsForMouseSelection(x: Float, y: Float) {
+        evaluateJavascript(ReaderHighlightCommand.PrepareSelection.source) { result ->
+            if (result?.trim() != "true") {
+                dismissHighlightColorPopup()
+                return@evaluateJavascript
+            }
+            val cursor = Rect(x.toInt(), y.toInt(), x.toInt(), y.toInt())
+            post { showHighlightColorPicker(cursor) }
+        }
     }
 
     override fun startActionMode(callback: ActionMode.Callback): ActionMode? =
@@ -1139,6 +1168,7 @@ private class ContinuousScrollTouchListener(
     private val shouldIgnoreReaderGesture: (MotionEvent) -> Boolean,
     private val onTap: (Float, Float) -> Unit,
     private val onScrollGesture: () -> Unit,
+    private val onMouseSelectionEnd: (Float, Float) -> Unit,
     private val onNextChapter: () -> Boolean,
     private val onPreviousChapter: () -> Boolean,
 ) : View.OnTouchListener {
@@ -1188,7 +1218,7 @@ private class ContinuousScrollTouchListener(
                     onTap(event.x, event.y)
                     return false
                 }
-                if (!event.isMouse()) handleBoundarySwipe(webView, dx, dy)
+                if (event.isMouse()) onMouseSelectionEnd(event.x, event.y) else handleBoundarySwipe(webView, dx, dy)
                 focusTracker.onCancel()
             }
         }

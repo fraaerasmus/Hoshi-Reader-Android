@@ -718,6 +718,8 @@
     <string name="gestures_section_volume">Volume keys</string>
     <string name="gestures_volume_hold">Hold a volume key</string>
     <string name="gestures_section_mouse">Mouse</string>
+    <string name="gestures_mouse_selection_colors">Highlight colours after selecting</string>
+    <string name="gestures_mouse_selection_colors_help">Selecting text with a mouse opens the highlight colours at the cursor. The system\'s own mouse menu (copy, translate, …) stays a right-click away.</string>
     <string name="gestures_mouse_side_click">Click the sides to turn pages</string>
     <string name="gestures_mouse_side_click_help">Clicks in the outer fifth of the page turn it instead of looking up the word there. The scroll wheel always turns pages.</string>
     <string name="gestures_section_keyboard">Keyboard</string>

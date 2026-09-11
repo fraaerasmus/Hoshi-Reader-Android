@@ -40,7 +40,12 @@ internal abstract class SwipePageTouchListener(
             MotionEvent.ACTION_DOWN -> tracker.onDown(event.x, event.y, event.eventTime, allowSwipe = !isMouse)
             MotionEvent.ACTION_POINTER_DOWN -> tracker.onAdditionalPointerDown()
             MotionEvent.ACTION_MOVE -> dispatch(tracker.onMove(event.x, event.y, event.eventTime))
-            MotionEvent.ACTION_UP -> dispatch(tracker.onUp(event.x, event.y, event.eventTime), view, isMouse)
+            MotionEvent.ACTION_UP -> {
+                val result = tracker.onUp(event.x, event.y, event.eventTime)
+                // A mouse drag that was not a click has left a text selection behind.
+                if (isMouse && result == ReaderSwipeGestureTracker.Result.None) onMouseSelectionEnd(event.x, event.y)
+                dispatch(result, view, isMouse)
+            }
             MotionEvent.ACTION_CANCEL -> tracker.onCancel()
         }
         return false
@@ -162,6 +167,9 @@ internal abstract class SwipePageTouchListener(
     open fun onLeftSwipe() = Unit
     open fun onRightSwipe() = Unit
     open fun onTap(x: Float, y: Float, isMouse: Boolean = false) = Unit
+
+    /** A mouse drag finished at ([x], [y]); Chromium shows no selection toolbar for it. */
+    open fun onMouseSelectionEnd(x: Float, y: Float) = Unit
     open fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean = false
 
     open fun edgeZoneWidthDp(): Float = READER_DEFAULT_EDGE_ZONE_DP

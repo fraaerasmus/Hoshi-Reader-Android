@@ -152,6 +152,18 @@ fun ReaderGesturesView(
                 GesturesCard {
                     ListItem(
                         colors = transparent(),
+                        headlineContent = { Text(stringResource(R.string.gestures_mouse_selection_colors)) },
+                        supportingContent = { Text(stringResource(R.string.gestures_mouse_selection_colors_help)) },
+                        trailingContent = {
+                            Switch(
+                                checked = gestures.mouseSelectionShowsHighlightColors,
+                                onCheckedChange = { checked -> scope.launch { gesturesRepository.update { it.copy(mouseSelectionShowsHighlightColors = checked) } } },
+                            )
+                        },
+                    )
+                    HorizontalDivider()
+                    ListItem(
+                        colors = transparent(),
                         headlineContent = { Text(stringResource(R.string.gestures_mouse_side_click)) },
                         supportingContent = { Text(stringResource(R.string.gestures_mouse_side_click_help)) },
                         trailingContent = {

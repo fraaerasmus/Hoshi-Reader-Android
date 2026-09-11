@@ -2130,6 +2130,7 @@ fun ReaderWebView(
                         systemDark = systemDarkTheme,
                         edgeGestures = edgeGestures,
                         mouseSideClickTurnsPages = gestureSettings.mouseSideClickTurnsPages,
+                        mouseSelectionShowsHighlightColors = gestureSettings.mouseSelectionShowsHighlightColors,
                         onBeforeRestoreVisible = { restoredWebView ->
                             sasayakiRestoreBeforeVisibleAction(
                                 restoredWebView = restoredWebView,

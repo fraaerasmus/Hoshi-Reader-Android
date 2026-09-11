@@ -21,6 +21,8 @@ data class ReaderGestureSettings(
     val dockOffsetFraction: Float = DefaultDockOffsetFraction,
     /** Mouse only: a click in the outer side zones turns the page instead of looking up the word there. */
     val mouseSideClickTurnsPages: Boolean = false,
+    /** Mouse only: finishing a selection opens the highlight colours, which Chromium's mouse menu leaves out. */
+    val mouseSelectionShowsHighlightColors: Boolean = true,
     /** Width of the touch strips on both screen edges that hold, double-tap and drag bindings listen in. */
     val edgeZoneWidthDp: Int = DefaultEdgeZoneWidthDp,
 ) {
@@ -52,6 +54,7 @@ class ReaderGesturesRepository(
             preferences[KEY_PLACEMENT] = next.controlsPlacement.name
             preferences[KEY_DOCK_OFFSET] = next.dockOffsetFraction.coerceIn(0f, 1f)
             preferences[KEY_MOUSE_SIDE_CLICK] = next.mouseSideClickTurnsPages
+            preferences[KEY_MOUSE_SELECTION_COLORS] = next.mouseSelectionShowsHighlightColors
             preferences[KEY_EDGE_ZONE_WIDTH] = next.edgeZoneWidthDp.coerceIn(ReaderGestureSettings.MinEdgeZoneWidthDp, ReaderGestureSettings.MaxEdgeZoneWidthDp)
         }
     }
@@ -64,6 +67,7 @@ class ReaderGesturesRepository(
             } ?: SasayakiControlsPlacement.Bottom,
             dockOffsetFraction = (this[KEY_DOCK_OFFSET] ?: ReaderGestureSettings.DefaultDockOffsetFraction).coerceIn(0f, 1f),
             mouseSideClickTurnsPages = this[KEY_MOUSE_SIDE_CLICK] ?: false,
+            mouseSelectionShowsHighlightColors = this[KEY_MOUSE_SELECTION_COLORS] ?: true,
             edgeZoneWidthDp = (this[KEY_EDGE_ZONE_WIDTH] ?: ReaderGestureSettings.DefaultEdgeZoneWidthDp)
                 .coerceIn(ReaderGestureSettings.MinEdgeZoneWidthDp, ReaderGestureSettings.MaxEdgeZoneWidthDp),
         )
@@ -80,6 +84,7 @@ class ReaderGesturesRepository(
         private val KEY_PLACEMENT = stringPreferencesKey("sasayakiControlsPlacement")
         private val KEY_DOCK_OFFSET = floatPreferencesKey("sasayakiDockOffsetFraction")
         private val KEY_MOUSE_SIDE_CLICK = booleanPreferencesKey("mouseSideClickTurnsPages")
+        private val KEY_MOUSE_SELECTION_COLORS = booleanPreferencesKey("mouseSelectionShowsHighlightColors")
         private val KEY_EDGE_ZONE_WIDTH = intPreferencesKey("edgeZoneWidthDp")
     }
 }
