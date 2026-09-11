@@ -181,7 +181,7 @@ internal fun RemoteBackupSection(
                         value = serverInput,
                         onValueChange = { serverInput = it },
                         label = { Text(stringResource(R.string.backup_server_address)) },
-                        placeholder = { Text("http://100.98.70.32:8090") },
+                        placeholder = { Text("http://192.168.1.10:8080/backups") },
                         singleLine = true,
                         colors = hoshiOutlinedTextFieldColors(),
                         modifier = Modifier.fillMaxWidth(),

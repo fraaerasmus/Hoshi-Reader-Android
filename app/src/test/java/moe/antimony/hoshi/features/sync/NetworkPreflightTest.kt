@@ -9,7 +9,7 @@ import org.junit.Test
 class NetworkPreflightTest {
     @Test
     fun tailscaleHostsAreCgnatAddressesOrMagicDnsNames() {
-        assertTrue(isTailscaleHost("100.98.70.32"))
+        assertTrue(isTailscaleHost("100.100.100.100"))
         assertTrue(isTailscaleHost("100.127.255.1"))
         assertTrue(isTailscaleHost("kobo.tailnet-name.ts.net"))
         assertFalse(isTailscaleHost("100.63.0.1"))

@@ -435,7 +435,7 @@ private fun CatalogDialog(
                     value = url,
                     onValueChange = { url = it },
                     label = { Text(stringResource(R.string.opds_catalog_url)) },
-                    placeholder = { Text("http://100.98.70.32:8083/opds") },
+                    placeholder = { Text("http://192.168.1.10:8080/opds") },
                     singleLine = true,
                     colors = hoshiOutlinedTextFieldColors(),
                     modifier = Modifier.fillMaxWidth(),

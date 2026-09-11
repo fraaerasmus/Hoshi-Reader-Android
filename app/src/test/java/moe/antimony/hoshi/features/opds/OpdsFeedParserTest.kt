@@ -37,18 +37,18 @@ class OpdsFeedParserTest {
 
     @Test
     fun resolvesCalibreRootRelativeLinksAgainstTheCatalogUrl() {
-        val feed = OpdsFeedParser.parseFeed("http://100.98.70.32:8083/opds?library_id=calibre", calibreFeed)
+        val feed = OpdsFeedParser.parseFeed("http://calibre.example:8083/opds?library_id=calibre", calibreFeed)
 
         assertEquals("calibre Library", feed.title)
-        assertEquals("http://100.98.70.32:8083/opds/search/{searchTerms}?library_id=calibre", feed.searchTemplate)
+        assertEquals("http://calibre.example:8083/opds/search/{searchTerms}?library_id=calibre", feed.searchTemplate)
         assertNull(feed.searchDescriptionHref)
-        assertEquals("http://100.98.70.32:8083/opds/navcatalog/4e6577657374?library_id=calibre&offset=25", feed.nextHref)
+        assertEquals("http://calibre.example:8083/opds/navcatalog/4e6577657374?library_id=calibre&offset=25", feed.nextHref)
         val navigation = feed.entries[0]
-        assertEquals("http://100.98.70.32:8083/opds/navcatalog/4f61757468?library_id=calibre", navigation.navigationHref)
+        assertEquals("http://calibre.example:8083/opds/navcatalog/4f61757468?library_id=calibre", navigation.navigationHref)
         assertNull(navigation.epubHref)
         val book = feed.entries[1]
         assertNull(book.navigationHref)
-        assertEquals("http://100.98.70.32:8083/get/epub/18/calibre", book.epubHref)
+        assertEquals("http://calibre.example:8083/get/epub/18/calibre", book.epubHref)
         assertEquals(listOf("住野よる"), book.authors)
         assertEquals("A novel about dreams.", book.summary)
         val pdfOnly = feed.entries[2]

@@ -89,7 +89,7 @@ fun KosyncSettingsView(
                         value = serverInput,
                         onValueChange = { serverInput = it },
                         label = { Text(stringResource(R.string.kosync_server)) },
-                        placeholder = { Text("http://100.98.70.32:7200") },
+                        placeholder = { Text("http://192.168.1.10:8081") },
                         singleLine = true,
                         colors = hoshiOutlinedTextFieldColors(),
                         modifier = Modifier.fillMaxWidth(),
