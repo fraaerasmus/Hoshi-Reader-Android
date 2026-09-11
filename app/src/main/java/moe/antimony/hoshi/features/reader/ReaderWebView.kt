@@ -1788,6 +1788,9 @@ fun ReaderWebView(
             steps = steps,
             secondsPerStep = preview.secondsPerStep,
             cueText = preview.cue?.text,
+            currentTime = player.currentTime,
+            targetTime = preview.targetTime,
+            duration = player.duration,
         )
     }
     fun commitSasayakiScrub(dragSteps: Int) {
@@ -2083,6 +2086,7 @@ fun ReaderWebView(
             sasayakiHoldEnabled = sasayakiSettings.holdPlaybackControlsToBoost,
             onSasayakiHoldStart = ::startSasayakiBoost,
             onSasayakiHoldEnd = ::endSasayakiBoost,
+            sasayakiDoubleTapEnabled = sasayakiSettings.doubleTapPlaybackControlsToToggle,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
         if (chromeVisibility.showBottomChrome) ReaderBottomChrome(
@@ -2238,8 +2242,10 @@ fun ReaderWebView(
             )
         }
         ReaderEdgeAdjustHud(controller = edgeAdjust)
-        ReaderSasayakiScrubHud(state = sasayakiScrubHud)
-        ReaderSasayakiBoostHud(rate = sasayakiBoostRate)
+        // Both HUDs sit just above the playback row, where the gesture happens.
+        val sasayakiHudBottomPadding = (sasayakiBottomPlaybackControls.rowHeightDp + bottomChromeMetrics.bottomSafeAreaDp + 16).dp
+        ReaderSasayakiScrubHud(state = sasayakiScrubHud, bottomPadding = sasayakiHudBottomPadding)
+        ReaderSasayakiBoostHud(rate = sasayakiBoostRate, bottomPadding = sasayakiHudBottomPadding)
         webView?.let { _ -> Unit }
     }
 }

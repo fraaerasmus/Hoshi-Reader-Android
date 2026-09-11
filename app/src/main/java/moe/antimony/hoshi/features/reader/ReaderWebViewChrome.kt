@@ -590,6 +590,7 @@ internal fun ReaderBottomSafeProgress(
     sasayakiHoldEnabled: Boolean,
     onSasayakiHoldStart: () -> Unit,
     onSasayakiHoldEnd: () -> Unit,
+    sasayakiDoubleTapEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val progress = readerBottomSafeProgressText(
@@ -618,6 +619,7 @@ internal fun ReaderBottomSafeProgress(
             holdEnabled = sasayakiHoldEnabled,
             onHoldStart = onSasayakiHoldStart,
             onHoldEnd = onSasayakiHoldEnd,
+            doubleTapEnabled = sasayakiDoubleTapEnabled,
         )
         Box(
             modifier = Modifier

@@ -66,9 +66,12 @@ internal fun ReaderSasayakiPlaybackRow(
     holdEnabled: Boolean,
     onHoldStart: () -> Unit,
     onHoldEnd: () -> Unit,
+    doubleTapEnabled: Boolean,
 ) {
     if (!controls.visible) return
     val onLongClick = onHoldStart.takeIf { holdEnabled }
+    // Only the empty area: the play button already toggles on a single tap.
+    val onDoubleClick = onTogglePlayback.takeIf { doubleTapEnabled }
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -89,7 +92,7 @@ internal fun ReaderSasayakiPlaybackRow(
             modifier = Modifier
                 .fillMaxSize()
                 .sasayakiHoldRelease(onHoldEnd)
-                .combinedClickable(onClick = onTapSafeArea, onLongClick = onLongClick),
+                .combinedClickable(onClick = onTapSafeArea, onLongClick = onLongClick, onDoubleClick = onDoubleClick),
         )
         Row(
             modifier = Modifier

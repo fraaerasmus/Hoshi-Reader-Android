@@ -191,6 +191,20 @@ fun SasayakiSettingsView(
                                     )
                                 },
                             )
+                            SettingsDivider()
+                            ListItem(
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                headlineContent = { Text(stringResource(R.string.sasayaki_double_tap_playback_controls_to_toggle)) },
+                                supportingContent = { Text(stringResource(R.string.sasayaki_double_tap_playback_controls_to_toggle_help)) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = loadedSettings.doubleTapPlaybackControlsToToggle,
+                                        onCheckedChange = {
+                                            save(loadedSettings.copy(doubleTapPlaybackControlsToToggle = it))
+                                        },
+                                    )
+                                },
+                            )
                         }
                         SettingsDivider()
                         ListItem(

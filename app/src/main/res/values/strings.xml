@@ -848,6 +848,9 @@
     <string name="sasayaki_scrub_seconds">%1$s s</string>
     <string name="sasayaki_hold_playback_controls_to_boost">Hold to Speed Up</string>
     <string name="sasayaki_hold_playback_controls_to_boost_help">Press and hold the play button or the empty part of the bottom playback controls (or Space / K on a keyboard) to play at double speed until you let go.</string>
+    <string name="sasayaki_double_tap_playback_controls_to_toggle">Double-tap to Play/Pause</string>
+    <string name="sasayaki_double_tap_playback_controls_to_toggle_help">Double-tap the empty part of the bottom playback controls to pause or resume.</string>
+    <string name="sasayaki_scrub_hint">Drag to scrub</string>
     <string name="sasayaki_playback">Playback</string>
     <string name="sasayaki_light_theme">Light Theme</string>
     <string name="sasayaki_dark_theme">Dark Theme</string>
