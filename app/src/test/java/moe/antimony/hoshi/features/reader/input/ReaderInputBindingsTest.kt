@@ -7,14 +7,14 @@ import org.junit.Test
 
 class ReaderInputBindingsTest {
     @Test
-    fun defaultsBoostOnEdgeHoldsAndKeepBrightnessVolumeDrags() {
+    fun defaultsBoostOnEdgeHoldsAndLeaveDragsAndVolumeHoldOff() {
         val bindings = ReaderInputBindings()
         assertEquals(ReaderInputAction.BoostWhileHeld, bindings.action(ReaderInputSource.EdgeLeftHold))
         assertEquals(ReaderInputAction.BoostWhileHeld, bindings.action(ReaderInputSource.EdgeRightHold))
         assertEquals(ReaderInputAction.None, bindings.action(ReaderInputSource.EdgeLeftDoubleTap))
-        assertEquals(ReaderInputAction.Brightness, bindings.action(ReaderInputSource.EdgeLeftDrag))
-        assertEquals(ReaderInputAction.Volume, bindings.action(ReaderInputSource.EdgeRightDrag))
-        assertEquals(ReaderInputAction.BoostWhileHeld, bindings.action(ReaderInputSource.VolumeKeyHold))
+        assertEquals(ReaderInputAction.None, bindings.action(ReaderInputSource.EdgeLeftDrag))
+        assertEquals(ReaderInputAction.None, bindings.action(ReaderInputSource.EdgeRightDrag))
+        assertEquals(ReaderInputAction.None, bindings.action(ReaderInputSource.VolumeKeyHold))
     }
 
     @Test
@@ -54,6 +54,7 @@ class ReaderInputBindingsTest {
         assertEquals(ReaderInputAction.BoostWhileHeld, off.action(ReaderInputSource.EdgeLeftHold))
         val on = ReaderInputBindings.fromLegacy(edgeSwipeControls = true)
         assertEquals(ReaderInputAction.Brightness, on.action(ReaderInputSource.EdgeLeftDrag))
-        assertFalse(on.map.containsKey(ReaderInputSource.EdgeLeftDrag))
+        assertEquals(ReaderInputAction.Volume, on.action(ReaderInputSource.EdgeRightDrag))
+        assertFalse(off.map.containsKey(ReaderInputSource.EdgeLeftDrag))
     }
 }

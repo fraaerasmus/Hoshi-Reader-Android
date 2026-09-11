@@ -51,9 +51,10 @@ data class ReaderInputBindings(val map: Map<ReaderInputSource, ReaderInputAction
             ReaderInputSource.EdgeRightHold to ReaderInputAction.BoostWhileHeld,
             ReaderInputSource.EdgeLeftDoubleTap to ReaderInputAction.None,
             ReaderInputSource.EdgeRightDoubleTap to ReaderInputAction.None,
-            ReaderInputSource.EdgeLeftDrag to ReaderInputAction.Brightness,
-            ReaderInputSource.EdgeRightDrag to ReaderInputAction.Volume,
-            ReaderInputSource.VolumeKeyHold to ReaderInputAction.BoostWhileHeld,
+            // Drags and the volume-key hold are opt-in: they take over gestures people already use for other things.
+            ReaderInputSource.EdgeLeftDrag to ReaderInputAction.None,
+            ReaderInputSource.EdgeRightDrag to ReaderInputAction.None,
+            ReaderInputSource.VolumeKeyHold to ReaderInputAction.None,
         )
 
         fun compatibleActions(source: ReaderInputSource): List<ReaderInputAction> =
@@ -63,10 +64,10 @@ data class ReaderInputBindings(val map: Map<ReaderInputSource, ReaderInputAction
         fun fromLegacy(edgeSwipeControls: Boolean): ReaderInputBindings =
             if (edgeSwipeControls) {
                 ReaderInputBindings()
+                    .with(ReaderInputSource.EdgeLeftDrag, ReaderInputAction.Brightness)
+                    .with(ReaderInputSource.EdgeRightDrag, ReaderInputAction.Volume)
             } else {
                 ReaderInputBindings()
-                    .with(ReaderInputSource.EdgeLeftDrag, ReaderInputAction.None)
-                    .with(ReaderInputSource.EdgeRightDrag, ReaderInputAction.None)
             }
 
         /** Unknown names are dropped; a broken blob yields the defaults rather than a broken reader. */
