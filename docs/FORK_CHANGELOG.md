@@ -42,6 +42,7 @@ below is a single living summary of everything the fork adds, grouped Added / Fi
 
 ## Fixed
 
+- Keep reader sync feedback visible until dismissed or undone, and accept newer KOReader progress on foreground after earlier local reading while still preserving reading done during the sync request.
 - Include per-profile settings in the Advanced > Backup export/import. Reader Appearance, Dictionary, and Anki settings are stored per profile and were silently dropped from the JSON backup, so they reset to defaults when restoring on a new install; the backup now captures the profile list and each profile's reader/dictionary/Anki settings. Older backup files without this data still import.
 - Persist the Sasayaki control position/size (reader Appearance) and the Dictionary "Scan Multi-Word Phrases", "Scan Word on Shift Hover", and "Mine nested lookups with reading context" toggles. These were never written to disk under the active profile, so they reset to defaults on restart; they now persist per profile (and are covered by the settings backup).
 - Keep words containing characters outside Unicode's basic plane (rare kanji, emoji) intact across the native lookup boundary instead of corrupting them.

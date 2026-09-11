@@ -31,7 +31,7 @@ import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.features.reader.ReaderLoadingPage
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.reader.ReaderWebView
-import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
@@ -82,7 +82,7 @@ internal fun ReaderRouteDestination(
     var reloadKey by remember(bookId) { mutableIntStateOf(0) }
     var pendingSyncJump by remember(bookId) { mutableStateOf<ReaderSyncJump?>(null) }
     var lastReaderSave by remember(bookId) { mutableStateOf<ReaderChapterPosition?>(null) }
-    val openSyncDeferred = remember(bookId) { mutableStateOf<Deferred<ProgressSyncReport>?>(null) }
+    var pendingSyncRequest by remember(bookId) { mutableStateOf<ReaderSyncRequest?>(null) }
     val autoSyncExportController = remember(bookId, appContainer) {
         ReaderAutoSyncExportController(appContainer.appScope)
     }
@@ -116,12 +116,14 @@ internal fun ReaderRouteDestination(
             val initialKosync = kosyncSettings ?: appContainer.kosyncSettingsRepository.settings.first()
             if (initialKosync.enabled && initialKosync.autoSyncEnabled) {
                 // Never hold the book open on the kosync server; the Ready branch picks the outcome up.
-                openSyncDeferred.value = appContainer.appScope.async {
-                    val kosync = setOf(SyncBackend.Kosync)
-                    val pulled = appContainer.progressSyncCoordinator.pull(entry, options = options, manual = false, backends = kosync)
-                    val pushed = appContainer.progressSyncCoordinator.push(entry, options = options, manual = false, backends = kosync)
-                    ProgressSyncReport(pulled.outcomes + pushed.outcomes)
-                }
+                pendingSyncRequest = ReaderSyncRequest(
+                    report = appContainer.appScope.async {
+                        val kosync = setOf(SyncBackend.Kosync)
+                        val pulled = appContainer.progressSyncCoordinator.pull(entry, options = options, manual = false, backends = kosync)
+                        val pushed = appContainer.progressSyncCoordinator.push(entry, options = options, manual = false, backends = kosync)
+                        ProgressSyncReport(pulled.outcomes + pushed.outcomes)
+                    },
+                )
             }
         }
         value = loaded.activateProfileAndPrepareRender(
@@ -198,6 +200,7 @@ internal fun ReaderRouteDestination(
         report: ProgressSyncReport,
         readyState: ReaderRouteLoadState.Ready,
         openPosition: ReaderChapterPosition,
+        positionAtSyncStart: ReaderChapterPosition,
     ) {
         val applied = report.applied
         if (applied == null) {
@@ -223,7 +226,7 @@ internal fun ReaderRouteDestination(
             readerSnackbarHostState.showSnackbar(message)
             return
         }
-        when (val plan = planReaderSync(applied, readyState.bookmark, lastReaderSave, openPosition)) {
+        when (val plan = planReaderSync(applied, readyState.bookmark, lastReaderSave, openPosition, positionAtSyncStart)) {
             ReaderSyncPlan.None -> Unit
             is ReaderSyncPlan.Ignore -> stateHolder.saveBookmark(
                 state = readyState,
@@ -244,11 +247,14 @@ internal fun ReaderRouteDestination(
         }
     }
 
-    fun importOnForeground(entry: BookEntry) {
+    fun importOnForeground(entry: BookEntry, position: ReaderChapterPosition) {
         if (!anyAutoSyncEnabled) return
-        openSyncDeferred.value = bookmarkScope.async {
-            appContainer.progressSyncCoordinator.pull(entry, options = routeSyncOptions, manual = false)
-        }
+        pendingSyncRequest = ReaderSyncRequest(
+            positionAtStart = position,
+            report = bookmarkScope.async {
+                appContainer.progressSyncCoordinator.pull(entry, options = routeSyncOptions, manual = false)
+            },
+        )
     }
 
     when (val state = routeState) {
@@ -278,11 +284,21 @@ internal fun ReaderRouteDestination(
                 index = readyState.bookmark?.chapterIndex ?: 0,
                 progress = readyState.bookmark?.progress ?: 0.0,
             )
-            LaunchedEffect(readyState.entry.metadata.id, openSyncDeferred.value) {
-                val deferred = openSyncDeferred.value ?: return@LaunchedEffect
-                val report = runCatching { deferred.await() }.getOrNull()
-                if (openSyncDeferred.value === deferred) openSyncDeferred.value = null
-                if (report != null) presentReport(report, readyState, openPosition)
+            LaunchedEffect(readyState.entry.metadata.id, pendingSyncRequest) {
+                val request = pendingSyncRequest ?: return@LaunchedEffect
+                try {
+                    val report = try {
+                        request.report.await()
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (error: Exception) {
+                        return@LaunchedEffect
+                    }
+                    presentReport(report, readyState, openPosition, request.positionAtStart ?: openPosition)
+                } finally {
+                    // Clearing the effect key while showSnackbar is suspended would cancel the snackbar and Undo.
+                    if (pendingSyncRequest === request) pendingSyncRequest = null
+                }
             }
             Box(modifier = modifier.fillMaxSize()) {
                 ReaderWebView(
@@ -314,7 +330,7 @@ internal fun ReaderRouteDestination(
                         scheduleExport(readyState.entry, readyState.book)
                     },
                     onFlushAutoSyncExport = ::flushExport,
-                    onForegroundAutoSyncImport = { importOnForeground(readyState.entry) },
+                    onForegroundAutoSyncImport = { importOnForeground(readyState.entry, lastReaderSave ?: openPosition) },
                     pendingSyncJump = pendingSyncJump,
                     onPendingSyncJumpConsumed = { pendingSyncJump = null },
                     onPositionDisplaced = { displaced, source ->

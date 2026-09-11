@@ -92,6 +92,73 @@ class ReaderRouteSyncControllerTest {
         )
     }
 
+    @Test
+    fun foregroundSyncAcceptsRemoteProgressAfterEarlierLocalReading() {
+        val current = bookmark(2, 0.6)
+        val remote = bookmark(4, 0.5)
+        val plan = planReaderSync(
+            applied = applied(remote, previous = current),
+            bookmarkAtOpen = bookmark(0, 0.1),
+            lastReaderSave = current.toReaderPosition(),
+            openPosition = ReaderChapterPosition(0, 0.1),
+            positionAtSyncStart = current.toReaderPosition(),
+        )
+
+        assertEquals(
+            ReaderSyncPlan.Apply(
+                ReaderSyncJump(remote.toReaderPosition(), current.toReaderPosition(), seedOnly = false),
+            ),
+            plan,
+        )
+    }
+
+    @Test
+    fun foregroundSyncKeepsReadingThatHappenedDuringTheRequest() {
+        val plan = planReaderSync(
+            applied = applied(bookmark(4, 0.5), previous = bookmark(2, 0.6)),
+            bookmarkAtOpen = bookmark(0, 0.1),
+            lastReaderSave = ReaderChapterPosition(2, 0.8),
+            openPosition = ReaderChapterPosition(0, 0.1),
+            positionAtSyncStart = ReaderChapterPosition(2, 0.6),
+        )
+
+        assertEquals(ReaderSyncPlan.Ignore(ReaderChapterPosition(2, 0.8)), plan)
+    }
+
+    @Test
+    fun foregroundSyncJumpsWhenTheRemoteTargetIsTheOriginalOpenPosition() {
+        val original = bookmark(0, 0.1)
+        val current = bookmark(2, 0.6)
+        val plan = planReaderSync(
+            applied = applied(original, previous = current),
+            bookmarkAtOpen = original,
+            lastReaderSave = current.toReaderPosition(),
+            openPosition = original.toReaderPosition(),
+            positionAtSyncStart = current.toReaderPosition(),
+        )
+
+        assertEquals(
+            ReaderSyncPlan.Apply(
+                ReaderSyncJump(original.toReaderPosition(), current.toReaderPosition(), seedOnly = false),
+            ),
+            plan,
+        )
+    }
+
+    @Test
+    fun foregroundSyncDoesNotJumpWhenTheReaderIsAlreadyAtTheRemoteTarget() {
+        val current = bookmark(2, 0.6)
+        val plan = planReaderSync(
+            applied = applied(current, previous = current),
+            bookmarkAtOpen = bookmark(0, 0.1),
+            lastReaderSave = current.toReaderPosition(),
+            openPosition = ReaderChapterPosition(0, 0.1),
+            positionAtSyncStart = current.toReaderPosition(),
+        )
+
+        assertEquals(ReaderSyncPlan.None, plan)
+    }
+
     private fun bookmark(chapterIndex: Int, progress: Double) =
         Bookmark(chapterIndex = chapterIndex, progress = progress, characterCount = 0)
 
