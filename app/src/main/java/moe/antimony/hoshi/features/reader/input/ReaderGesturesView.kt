@@ -17,6 +17,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -30,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
@@ -105,8 +107,12 @@ fun ReaderGesturesView(
             item {
                 SectionTitle(stringResource(R.string.gestures_section_edges))
                 GesturesCard {
-                    readerEdgeSources().forEachIndexed { index, source ->
-                        if (index > 0) HorizontalDivider()
+                    EdgeZoneWidthRow(
+                        widthDp = gestures.edgeZoneWidthDp,
+                        onWidthChange = { width -> scope.launch { gesturesRepository.update { it.copy(edgeZoneWidthDp = width) } } },
+                    )
+                    readerEdgeSources().forEach { source ->
+                        HorizontalDivider()
                         BindingRow(source, gestures.bindings.action(source), ::bind)
                     }
                 }
@@ -210,6 +216,27 @@ private fun <T> ChoiceRow(
                 }
             }
         },
+    )
+}
+
+@Composable
+private fun EdgeZoneWidthRow(widthDp: Int, onWidthChange: (Int) -> Unit) {
+    val min = ReaderGestureSettings.MinEdgeZoneWidthDp
+    val max = ReaderGestureSettings.MaxEdgeZoneWidthDp
+    var sliderValue by remember(widthDp) { mutableStateOf(widthDp.toFloat()) }
+    ListItem(
+        colors = transparent(),
+        headlineContent = { Text(stringResource(R.string.gestures_edge_zone_width)) },
+        supportingContent = {
+            Slider(
+                value = sliderValue,
+                onValueChange = { sliderValue = it },
+                onValueChangeFinished = { onWidthChange(sliderValue.roundToInt().coerceIn(min, max)) },
+                valueRange = min.toFloat()..max.toFloat(),
+                steps = (max - min) / 4 - 1,
+            )
+        },
+        trailingContent = { Text(stringResource(R.string.gestures_edge_zone_width_value_format, sliderValue.roundToInt())) },
     )
 }
 

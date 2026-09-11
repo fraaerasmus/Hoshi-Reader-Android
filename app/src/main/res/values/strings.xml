@@ -707,6 +707,8 @@
     <string name="gestures_dock_reset">Reset dock position</string>
     <string name="gestures_dock_help">Drag the handle along the edge to move it; tap it to show the controls.</string>
     <string name="gestures_section_edges">Screen edges</string>
+    <string name="gestures_edge_zone_width">Edge zone width</string>
+    <string name="gestures_edge_zone_width_value_format">%1$d dp</string>
     <string name="gestures_edge_left_hold">Hold left edge</string>
     <string name="gestures_edge_right_hold">Hold right edge</string>
     <string name="gestures_edge_left_double_tap">Double-tap left edge</string>

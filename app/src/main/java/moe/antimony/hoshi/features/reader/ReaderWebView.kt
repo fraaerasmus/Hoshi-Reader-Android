@@ -1858,7 +1858,8 @@ fun ReaderWebView(
     val edgeScrubSteps = remember { intArrayOf(0) }
     val edgeDragAction = remember { arrayOf(ReaderInputAction.None) }
     val hasSasayakiAudioForGestures = sasayakiPlayer?.hasAudio == true
-    val edgeGestures = remember(inputBindings, hasSasayakiAudioForGestures, sasayakiPlayer) {
+    val edgeZoneWidthDp = gestureSettings.edgeZoneWidthDp.toFloat()
+    val edgeGestures = remember(inputBindings, hasSasayakiAudioForGestures, sasayakiPlayer, edgeZoneWidthDp) {
         fun source(edge: ReaderEdgeSwipeGestureTracker.Edge, left: ReaderInputSource, right: ReaderInputSource): ReaderInputSource? =
             when (edge) {
                 ReaderEdgeSwipeGestureTracker.Edge.Left -> left
@@ -1871,6 +1872,7 @@ fun ReaderWebView(
             action == ReaderInputAction.BoostWhileHeld || action == ReaderInputAction.Scrub ||
                 action == ReaderInputAction.TogglePlayback || action == ReaderInputAction.SkipForward || action == ReaderInputAction.SkipBackward
         object : ReaderEdgeGestureHandler {
+            override val zoneWidthDp: Float = edgeZoneWidthDp
             override fun holdEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean =
                 bound(edge, ReaderInputSource.EdgeLeftHold, ReaderInputSource.EdgeRightHold) == ReaderInputAction.BoostWhileHeld && hasSasayakiAudioForGestures
             override fun doubleTapEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean {

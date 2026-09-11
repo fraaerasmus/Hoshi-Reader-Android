@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -20,9 +21,14 @@ data class ReaderGestureSettings(
     val dockOffsetFraction: Float = DefaultDockOffsetFraction,
     /** Mouse only: a click in the outer side zones turns the page instead of looking up the word there. */
     val mouseSideClickTurnsPages: Boolean = false,
+    /** Width of the touch strips on both screen edges that hold, double-tap and drag bindings listen in. */
+    val edgeZoneWidthDp: Int = DefaultEdgeZoneWidthDp,
 ) {
     companion object {
         const val DefaultDockOffsetFraction = 0.6f
+        const val DefaultEdgeZoneWidthDp = 32
+        const val MinEdgeZoneWidthDp = 16
+        const val MaxEdgeZoneWidthDp = 64
     }
 }
 
@@ -36,36 +42,31 @@ class ReaderGesturesRepository(
     private val dataStore: DataStore<Preferences>,
     private val legacyEdgeSwipeControls: suspend () -> Boolean,
 ) {
-    val settings: Flow<ReaderGestureSettings> = dataStore.data.map { preferences ->
-        ReaderGestureSettings(
-            bindings = preferences[KEY_BINDINGS]?.let(ReaderInputBindings::decode)
-                ?: ReaderInputBindings.fromLegacy(legacyEdgeSwipeControls()),
-            controlsPlacement = preferences[KEY_PLACEMENT]?.let { name ->
-                SasayakiControlsPlacement.entries.firstOrNull { it.name == name }
-            } ?: SasayakiControlsPlacement.Bottom,
-            dockOffsetFraction = (preferences[KEY_DOCK_OFFSET] ?: ReaderGestureSettings.DefaultDockOffsetFraction).coerceIn(0f, 1f),
-            mouseSideClickTurnsPages = preferences[KEY_MOUSE_SIDE_CLICK] ?: false,
-        )
-    }
+    val settings: Flow<ReaderGestureSettings> = dataStore.data.map { it.toSettings(legacyEdgeSwipeControls()) }
 
     suspend fun update(transform: (ReaderGestureSettings) -> ReaderGestureSettings) {
         val legacy = legacyEdgeSwipeControls()
         dataStore.edit { preferences ->
-            val current = ReaderGestureSettings(
-                bindings = preferences[KEY_BINDINGS]?.let(ReaderInputBindings::decode) ?: ReaderInputBindings.fromLegacy(legacy),
-                controlsPlacement = preferences[KEY_PLACEMENT]?.let { name ->
-                    SasayakiControlsPlacement.entries.firstOrNull { it.name == name }
-                } ?: SasayakiControlsPlacement.Bottom,
-                dockOffsetFraction = preferences[KEY_DOCK_OFFSET] ?: ReaderGestureSettings.DefaultDockOffsetFraction,
-                mouseSideClickTurnsPages = preferences[KEY_MOUSE_SIDE_CLICK] ?: false,
-            )
-            val next = transform(current)
+            val next = transform(preferences.toSettings(legacy))
             preferences[KEY_BINDINGS] = next.bindings.encode()
             preferences[KEY_PLACEMENT] = next.controlsPlacement.name
             preferences[KEY_DOCK_OFFSET] = next.dockOffsetFraction.coerceIn(0f, 1f)
             preferences[KEY_MOUSE_SIDE_CLICK] = next.mouseSideClickTurnsPages
+            preferences[KEY_EDGE_ZONE_WIDTH] = next.edgeZoneWidthDp.coerceIn(ReaderGestureSettings.MinEdgeZoneWidthDp, ReaderGestureSettings.MaxEdgeZoneWidthDp)
         }
     }
+
+    private fun Preferences.toSettings(legacyEdgeSwipeControls: Boolean): ReaderGestureSettings =
+        ReaderGestureSettings(
+            bindings = this[KEY_BINDINGS]?.let(ReaderInputBindings::decode) ?: ReaderInputBindings.fromLegacy(legacyEdgeSwipeControls),
+            controlsPlacement = this[KEY_PLACEMENT]?.let { name ->
+                SasayakiControlsPlacement.entries.firstOrNull { it.name == name }
+            } ?: SasayakiControlsPlacement.Bottom,
+            dockOffsetFraction = (this[KEY_DOCK_OFFSET] ?: ReaderGestureSettings.DefaultDockOffsetFraction).coerceIn(0f, 1f),
+            mouseSideClickTurnsPages = this[KEY_MOUSE_SIDE_CLICK] ?: false,
+            edgeZoneWidthDp = (this[KEY_EDGE_ZONE_WIDTH] ?: ReaderGestureSettings.DefaultEdgeZoneWidthDp)
+                .coerceIn(ReaderGestureSettings.MinEdgeZoneWidthDp, ReaderGestureSettings.MaxEdgeZoneWidthDp),
+        )
 
     suspend fun exportEntries(): JsonObject = PreferencesBackup.export(dataStore)
 
@@ -79,5 +80,6 @@ class ReaderGesturesRepository(
         private val KEY_PLACEMENT = stringPreferencesKey("sasayakiControlsPlacement")
         private val KEY_DOCK_OFFSET = floatPreferencesKey("sasayakiDockOffsetFraction")
         private val KEY_MOUSE_SIDE_CLICK = booleanPreferencesKey("mouseSideClickTurnsPages")
+        private val KEY_EDGE_ZONE_WIDTH = intPreferencesKey("edgeZoneWidthDp")
     }
 }

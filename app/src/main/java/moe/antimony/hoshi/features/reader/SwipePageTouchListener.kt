@@ -57,7 +57,7 @@ internal abstract class SwipePageTouchListener(
         ).also { tapHoldTracker = it }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                val edge = readerEdgeForTouch(event.x, view.width, view.resources.displayMetrics.density)
+                val edge = readerEdgeForTouch(event.x, view.width, view.resources.displayMetrics.density, edgeZoneWidthDp())
                 val schedule = tapHold.onDown(
                     edge = edge,
                     x = event.x,
@@ -87,6 +87,8 @@ internal abstract class SwipePageTouchListener(
                         pendingTap?.let(view::removeCallbacks)
                         pendingTap = null
                         tracker.suppressCurrentGesture()
+                        // The WebView saw this touch go down; without a cancel its long-press would select the nearest word.
+                        cancelWebViewGesture(view, event)
                         onEdgeDoubleTap(result.edge)
                         return true
                     }
@@ -121,6 +123,7 @@ internal abstract class SwipePageTouchListener(
                 viewWidthPx = view.width,
                 viewHeightPx = view.height,
                 density = view.resources.displayMetrics.density,
+                zoneWidthDp = edgeZoneWidthDp(),
             )
             MotionEvent.ACTION_MOVE -> {
                 val wasActive = edgeTracker.isActive
@@ -161,6 +164,7 @@ internal abstract class SwipePageTouchListener(
     open fun onTap(x: Float, y: Float, isMouse: Boolean = false) = Unit
     open fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean = false
 
+    open fun edgeZoneWidthDp(): Float = READER_DEFAULT_EDGE_ZONE_DP
     open fun isEdgeHoldEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean = false
     open fun isEdgeDoubleTapEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean = false
     open fun isEdgeDragEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean = false
@@ -176,7 +180,7 @@ internal abstract class SwipePageTouchListener(
             ReaderSwipeGestureTracker.Result.RightSwipe -> onRightSwipe()
             is ReaderSwipeGestureTracker.Result.Tap -> {
                 // A tap in an edge zone with a double-tap bound waits out the double-tap window first.
-                val edge = view?.let { readerEdgeForTouch(result.x, it.width, it.resources.displayMetrics.density) }
+                val edge = view?.let { readerEdgeForTouch(result.x, it.width, it.resources.displayMetrics.density, edgeZoneWidthDp()) }
                 if (view != null && edge != null && !isMouse && isEdgeDoubleTapEnabled(edge)) {
                     pendingTap?.let(view::removeCallbacks)
                     val runnable = Runnable {
@@ -318,10 +322,10 @@ internal class ReaderEdgeSwipeGestureTracker {
     private var activationPx = 0f
     private var hasDown = false
 
-    fun onDown(x: Float, y: Float, viewWidthPx: Int, viewHeightPx: Int, density: Float) {
+    fun onDown(x: Float, y: Float, viewWidthPx: Int, viewHeightPx: Int, density: Float, zoneWidthDp: Float = READER_DEFAULT_EDGE_ZONE_DP) {
         reset()
         if (viewWidthPx <= 0 || viewHeightPx <= 0) return
-        edge = readerEdgeForTouch(x, viewWidthPx, density)
+        edge = readerEdgeForTouch(x, viewWidthPx, density, zoneWidthDp)
         if (edge == Edge.None) return
         downX = x
         downY = y

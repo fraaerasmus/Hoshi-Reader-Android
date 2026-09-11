@@ -705,6 +705,8 @@
     <string name="gestures_dock_reset">重置停靠位置</string>
     <string name="gestures_dock_help">沿边缘拖动手柄可移动；点按手柄显示控件。</string>
     <string name="gestures_section_edges">屏幕边缘</string>
+    <string name="gestures_edge_zone_width">边缘区域宽度</string>
+    <string name="gestures_edge_zone_width_value_format">%1$d dp</string>
     <string name="gestures_edge_left_hold">长按左边缘</string>
     <string name="gestures_edge_right_hold">长按右边缘</string>
     <string name="gestures_edge_left_double_tap">双击左边缘</string>

@@ -428,6 +428,8 @@ internal fun ChapterWebView(
                             override fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean =
                                 shouldIgnoreReaderGestureEvent(event)
 
+                            override fun edgeZoneWidthDp(): Float = currentEdgeGestures.value.zoneWidthDp
+
                             override fun isEdgeHoldEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean =
                                 currentEdgeGestures.value.holdEnabled(edge)
 

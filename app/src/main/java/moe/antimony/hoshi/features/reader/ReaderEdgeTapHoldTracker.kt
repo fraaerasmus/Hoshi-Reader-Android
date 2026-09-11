@@ -3,11 +3,15 @@ package moe.antimony.hoshi.features.reader
 import kotlin.math.abs
 
 /** Which screen edge a touch started in; shared by the edge drag, hold and double-tap trackers. */
-internal fun readerEdgeForTouch(x: Float, viewWidthPx: Int, density: Float): ReaderEdgeSwipeGestureTracker.Edge {
+internal fun readerEdgeForTouch(
+    x: Float,
+    viewWidthPx: Int,
+    density: Float,
+    zoneWidthDp: Float = READER_DEFAULT_EDGE_ZONE_DP,
+): ReaderEdgeSwipeGestureTracker.Edge {
     if (viewWidthPx <= 0) return ReaderEdgeSwipeGestureTracker.Edge.None
-    val zoneWidth = (viewWidthPx * READER_EDGE_ZONE_FRACTION)
-        .coerceAtMost(READER_MAX_EDGE_ZONE_DP * density)
-        .coerceAtLeast(READER_MIN_EDGE_ZONE_DP * density)
+    // Never let the two strips meet in the middle on a narrow view.
+    val zoneWidth = (zoneWidthDp * density).coerceAtMost(viewWidthPx * READER_MAX_EDGE_ZONE_FRACTION)
     return when {
         x <= zoneWidth -> ReaderEdgeSwipeGestureTracker.Edge.Left
         x >= viewWidthPx - zoneWidth -> ReaderEdgeSwipeGestureTracker.Edge.Right
@@ -15,9 +19,8 @@ internal fun readerEdgeForTouch(x: Float, viewWidthPx: Int, density: Float): Rea
     }
 }
 
-internal const val READER_EDGE_ZONE_FRACTION = 0.08f
-internal const val READER_MIN_EDGE_ZONE_DP = 24f
-internal const val READER_MAX_EDGE_ZONE_DP = 64f
+internal const val READER_DEFAULT_EDGE_ZONE_DP = 32f
+internal const val READER_MAX_EDGE_ZONE_FRACTION = 0.4f
 
 /**
  * Hold and double-tap inside the screen edge zones, timer-free: the caller schedules a hold timeout
@@ -112,6 +115,7 @@ internal class ReaderEdgeTapHoldTracker(
 
 /** What the reader wants from each edge; the WebView only asks and reports, the bindings decide. */
 internal interface ReaderEdgeGestureHandler {
+    val zoneWidthDp: Float
     fun holdEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean
     fun doubleTapEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean
     fun dragEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean
@@ -123,6 +127,7 @@ internal interface ReaderEdgeGestureHandler {
 
     companion object {
         val None = object : ReaderEdgeGestureHandler {
+            override val zoneWidthDp: Float = READER_DEFAULT_EDGE_ZONE_DP
             override fun holdEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge) = false
             override fun doubleTapEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge) = false
             override fun dragEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge) = false
