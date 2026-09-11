@@ -133,6 +133,31 @@ fun ReaderGesturesView(
                     BindingRow(ReaderInputSource.VolumeKeyHold, gestures.bindings.action(ReaderInputSource.VolumeKeyHold), ::bind)
                 }
             }
+            item {
+                SectionTitle(stringResource(R.string.gestures_section_mouse))
+                GesturesCard {
+                    ListItem(
+                        colors = transparent(),
+                        headlineContent = { Text(stringResource(R.string.gestures_mouse_side_click)) },
+                        supportingContent = { Text(stringResource(R.string.gestures_mouse_side_click_help)) },
+                        trailingContent = {
+                            Switch(
+                                checked = gestures.mouseSideClickTurnsPages,
+                                onCheckedChange = { checked -> scope.launch { gesturesRepository.update { it.copy(mouseSideClickTurnsPages = checked) } } },
+                            )
+                        },
+                    )
+                }
+            }
+            item {
+                SectionTitle(stringResource(R.string.gestures_section_keyboard))
+                GesturesCard {
+                    ListItem(
+                        colors = transparent(),
+                        headlineContent = { Text(stringResource(R.string.gestures_keyboard_help)) },
+                    )
+                }
+            }
         }
     }
 }

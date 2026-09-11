@@ -10,6 +10,7 @@ import android.graphics.drawable.InsetDrawable
 import android.net.Uri
 import android.os.SystemClock
 import android.view.ActionMode
+import android.view.InputDevice
 import android.view.Gravity
 import android.view.Menu
 import android.view.MenuItem
@@ -98,6 +99,7 @@ internal fun ChapterWebView(
     fontManager: ReaderFontManager,
     systemDark: Boolean,
     edgeGestures: ReaderEdgeGestureHandler,
+    mouseSideClickTurnsPages: Boolean,
     onBeforeRestoreVisible: (WebView) -> ReaderRestoreBeforeVisibleAction? = { null },
     modifier: Modifier = Modifier,
 ) {
@@ -120,6 +122,7 @@ internal fun ChapterWebView(
     val currentOnRestoreStarted = rememberUpdatedState(onRestoreStarted)
     val currentOnRestoreCompleted = rememberUpdatedState(onRestoreCompleted)
     val currentEdgeGestures = rememberUpdatedState(edgeGestures)
+    val currentMouseSideClickTurnsPages = rememberUpdatedState(mouseSideClickTurnsPages)
     val currentOnBeforeRestoreVisible = rememberUpdatedState(onBeforeRestoreVisible)
     val context = LocalContext.current
     val readerWebAssets = remember(context) { ReaderWebAssets.load(context) }
@@ -330,6 +333,7 @@ internal fun ChapterWebView(
                     y = androidPixelsToCssPixels(event.y, density).toDouble(),
                 )
             }
+            (webView as? HoshiReaderWebView)?.onWheelPage = null
             when (readerSettings.viewMode) {
                 ReaderViewMode.Continuous -> {
                     webView.setOnTouchListener(
@@ -405,6 +409,18 @@ internal fun ChapterWebView(
                     continuousScrollProgressScheduler.reset(webView::removeCallbacks)
                     readerPendingProgressSaveCallbacks.remove(webView)?.let(webView::removeCallbacks)
                     webView.setOnScrollChangeListener(null)
+                    fun turnPage(direction: ReaderNavigationDirection) {
+                        currentOnReaderInteraction.value()
+                        currentOnClearLookupPopup.value()
+                        webView.navigatePageForDirection(
+                            direction = direction,
+                            onNextChapter = currentOnNextChapter.value,
+                            onPreviousChapter = currentOnPreviousChapter.value,
+                            onDisplayedProgress = currentOnDisplayProgress.value,
+                            onSaveProgress = currentOnSaveBookmark.value,
+                        )
+                    }
+                    (webView as? HoshiReaderWebView)?.onWheelPage = ::turnPage
                     webView.setOnTouchListener(
                         object : SwipePageTouchListener(
                             swipeDistance = readerSettings.pageSwipeThresholdPx.toFloat(),
@@ -441,7 +457,13 @@ internal fun ChapterWebView(
                                 currentEdgeGestures.value.onDragEnd()
                             }
 
-                            override fun onTap(x: Float, y: Float) {
+                            override fun onTap(x: Float, y: Float, isMouse: Boolean) {
+                                if (isMouse && currentMouseSideClickTurnsPages.value) {
+                                    readerMouseSideClickSwipe(x, webView.width)?.let { swipe ->
+                                        turnPage(readerNavigationDirectionForSwipe(readerSettings.verticalWriting, swipe))
+                                        return
+                                    }
+                                }
                                 selectAt(x, y) {
                                     if (readerSettings.viewMode == ReaderViewMode.VisualNovel && readerSettings.visualNovelClickAdvance) {
                                         currentOnReaderInteraction.value()
@@ -460,35 +482,11 @@ internal fun ChapterWebView(
                             }
 
                             override fun onLeftSwipe() {
-                                currentOnReaderInteraction.value()
-                                currentOnClearLookupPopup.value()
-                                val direction = readerNavigationDirectionForSwipe(
-                                    isVerticalWriting = readerSettings.verticalWriting,
-                                    swipeDirection = ReaderSwipeDirection.Left,
-                                )
-                                webView.navigatePageForDirection(
-                                    direction = direction,
-                                    onNextChapter = currentOnNextChapter.value,
-                                    onPreviousChapter = currentOnPreviousChapter.value,
-                                    onDisplayedProgress = currentOnDisplayProgress.value,
-                                    onSaveProgress = currentOnSaveBookmark.value,
-                                )
+                                turnPage(readerNavigationDirectionForSwipe(readerSettings.verticalWriting, ReaderSwipeDirection.Left))
                             }
 
                             override fun onRightSwipe() {
-                                currentOnReaderInteraction.value()
-                                currentOnClearLookupPopup.value()
-                                val direction = readerNavigationDirectionForSwipe(
-                                    isVerticalWriting = readerSettings.verticalWriting,
-                                    swipeDirection = ReaderSwipeDirection.Right,
-                                )
-                                webView.navigatePageForDirection(
-                                    direction = direction,
-                                    onNextChapter = currentOnNextChapter.value,
-                                    onPreviousChapter = currentOnPreviousChapter.value,
-                                    onDisplayedProgress = currentOnDisplayProgress.value,
-                                    onSaveProgress = currentOnSaveBookmark.value,
-                                )
+                                turnPage(readerNavigationDirectionForSwipe(readerSettings.verticalWriting, ReaderSwipeDirection.Right))
                             }
                         },
                     )
@@ -621,6 +619,22 @@ internal fun readerSelectionMaxLength(settings: DictionarySettings): Int =
 
 private class HoshiReaderWebView(context: Context) : WebView(context) {
     var onHighlightCreated: (HighlightColor, String, ReaderHighlightCreationResult) -> Unit = { _, _, _ -> }
+    /** Set in paginated modes: a mouse wheel tick turns a page instead of scrolling the (unscrollable) page. */
+    var onWheelPage: ((ReaderNavigationDirection) -> Unit)? = null
+    private var lastWheelTurnMs = 0L
+
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        val handler = onWheelPage
+        if (handler != null && event.actionMasked == MotionEvent.ACTION_SCROLL && event.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
+            val scroll = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+            if (scroll != 0f && event.eventTime - lastWheelTurnMs >= WHEEL_PAGE_INTERVAL_MS) {
+                lastWheelTurnMs = event.eventTime
+                handler(if (scroll < 0f) ReaderNavigationDirection.Forward else ReaderNavigationDirection.Backward)
+            }
+            return true
+        }
+        return super.onGenericMotionEvent(event)
+    }
     private var nativeSelectionActionModeActive = false
     private var nativeSelectionActionMode: ActionMode? = null
     private var nativeSelectionContentRect: Rect? = null
@@ -1172,7 +1186,7 @@ private class ContinuousScrollTouchListener(
                     onTap(event.x, event.y)
                     return false
                 }
-                handleBoundarySwipe(webView, dx, dy)
+                if (!event.isMouse()) handleBoundarySwipe(webView, dx, dy)
                 focusTracker.onCancel()
             }
         }
@@ -1441,3 +1455,17 @@ private const val ReaderSasayakiPlaybackFileName = "sasayaki_playback.json"
 
 internal fun androidPixelsToCssPixels(value: Float, density: Float): Float =
     value / density.coerceAtLeast(1f)
+
+private const val WHEEL_PAGE_INTERVAL_MS = 150L
+private const val MOUSE_SIDE_CLICK_ZONE_FRACTION = 0.2f
+
+/** Which swipe a mouse click in the outer side zones stands for; null in the middle of the page. */
+internal fun readerMouseSideClickSwipe(x: Float, viewWidth: Int, zoneFraction: Float = MOUSE_SIDE_CLICK_ZONE_FRACTION): ReaderSwipeDirection? {
+    if (viewWidth <= 0) return null
+    val zone = viewWidth * zoneFraction
+    return when {
+        x < zone -> ReaderSwipeDirection.Right
+        x > viewWidth - zone -> ReaderSwipeDirection.Left
+        else -> null
+    }
+}

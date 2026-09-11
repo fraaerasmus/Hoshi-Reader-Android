@@ -513,6 +513,8 @@ class ReaderHardwareKeyNavigationTest {
             KeyEvent.KEYCODE_J to ReaderHardwareKeyAction.SasayakiSeekBackward,
             KeyEvent.KEYCODE_DPAD_RIGHT to ReaderHardwareKeyAction.SasayakiSeekForward,
             KeyEvent.KEYCODE_L to ReaderHardwareKeyAction.SasayakiSeekForward,
+            KeyEvent.KEYCODE_COMMA to ReaderHardwareKeyAction.SasayakiSpeedDown,
+            KeyEvent.KEYCODE_PERIOD to ReaderHardwareKeyAction.SasayakiSpeedUp,
         )
 
         expectations.forEach { (keyCode, expected) ->
@@ -745,5 +747,7 @@ class ReaderHardwareKeyNavigationTest {
         KeyEvent.KEYCODE_J,
         KeyEvent.KEYCODE_DPAD_RIGHT,
         KeyEvent.KEYCODE_L,
+        KeyEvent.KEYCODE_COMMA,
+        KeyEvent.KEYCODE_PERIOD,
     )
 }

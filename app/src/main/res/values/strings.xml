@@ -715,6 +715,11 @@
     <string name="gestures_edge_right_drag">Drag along right edge</string>
     <string name="gestures_section_volume">Volume keys</string>
     <string name="gestures_volume_hold">Hold a volume key</string>
+    <string name="gestures_section_mouse">Mouse</string>
+    <string name="gestures_mouse_side_click">Click the sides to turn pages</string>
+    <string name="gestures_mouse_side_click_help">Clicks in the outer fifth of the page turn it instead of looking up the word there. The scroll wheel always turns pages.</string>
+    <string name="gestures_section_keyboard">Keyboard</string>
+    <string name="gestures_keyboard_help">Space or K: play / pause · J or L: skip · &lt; or &gt;: speed −/+ 0.1× · Page Up / Page Down: turn pages</string>
     <string name="input_action_none" comment="Gesture binding option meaning the gesture does nothing.">Nothing</string>
     <string name="input_action_toggle_playback">Play / pause</string>
     <string name="input_action_skip_forward">Skip forward</string>

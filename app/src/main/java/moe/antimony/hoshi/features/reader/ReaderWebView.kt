@@ -64,6 +64,8 @@ import moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement
 import moe.antimony.hoshi.features.sync.BookSyncSheetContent
 import moe.antimony.hoshi.features.sync.SyncSettings
 import moe.antimony.hoshi.navigation.ReaderSyncJump
+import moe.antimony.hoshi.navigation.ReaderSyncNotice
+import moe.antimony.hoshi.features.sasayaki.SasayakiSpeedSliderRange
 import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.HighlightColor
@@ -125,6 +127,9 @@ fun ReaderWebView(
     onForegroundAutoSyncImport: () -> Unit = {},
     pendingSyncJump: ReaderSyncJump? = null,
     onPendingSyncJumpConsumed: () -> Unit = {},
+    syncNotice: ReaderSyncNotice? = null,
+    onSyncNoticeUndo: () -> Unit = {},
+    onSyncNoticeDismissed: () -> Unit = {},
     onPositionDisplaced: (ReaderChapterPosition, String) -> Unit = { _, _ -> },
     onTextSelected: (ReaderSelectionData) -> Int? = { null },
     contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
@@ -737,6 +742,7 @@ fun ReaderWebView(
     fun handleReaderInteraction() {
         cancelSasayakiAutoPage()
         stateHolder.enterFocusModeForReaderInteraction()
+        if (syncNotice != null) onSyncNoticeDismissed()
     }
     fun replyReaderPopupMessage(popupId: String, messageId: String, bodyJson: String) {
         webView?.evaluateJavascript(
@@ -1525,6 +1531,19 @@ fun ReaderWebView(
         }
     }
     var sasayakiBoostRate by remember { mutableStateOf<Float?>(null) }
+    // The saved rate after a < / > key press, shown in the boost pill for a moment.
+    var sasayakiSpeedFlash by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(sasayakiSpeedFlash) {
+        if (sasayakiSpeedFlash == null) return@LaunchedEffect
+        delay(SASAYAKI_SPEED_FLASH_MS)
+        sasayakiSpeedFlash = null
+    }
+    fun stepSasayakiRate(delta: Float) {
+        val player = sasayakiPlayer ?: return
+        val next = ((player.rate + delta) * 10f).roundToInt() / 10f
+        player.setRate(next.coerceIn(SasayakiSpeedSliderRange))
+        sasayakiSpeedFlash = player.rate
+    }
     fun startSasayakiBoost() {
         sasayakiPlayer?.startSpeedBoost()?.let { sasayakiBoostRate = it }
     }
@@ -1593,6 +1612,8 @@ fun ReaderWebView(
             ReaderHardwareKeyAction.SasayakiSeekForward -> {
                 sasayakiPlayer?.nextCue()
             }
+            ReaderHardwareKeyAction.SasayakiSpeedUp -> stepSasayakiRate(SASAYAKI_KEY_SPEED_STEP)
+            ReaderHardwareKeyAction.SasayakiSpeedDown -> stepSasayakiRate(-SASAYAKI_KEY_SPEED_STEP)
             ReaderHardwareKeyAction.SasayakiHoldBoostStart -> {
                 sasayakiKeyBoosting[0] = true
                 startSasayakiBoost()
@@ -2091,6 +2112,7 @@ fun ReaderWebView(
                         fontManager = fontManager,
                         systemDark = systemDarkTheme,
                         edgeGestures = edgeGestures,
+                        mouseSideClickTurnsPages = gestureSettings.mouseSideClickTurnsPages,
                         onBeforeRestoreVisible = { restoredWebView ->
                             sasayakiRestoreBeforeVisibleAction(
                                 restoredWebView = restoredWebView,
@@ -2357,7 +2379,13 @@ fun ReaderWebView(
         // Both HUDs sit just above the playback row, where the gesture happens.
         val sasayakiHudBottomPadding = (sasayakiBottomPlaybackControls.rowHeightDp + bottomChromeMetrics.bottomSafeAreaDp + 16).dp
         ReaderSasayakiScrubHud(state = sasayakiScrubHud, bottomPadding = sasayakiHudBottomPadding)
-        ReaderSasayakiBoostHud(rate = sasayakiBoostRate, bottomPadding = sasayakiHudBottomPadding)
+        ReaderSasayakiBoostHud(rate = sasayakiBoostRate ?: sasayakiSpeedFlash, bottomPadding = sasayakiHudBottomPadding)
+        ReaderSyncNoticeCard(
+            notice = syncNotice,
+            bottomPadding = sasayakiHudBottomPadding,
+            onUndo = onSyncNoticeUndo,
+            onDismiss = onSyncNoticeDismissed,
+        )
         webView?.let { _ -> Unit }
     }
 }
@@ -2443,3 +2471,6 @@ private fun SasayakiPlaybackData?.hasStoredAudioSource(): Boolean =
 
 /** A full-height edge drag scrubs this many steps. */
 private const val EDGE_SCRUB_STEPS_PER_HEIGHT = 16f
+
+private const val SASAYAKI_KEY_SPEED_STEP = 0.1f
+private const val SASAYAKI_SPEED_FLASH_MS = 900L

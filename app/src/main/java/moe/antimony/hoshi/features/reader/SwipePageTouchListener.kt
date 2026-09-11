@@ -22,21 +22,25 @@ internal abstract class SwipePageTouchListener(
             cancelEdgeHold(view)
             return false
         }
-        if (handleEdgeTapHold(view, event)) {
-            tracker.suppressCurrentGesture()
-            edgeTracker.onCancel()
-            return true
-        }
-        if (handleEdgeSwipe(view, event)) {
-            tracker.suppressCurrentGesture()
-            cancelEdgeHold(view)
-            return true
+        // A mouse drag selects text: no swipe, no edge gesture, and never an ACTION_CANCEL into the WebView.
+        val isMouse = event.isMouse()
+        if (!isMouse) {
+            if (handleEdgeTapHold(view, event)) {
+                tracker.suppressCurrentGesture()
+                edgeTracker.onCancel()
+                return true
+            }
+            if (handleEdgeSwipe(view, event)) {
+                tracker.suppressCurrentGesture()
+                cancelEdgeHold(view)
+                return true
+            }
         }
         when (event.actionMasked) {
-            MotionEvent.ACTION_DOWN -> tracker.onDown(event.x, event.y, event.eventTime)
+            MotionEvent.ACTION_DOWN -> tracker.onDown(event.x, event.y, event.eventTime, allowSwipe = !isMouse)
             MotionEvent.ACTION_POINTER_DOWN -> tracker.onAdditionalPointerDown()
             MotionEvent.ACTION_MOVE -> dispatch(tracker.onMove(event.x, event.y, event.eventTime))
-            MotionEvent.ACTION_UP -> dispatch(tracker.onUp(event.x, event.y, event.eventTime), view)
+            MotionEvent.ACTION_UP -> dispatch(tracker.onUp(event.x, event.y, event.eventTime), view, isMouse)
             MotionEvent.ACTION_CANCEL -> tracker.onCancel()
         }
         return false
@@ -154,7 +158,7 @@ internal abstract class SwipePageTouchListener(
 
     open fun onLeftSwipe() = Unit
     open fun onRightSwipe() = Unit
-    open fun onTap(x: Float, y: Float) = Unit
+    open fun onTap(x: Float, y: Float, isMouse: Boolean = false) = Unit
     open fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean = false
 
     open fun isEdgeHoldEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean = false
@@ -166,14 +170,14 @@ internal abstract class SwipePageTouchListener(
     open fun onEdgeDrag(edge: ReaderEdgeSwipeGestureTracker.Edge, fraction: Float) = Unit
     open fun onEdgeDragEnd() = Unit
 
-    private fun dispatch(result: ReaderSwipeGestureTracker.Result, view: View? = null) {
+    private fun dispatch(result: ReaderSwipeGestureTracker.Result, view: View? = null, isMouse: Boolean = false) {
         when (result) {
             ReaderSwipeGestureTracker.Result.LeftSwipe -> onLeftSwipe()
             ReaderSwipeGestureTracker.Result.RightSwipe -> onRightSwipe()
             is ReaderSwipeGestureTracker.Result.Tap -> {
                 // A tap in an edge zone with a double-tap bound waits out the double-tap window first.
                 val edge = view?.let { readerEdgeForTouch(result.x, it.width, it.resources.displayMetrics.density) }
-                if (view != null && edge != null && isEdgeDoubleTapEnabled(edge)) {
+                if (view != null && edge != null && !isMouse && isEdgeDoubleTapEnabled(edge)) {
                     pendingTap?.let(view::removeCallbacks)
                     val runnable = Runnable {
                         pendingTap = null
@@ -182,7 +186,7 @@ internal abstract class SwipePageTouchListener(
                     pendingTap = runnable
                     view.postDelayed(runnable, ViewConfiguration.getDoubleTapTimeout().toLong())
                 } else {
-                    onTap(result.x, result.y)
+                    onTap(result.x, result.y, isMouse)
                 }
             }
             ReaderSwipeGestureTracker.Result.None -> Unit
@@ -209,16 +213,20 @@ internal class ReaderSwipeGestureTracker(
     val didDispatchSwipe: Boolean
         get() = swipeDispatched
 
-    fun onDown(x: Float, y: Float, eventTime: Long) {
+    private var swipeAllowed = true
+
+    /** [allowSwipe] is false for a mouse: movement is a text selection, only a click without movement is a tap. */
+    fun onDown(x: Float, y: Float, eventTime: Long, allowSwipe: Boolean = true) {
         downX = x
         downY = y
         downTime = eventTime
         hasDown = true
         swipeDispatched = false
+        swipeAllowed = allowSwipe
     }
 
     fun onMove(x: Float, y: Float, eventTime: Long): Result {
-        if (!hasDown || swipeDispatched || minDistance <= 0f) return Result.None
+        if (!hasDown || !swipeAllowed || swipeDispatched || minDistance <= 0f) return Result.None
         val dx = x - downX
         val dy = y - downY
         val elapsedMs = (eventTime - downTime).coerceAtLeast(1L)
@@ -352,3 +360,5 @@ internal class ReaderEdgeSwipeGestureTracker {
         const val ACTIVATION_DP = 16f
     }
 }
+
+internal fun MotionEvent.isMouse(): Boolean = getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE

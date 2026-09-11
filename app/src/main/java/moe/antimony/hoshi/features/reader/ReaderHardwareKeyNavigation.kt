@@ -13,6 +13,9 @@ internal sealed interface ReaderHardwareKeyAction {
     data class PopupTermNavigation(val direction: PopupTermNavigationDirection) : ReaderHardwareKeyAction
     data object SasayakiSeekForward : ReaderHardwareKeyAction
     data object SasayakiSeekBackward : ReaderHardwareKeyAction
+    /** `>` / `<`: step the saved playback rate, like YouTube. */
+    data object SasayakiSpeedUp : ReaderHardwareKeyAction
+    data object SasayakiSpeedDown : ReaderHardwareKeyAction
     /** Play key auto-repeat began: hold-to-boost should start. */
     data object SasayakiHoldBoostStart : ReaderHardwareKeyAction
     /** Play key released: end a running boost, else toggle playback. */
@@ -105,6 +108,8 @@ internal fun readerHardwareKeyEventForKeyEvent(
         KeyEvent.KEYCODE_J,
         KeyEvent.KEYCODE_DPAD_RIGHT,
         KeyEvent.KEYCODE_L,
+        KeyEvent.KEYCODE_COMMA,
+        KeyEvent.KEYCODE_PERIOD,
         -> sasayakiKeyboardResult(
             keyCode = keyCode,
             action = action,
@@ -143,9 +148,11 @@ private fun sasayakiKeyboardResult(
         KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_K -> ReaderHardwareKeyAction.SasayakiTogglePlayback
         KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_J -> ReaderHardwareKeyAction.SasayakiSeekBackward
         KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_L -> ReaderHardwareKeyAction.SasayakiSeekForward
+        KeyEvent.KEYCODE_COMMA -> ReaderHardwareKeyAction.SasayakiSpeedDown
+        KeyEvent.KEYCODE_PERIOD -> ReaderHardwareKeyAction.SasayakiSpeedUp
         else -> return ReaderHardwareKeyEventResult(consumed = false)
     }
-    // Play/pause fires once per press; seeks repeat while a key is held.
+    // Play/pause fires once per press; seeks and speed steps repeat while a key is held.
     val fires = action == KeyEvent.ACTION_DOWN &&
         (keyAction != ReaderHardwareKeyAction.SasayakiTogglePlayback || repeatCount == 0)
     return ReaderHardwareKeyEventResult(consumed = true, action = keyAction.takeIf { fires })

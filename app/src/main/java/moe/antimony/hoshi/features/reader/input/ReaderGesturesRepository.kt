@@ -3,6 +3,7 @@ package moe.antimony.hoshi.features.reader.input
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -17,6 +18,8 @@ data class ReaderGestureSettings(
     val controlsPlacement: SasayakiControlsPlacement = SasayakiControlsPlacement.Bottom,
     /** Where the side dock rests along its edge, 0 = top, 1 = bottom. */
     val dockOffsetFraction: Float = DefaultDockOffsetFraction,
+    /** Mouse only: a click in the outer side zones turns the page instead of looking up the word there. */
+    val mouseSideClickTurnsPages: Boolean = false,
 ) {
     companion object {
         const val DefaultDockOffsetFraction = 0.6f
@@ -41,6 +44,7 @@ class ReaderGesturesRepository(
                 SasayakiControlsPlacement.entries.firstOrNull { it.name == name }
             } ?: SasayakiControlsPlacement.Bottom,
             dockOffsetFraction = (preferences[KEY_DOCK_OFFSET] ?: ReaderGestureSettings.DefaultDockOffsetFraction).coerceIn(0f, 1f),
+            mouseSideClickTurnsPages = preferences[KEY_MOUSE_SIDE_CLICK] ?: false,
         )
     }
 
@@ -53,11 +57,13 @@ class ReaderGesturesRepository(
                     SasayakiControlsPlacement.entries.firstOrNull { it.name == name }
                 } ?: SasayakiControlsPlacement.Bottom,
                 dockOffsetFraction = preferences[KEY_DOCK_OFFSET] ?: ReaderGestureSettings.DefaultDockOffsetFraction,
+                mouseSideClickTurnsPages = preferences[KEY_MOUSE_SIDE_CLICK] ?: false,
             )
             val next = transform(current)
             preferences[KEY_BINDINGS] = next.bindings.encode()
             preferences[KEY_PLACEMENT] = next.controlsPlacement.name
             preferences[KEY_DOCK_OFFSET] = next.dockOffsetFraction.coerceIn(0f, 1f)
+            preferences[KEY_MOUSE_SIDE_CLICK] = next.mouseSideClickTurnsPages
         }
     }
 
@@ -72,5 +78,6 @@ class ReaderGesturesRepository(
         private val KEY_BINDINGS = stringPreferencesKey("readerInputBindings")
         private val KEY_PLACEMENT = stringPreferencesKey("sasayakiControlsPlacement")
         private val KEY_DOCK_OFFSET = floatPreferencesKey("sasayakiDockOffsetFraction")
+        private val KEY_MOUSE_SIDE_CLICK = booleanPreferencesKey("mouseSideClickTurnsPages")
     }
 }

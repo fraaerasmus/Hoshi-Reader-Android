@@ -713,6 +713,11 @@
     <string name="gestures_edge_right_drag">沿右边缘拖动</string>
     <string name="gestures_section_volume">音量键</string>
     <string name="gestures_volume_hold">长按音量键</string>
+    <string name="gestures_section_mouse">鼠标</string>
+    <string name="gestures_mouse_side_click">点击两侧翻页</string>
+    <string name="gestures_mouse_side_click_help">点击页面外侧五分之一区域翻页，而不是查询该处的词。滚轮始终可以翻页。</string>
+    <string name="gestures_section_keyboard">键盘</string>
+    <string name="gestures_keyboard_help">空格或 K：播放 / 暂停 · J 或 L：跳转 · &lt; 或 &gt;：速度 −/+ 0.1× · Page Up / Page Down：翻页</string>
     <string name="input_action_none" comment="Gesture binding option meaning the gesture does nothing.">无</string>
     <string name="input_action_toggle_playback">播放 / 暂停</string>
     <string name="input_action_skip_forward">快进</string>

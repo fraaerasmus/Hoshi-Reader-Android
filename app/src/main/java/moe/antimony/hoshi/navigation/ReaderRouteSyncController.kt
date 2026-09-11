@@ -12,6 +12,13 @@ internal class ReaderSyncRequest(
     val positionAtStart: ReaderChapterPosition? = null,
 )
 
+/** Reader feedback for a finished sync; [undo] is the position to jump back to when the user asks. */
+data class ReaderSyncNotice(
+    val message: String,
+    val isError: Boolean,
+    val undo: ReaderChapterPosition? = null,
+)
+
 /** Where a sync wants the reader to go, and where it came from so the move can be undone. */
 data class ReaderSyncJump(
     val target: ReaderChapterPosition,

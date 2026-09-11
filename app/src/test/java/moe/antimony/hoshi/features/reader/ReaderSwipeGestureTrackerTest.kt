@@ -171,4 +171,16 @@ class ReaderSwipeGestureTrackerTest {
 
         assertTrue(result == ReaderSwipeGestureTracker.Result.None)
     }
+
+    @Test
+    fun mouseDragNeverSwipesButAMouseClickIsStillATap() {
+        val tracker = ReaderSwipeGestureTracker(minDistance = 72f)
+
+        tracker.onDown(240f, 100f, eventTime = 1_000L, allowSwipe = false)
+        assertEquals(ReaderSwipeGestureTracker.Result.None, tracker.onMove(100f, 104f, eventTime = 1_100L))
+        assertEquals(ReaderSwipeGestureTracker.Result.None, tracker.onUp(60f, 104f, eventTime = 1_200L))
+
+        tracker.onDown(240f, 100f, eventTime = 2_000L, allowSwipe = false)
+        assertEquals(ReaderSwipeGestureTracker.Result.Tap(241f, 101f), tracker.onUp(241f, 101f, eventTime = 2_080L))
+    }
 }

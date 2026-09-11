@@ -10,7 +10,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -81,6 +80,7 @@ internal fun ReaderRouteDestination(
     val bookmarkScope = rememberCoroutineScope()
     var reloadKey by remember(bookId) { mutableIntStateOf(0) }
     var pendingSyncJump by remember(bookId) { mutableStateOf<ReaderSyncJump?>(null) }
+    var syncNotice by remember(bookId) { mutableStateOf<ReaderSyncNotice?>(null) }
     var lastReaderSave by remember(bookId) { mutableStateOf<ReaderChapterPosition?>(null) }
     var pendingSyncRequest by remember(bookId) { mutableStateOf<ReaderSyncRequest?>(null) }
     val autoSyncExportController = remember(bookId, appContainer) {
@@ -195,7 +195,7 @@ internal fun ReaderRouteDestination(
         autoSyncExportController.flushExport(anyAutoSyncEnabled)
     }
 
-    /** Turns a finished background sync into reader feedback: a snackbar, a jump with Undo, or a re-save when the reader moved on. */
+    /** Turns a finished background sync into reader feedback: a notice card, a jump with Undo, or a re-save when the reader moved on. */
     suspend fun presentReport(
         report: ProgressSyncReport,
         readyState: ReaderRouteLoadState.Ready,
@@ -205,12 +205,13 @@ internal fun ReaderRouteDestination(
         val applied = report.applied
         if (applied == null) {
             report.failures.firstOrNull()?.let { failure ->
-                readerSnackbarHostState.showSnackbar(
-                    resources.getString(
+                syncNotice = ReaderSyncNotice(
+                    message = resources.getString(
                         R.string.reader_sync_failed_format,
                         failure.backend.displayName,
                         failure.error.resolve(resources),
                     ),
+                    isError = true,
                 )
             }
             return
@@ -223,7 +224,7 @@ internal fun ReaderRouteDestination(
         if (applied.backend == SyncBackend.Ttu) {
             // A Drive import rewrites statistics and sidecars too, so only a reload picks everything up.
             reloadKey += 1
-            readerSnackbarHostState.showSnackbar(message)
+            syncNotice = ReaderSyncNotice(message, isError = false)
             return
         }
         when (val plan = planReaderSync(applied, readyState.bookmark, lastReaderSave, openPosition, positionAtSyncStart)) {
@@ -236,13 +237,7 @@ internal fun ReaderRouteDestination(
             )
             is ReaderSyncPlan.Apply -> {
                 pendingSyncJump = plan.jump
-                val result = readerSnackbarHostState.showSnackbar(
-                    message = message,
-                    actionLabel = resources.getString(R.string.action_undo),
-                )
-                if (result == SnackbarResult.ActionPerformed) {
-                    plan.jump.origin?.let { pendingSyncJump = ReaderSyncJump(target = it, origin = null, seedOnly = false) }
-                }
+                syncNotice = ReaderSyncNotice(message, isError = false, undo = plan.jump.origin)
             }
         }
     }
@@ -296,7 +291,6 @@ internal fun ReaderRouteDestination(
                     }
                     presentReport(report, readyState, openPosition, request.positionAtStart ?: openPosition)
                 } finally {
-                    // Clearing the effect key while showSnackbar is suspended would cancel the snackbar and Undo.
                     if (pendingSyncRequest === request) pendingSyncRequest = null
                 }
             }
@@ -333,6 +327,12 @@ internal fun ReaderRouteDestination(
                     onForegroundAutoSyncImport = { importOnForeground(readyState.entry, lastReaderSave ?: openPosition) },
                     pendingSyncJump = pendingSyncJump,
                     onPendingSyncJumpConsumed = { pendingSyncJump = null },
+                    syncNotice = syncNotice,
+                    onSyncNoticeUndo = {
+                        syncNotice?.undo?.let { pendingSyncJump = ReaderSyncJump(target = it, origin = null, seedOnly = false) }
+                        syncNotice = null
+                    },
+                    onSyncNoticeDismissed = { syncNotice = null },
                     onPositionDisplaced = { displaced, source ->
                         bookmarkScope.launch {
                             appContainer.progressSyncCoordinator.recordDisplacement(
