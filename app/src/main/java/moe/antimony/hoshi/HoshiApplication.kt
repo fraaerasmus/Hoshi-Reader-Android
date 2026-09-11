@@ -19,6 +19,7 @@ import moe.antimony.hoshi.features.bookshelf.BookCoverFetcher
 import moe.antimony.hoshi.features.bookshelf.BookCoverKeyer
 import moe.antimony.hoshi.features.bookshelf.BookCoverThumbnailStore
 import moe.antimony.hoshi.features.diagnostics.installCrashDiagnostics
+import moe.antimony.hoshi.features.backup.RemoteBackupScheduler
 import moe.antimony.hoshi.features.dictionary.DictionaryAutoUpdateScheduler
 import moe.antimony.hoshi.features.update.UpdateApkCleanup
 import moe.antimony.hoshi.features.update.UpdateScheduler
@@ -29,6 +30,7 @@ import moe.antimony.hoshi.features.update.UpdateDownloadStore
 class HoshiApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
     @Inject internal lateinit var updateApkCleanup: UpdateApkCleanup
     @Inject internal lateinit var dictionaryAutoUpdateScheduler: Lazy<DictionaryAutoUpdateScheduler>
+    @Inject internal lateinit var remoteBackupScheduler: Lazy<RemoteBackupScheduler>
     @Inject internal lateinit var updateDownloadStore: UpdateDownloadStore
     @Inject internal lateinit var updateScheduler: Lazy<UpdateScheduler>
     @Inject internal lateinit var workerFactory: HiltWorkerFactory
@@ -46,6 +48,7 @@ class HoshiApplication : Application(), Configuration.Provider, SingletonImageLo
         prepareUpdateStartupState()
         updateScheduler.get().sync()
         dictionaryAutoUpdateScheduler.get().registerProcessForegroundChecks()
+        remoteBackupScheduler.get().registerProcessBackgroundBackups()
     }
 
     override fun newImageLoader(context: Context): ImageLoader =

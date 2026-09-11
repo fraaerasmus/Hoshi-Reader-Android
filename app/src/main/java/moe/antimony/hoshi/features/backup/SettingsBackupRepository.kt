@@ -74,12 +74,12 @@ class SettingsBackupRepository @Inject constructor(
     private val updateSettingsRepository: UpdateSettingsRepository,
     private val driveAuthorizer: DeviceCodeDriveAuthorizer,
     private val profileRepository: ProfileRepository,
+    private val remoteBackupSettingsRepository: RemoteBackupSettingsRepository,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-) {
+) : SettingsBackupSnapshot {
     suspend fun exportSettings(contentResolver: ContentResolver, uri: Uri) {
         withContext(ioDispatcher) {
-            val envelope = buildEnvelope()
-            val bytes = JSON.encodeToString(JsonElement.serializer(), envelope).toByteArray()
+            val bytes = exportSettingsJson().toByteArray()
             contentResolver.openOutputStream(uri)?.use { output ->
                 output.write(bytes)
             } ?: error("Unable to open settings backup destination.")
@@ -91,9 +91,19 @@ class SettingsBackupRepository @Inject constructor(
             val text = contentResolver.openInputStream(uri)?.use { input ->
                 input.readBytes().decodeToString()
             } ?: error("Unable to open settings backup file.")
-            applyEnvelope(JSON.parseToJsonElement(text).jsonObject)
+            importSettingsJson(text)
         }
     }
+
+    suspend fun exportSettingsJson(): String = encode(exportEnvelope())
+
+    override suspend fun importSettingsJson(text: String) {
+        applyEnvelope(JSON.parseToJsonElement(text).jsonObject)
+    }
+
+    override suspend fun exportEnvelope(): JsonObject = buildEnvelope()
+
+    override fun encode(envelope: JsonObject): String = JSON.encodeToString(JsonElement.serializer(), envelope)
 
     private suspend fun buildEnvelope(): JsonObject {
         // Gather suspend results before composing the (non-suspend) JSON builders.
@@ -106,6 +116,7 @@ class SettingsBackupRepository @Inject constructor(
         val sync = syncSettingsRepository.exportEntries()
         val kosync = kosyncSettingsRepository.exportEntries()
         val update = updateSettingsRepository.exportEntries()
+        val remoteBackup = remoteBackupSettingsRepository.exportEntries()
         val driveCredentials = driveAuthorizer.exportCredentials()
         val profiles = profileRepository.exportProfilesBackup()
         return buildJsonObject {
@@ -125,6 +136,7 @@ class SettingsBackupRepository @Inject constructor(
                     put(STORE_SYNC, sync)
                     put(STORE_KOSYNC, kosync)
                     put(STORE_UPDATE, update)
+                    put(STORE_REMOTE_BACKUP, remoteBackup)
                 },
             )
             put(
@@ -133,6 +145,7 @@ class SettingsBackupRepository @Inject constructor(
                     put(CREDENTIAL_DRIVE, driveCredentials)
                     put(CREDENTIAL_KOSYNC, kosyncSettingsRepository.exportCredentials())
                     put(CREDENTIAL_OPDS, opdsCatalogRepository.exportCredentials())
+                    put(CREDENTIAL_REMOTE_BACKUP, remoteBackupSettingsRepository.exportCredentials())
                 },
             )
             put(KEY_PROFILES, profiles)
@@ -150,6 +163,7 @@ class SettingsBackupRepository @Inject constructor(
         stores.store(STORE_SYNC)?.let { syncSettingsRepository.importEntries(it) }
         stores.store(STORE_KOSYNC)?.let { kosyncSettingsRepository.importEntries(it) }
         stores.store(STORE_UPDATE)?.let { updateSettingsRepository.importEntries(it) }
+        stores.store(STORE_REMOTE_BACKUP)?.let { remoteBackupSettingsRepository.importEntries(it) }
 
         envelope[KEY_CREDENTIALS]?.jsonObject?.store(CREDENTIAL_DRIVE)
             ?.let { driveAuthorizer.importCredentials(it) }
@@ -157,6 +171,8 @@ class SettingsBackupRepository @Inject constructor(
             ?.let { kosyncSettingsRepository.importCredentials(it) }
         envelope[KEY_CREDENTIALS]?.jsonObject?.store(CREDENTIAL_OPDS)
             ?.let { opdsCatalogRepository.importCredentials(it) }
+        envelope[KEY_CREDENTIALS]?.jsonObject?.store(CREDENTIAL_REMOTE_BACKUP)
+            ?.let { remoteBackupSettingsRepository.importCredentials(it) }
 
         envelope[KEY_PROFILES]?.jsonObject?.let { profileRepository.importProfilesBackup(it) }
     }
@@ -184,9 +200,11 @@ class SettingsBackupRepository @Inject constructor(
         const val STORE_SYNC = "sync"
         const val STORE_KOSYNC = "kosync"
         const val STORE_UPDATE = "update"
+        const val STORE_REMOTE_BACKUP = "remoteBackup"
         const val CREDENTIAL_DRIVE = "drive"
         const val CREDENTIAL_KOSYNC = "kosync"
         const val CREDENTIAL_OPDS = "opds"
+        const val CREDENTIAL_REMOTE_BACKUP = "remoteBackup"
 
         val JSON = Json {
             prettyPrint = true

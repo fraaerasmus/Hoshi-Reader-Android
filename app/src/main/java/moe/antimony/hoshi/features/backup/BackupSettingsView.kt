@@ -278,6 +278,13 @@ fun BackupSettingsView(
                     )
                 }
                 item {
+                    RemoteBackupSection(
+                        enabled = operation == null,
+                        onOperation = { operation = it },
+                        onMessage = { message -> scope.launch { snackbarHostState.showSnackbar(message) } },
+                    )
+                }
+                item {
                     BackupSection(
                         title = stringResource(R.string.backup_ttu_bookdata),
                         footer = stringResource(R.string.backup_ttu_bookdata_description),
@@ -352,7 +359,7 @@ private fun BackupSection(
 }
 
 @Composable
-private fun BackupGroupCard(content: @Composable () -> Unit) {
+internal fun BackupGroupCard(content: @Composable () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -366,11 +373,13 @@ private fun BackupGroupCard(content: @Composable () -> Unit) {
 
 private val SETTINGS_IMPORT_MIME_TYPES = arrayOf("application/json", "application/octet-stream")
 
-private enum class BackupOperation(val labelRes: Int) {
+internal enum class BackupOperation(val labelRes: Int) {
     Exporting(R.string.backup_archiving),
     Restoring(R.string.backup_restoring),
     ExportingTtu(R.string.backup_exporting),
     ImportingTtu(R.string.backup_importing),
+    Uploading(R.string.backup_server_uploading),
+    Downloading(R.string.backup_server_downloading),
 }
 
 internal fun Throwable?.stableBackupFailureMessage(

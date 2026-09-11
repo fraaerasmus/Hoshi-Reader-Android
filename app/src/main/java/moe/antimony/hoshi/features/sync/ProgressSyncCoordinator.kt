@@ -57,6 +57,7 @@ val SyncBackend.displayName: String
     get() = when (this) {
         SyncBackend.Ttu -> "ッツ"
         SyncBackend.Kosync -> "KOReader"
+        SyncBackend.RemoteBackup -> "Server"
     }
 
 /** One entry point for "sync this book" across every enabled backend; owns outcomes, errors, the position trail and the audio follow-up. */
@@ -193,6 +194,7 @@ internal class ProgressSyncCoordinator private constructor(
                     when (backend) {
                         SyncBackend.Ttu -> syncManager.status(entry)
                         SyncBackend.Kosync -> kosyncManager.status(entry)
+                        SyncBackend.RemoteBackup -> null
                     }
                 }.fold(
                     onSuccess = { BackendStatus(backend, it, null) },
@@ -272,6 +274,7 @@ internal class ProgressSyncCoordinator private constructor(
         get() = when (this) {
             SyncBackend.Ttu -> PositionTrailEntry.SourceDrive
             SyncBackend.Kosync -> PositionTrailEntry.SourceKosync
+            SyncBackend.RemoteBackup -> PositionTrailEntry.SourceDrive
         }
 }
 

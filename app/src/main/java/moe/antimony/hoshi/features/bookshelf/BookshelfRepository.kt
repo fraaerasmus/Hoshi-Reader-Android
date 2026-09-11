@@ -28,6 +28,7 @@ import moe.antimony.hoshi.features.sync.DriveAuthStatus
 import moe.antimony.hoshi.features.sync.DriveAuthorizer
 import moe.antimony.hoshi.features.sync.DriveSyncDataSource
 import moe.antimony.hoshi.features.sync.GoogleDriveApiException
+import moe.antimony.hoshi.features.backup.RemoteBackupManager
 import moe.antimony.hoshi.features.sync.ProgressSyncCoordinator
 import moe.antimony.hoshi.features.sync.ProgressSyncReport
 import moe.antimony.hoshi.features.sync.SyncDirection
@@ -98,6 +99,7 @@ internal class AndroidBookshelfRepository @Inject constructor(
     private val ttuBookDataConverter: TtuBookDataConverter,
     private val bookParser: EpubBookParser,
     private val bookCoverThumbnailStore: BookCoverThumbnailStore,
+    private val remoteBackupManager: RemoteBackupManager,
     @param:CacheDir private val cacheDir: File,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : BookshelfRepository {
@@ -153,6 +155,7 @@ internal class AndroidBookshelfRepository @Inject constructor(
         saveMetadata(root, parsedBook, bookRepository.loadMetadata(root))
         saveBookInfo(root, parsedBook)
         prewarmBookCover(root)
+        restoreBackedUpReadingData(root)
         readerBookId(root)
     }
 
@@ -162,6 +165,7 @@ internal class AndroidBookshelfRepository @Inject constructor(
         saveMetadata(root, parsedBook, bookRepository.loadMetadata(root))
         saveBookInfo(root, parsedBook)
         prewarmBookCover(root)
+        restoreBackedUpReadingData(root)
         readerBookId(root)
     }
 
@@ -395,6 +399,12 @@ internal class AndroidBookshelfRepository @Inject constructor(
                 bookRepository.saveSasayakiPlayback(entry.root, existing.copy(lastPosition = audioBook.playbackPosition))
             }
         }
+    }
+
+    /** A book the backup server already knows gets its reading data back before the shelf shows it. */
+    private suspend fun restoreBackedUpReadingData(root: File) {
+        val metadata = bookRepository.loadMetadata(root) ?: return
+        remoteBackupManager.restoreBookStateAfterImport(BookEntry(root, metadata))
     }
 
     private suspend fun readerBookId(root: File): String =

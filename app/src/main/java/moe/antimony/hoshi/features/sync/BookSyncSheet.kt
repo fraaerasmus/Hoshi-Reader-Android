@@ -50,10 +50,12 @@ import moe.antimony.hoshi.epub.BookInfo
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.PositionTrailEntry
+import moe.antimony.hoshi.features.backup.RemoteBackupManager
 import moe.antimony.hoshi.features.reader.ReaderChapterPosition
 import moe.antimony.hoshi.features.reader.tocLabelAt
 import moe.antimony.hoshi.features.sasayaki.SasayakiAudioPosition
 import moe.antimony.hoshi.features.sasayaki.formatDuration
+import moe.antimony.hoshi.ui.UiText
 import moe.antimony.hoshi.ui.hoshiOutlinedTextFieldColors
 import moe.antimony.hoshi.ui.resolve
 
@@ -79,6 +81,7 @@ internal fun BookSyncSheetContent(
     val state = remember(entry.metadata.id) { BookSyncSheetState(entry, deps) }
     var editingDocumentId by remember { mutableStateOf(false) }
     var showAllPositions by remember { mutableStateOf(false) }
+    var confirmRestore by remember { mutableStateOf(false) }
     LaunchedEffect(state) { state.refresh() }
 
     fun applyPosition(chapterIndex: Int, progress: Double, source: String) {
@@ -157,11 +160,11 @@ internal fun BookSyncSheetContent(
                 Text(stringResource(R.string.sync_sheet_sync_now))
             }
         }
-        state.lastReport?.toUiText()?.let { outcome ->
+        (state.lastMessage ?: state.lastReport?.toUiText())?.let { outcome ->
             Text(
                 text = outcome.resolve(resources),
                 style = MaterialTheme.typography.bodySmall,
-                color = if (state.lastReport?.failures.isNullOrEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                color = if (state.lastMessage == null && !state.lastReport?.failures.isNullOrEmpty()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
@@ -225,6 +228,14 @@ internal fun BookSyncSheetContent(
                 }
             }
         }
+        if (state.remoteBackupEnabled) {
+            ListItem(
+                colors = transparentListItemColors(),
+                leadingContent = { Icon(Icons.Rounded.CloudDownload, contentDescription = null) },
+                headlineContent = { Text(stringResource(R.string.sync_sheet_restore_from_server)) },
+                modifier = Modifier.clickable(enabled = state.busy.isEmpty()) { confirmRestore = true },
+            )
+        }
         if (state.kosyncEnabled) {
             ListItem(
                 colors = transparentListItemColors(),
@@ -237,6 +248,37 @@ internal fun BookSyncSheetContent(
                 },
             )
         }
+    }
+
+    if (confirmRestore) {
+        AlertDialog(
+            onDismissRequest = { confirmRestore = false },
+            title = { Text(stringResource(R.string.sync_sheet_restore_from_server)) },
+            text = { Text(stringResource(R.string.sync_sheet_restore_from_server_confirm)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmRestore = false
+                        scope.launch {
+                            val restored = state.restoreFromServer(deps.remoteBackupManager)
+                            val bookmark = state.bookmark
+                            if (restored && bookmark != null) {
+                                if (onApplyLocalPosition != null) {
+                                    onApplyLocalPosition(ReaderChapterPosition(bookmark.chapterIndex, bookmark.progress))
+                                } else {
+                                    onLocalPositionChanged()
+                                }
+                            }
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.action_ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmRestore = false }) { Text(stringResource(R.string.action_cancel)) }
+            },
+        )
     }
 
     if (editingDocumentId) {
@@ -389,6 +431,11 @@ internal class BookSyncSheetState(
         private set
     var kosyncEnabled by mutableStateOf(false)
         private set
+    var remoteBackupEnabled by mutableStateOf(false)
+        private set
+    /** A non-sync outcome (server restore) shown on the outcome line instead of [lastReport]. */
+    var lastMessage by mutableStateOf<UiText?>(null)
+        private set
 
     fun percentOf(characterCount: Int): Int =
         if (characterTotal > 0) (characterCount.toDouble() / characterTotal).coerceIn(0.0, 1.0).toPercent() else 0
@@ -416,6 +463,7 @@ internal class BookSyncSheetState(
         hasAudioMatch = deps.bookRepository.loadSasayakiMatch(entry.root)?.matches?.isNotEmpty() == true
         audioPosition = if (hasAudioMatch) deps.sasayakiPositionSync.audioPosition(entry) else null
         kosyncEnabled = deps.kosyncSettingsRepository.settings.first().enabled
+        remoteBackupEnabled = deps.remoteBackupSettingsRepository.settings.first().let { it.enabled && it.backupBookState }
         documentId = if (kosyncEnabled) deps.kosyncManager.documentId(entry) else null
         backends = deps.progressSyncCoordinator.enabledBackends(manual = true).sortedBy { it.ordinal }
         statusesLoaded = false
@@ -432,8 +480,25 @@ internal class BookSyncSheetState(
             busy = emptySet()
         }
         lastReport = report
+        lastMessage = null
         refresh()
         return report
+    }
+
+    suspend fun restoreFromServer(manager: RemoteBackupManager): Boolean {
+        busy = SyncBackend.values().toSet()
+        val restored = try {
+            manager.restoreBookState(entry)
+        } catch (error: Exception) {
+            lastMessage = error.toSyncErrorText()
+            false
+        } finally {
+            busy = emptySet()
+        }
+        if (restored) lastMessage = UiText.Resource(R.string.sync_sheet_restore_from_server_done)
+        else if (lastMessage == null) lastMessage = UiText.Resource(R.string.sync_sheet_restore_from_server_none)
+        refresh()
+        return restored
     }
 
     suspend fun saveLocalPosition(chapterIndex: Int, progress: Double, source: String) {

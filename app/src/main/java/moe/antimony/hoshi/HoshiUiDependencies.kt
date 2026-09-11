@@ -11,6 +11,8 @@ import moe.antimony.hoshi.epub.EpubBookParser
 import moe.antimony.hoshi.features.audio.AudioSettingsRepository
 import moe.antimony.hoshi.features.audio.LocalAudioRepository
 import moe.antimony.hoshi.features.backup.HoshiBackupRepository
+import moe.antimony.hoshi.features.backup.RemoteBackupManager
+import moe.antimony.hoshi.features.backup.RemoteBackupSettingsRepository
 import moe.antimony.hoshi.features.backup.SettingsBackupRepository
 import moe.antimony.hoshi.features.dictionary.DictionarySettingsRepository
 import moe.antimony.hoshi.features.reader.ReaderFontManager
@@ -61,6 +63,8 @@ internal class HoshiUiDependencies @Inject constructor(
     private val localAudioRepositoryProvider: Lazy<LocalAudioRepository>,
     private val backupRepositoryProvider: Lazy<HoshiBackupRepository>,
     private val settingsBackupRepositoryProvider: Lazy<SettingsBackupRepository>,
+    private val remoteBackupSettingsRepositoryProvider: Lazy<RemoteBackupSettingsRepository>,
+    private val remoteBackupManagerProvider: Lazy<RemoteBackupManager>,
     private val storageCleanupRepositoryProvider: Lazy<StorageCleanupRepository>,
     private val deviceCodeDriveAuthorizerProvider: Lazy<DeviceCodeDriveAuthorizer>,
     private val syncManagerProvider: Lazy<SyncManager>,
@@ -94,6 +98,8 @@ internal class HoshiUiDependencies @Inject constructor(
     val localAudioRepository: LocalAudioRepository get() = localAudioRepositoryProvider.get()
     val backupRepository: HoshiBackupRepository get() = backupRepositoryProvider.get()
     val settingsBackupRepository: SettingsBackupRepository get() = settingsBackupRepositoryProvider.get()
+    val remoteBackupSettingsRepository: RemoteBackupSettingsRepository get() = remoteBackupSettingsRepositoryProvider.get()
+    val remoteBackupManager: RemoteBackupManager get() = remoteBackupManagerProvider.get()
     val storageCleanupRepository: StorageCleanupRepository get() = storageCleanupRepositoryProvider.get()
     val deviceCodeDriveAuthorizer: DeviceCodeDriveAuthorizer get() = deviceCodeDriveAuthorizerProvider.get()
     val syncManager: SyncManager get() = syncManagerProvider.get()

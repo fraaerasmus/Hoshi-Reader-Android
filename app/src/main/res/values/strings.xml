@@ -670,6 +670,28 @@
     <string name="backup_settings_credentials_warning">Includes your Google Drive and Anki credentials in plain text. Keep this file private and delete it after importing.</string>
     <string name="backup_exporting">Exporting...</string>
     <string name="backup_importing" comment="ッツ backup import progress label, intentionally matching the generic importing progress text.">Importing...</string>
+    <string name="backup_server" comment="Backup section label for the WebDAV server, distinct from the kosync server field.">Server</string>
+    <string name="backup_server_description">Back up settings and book reading data to your own WebDAV share.</string>
+    <string name="backup_server_address">Server address</string>
+    <string name="backup_server_device_name">Device name</string>
+    <string name="backup_server_auto">Back up automatically</string>
+    <string name="backup_server_auto_help">When you leave the app, changed settings and book data are uploaded.</string>
+    <string name="backup_server_book_state">Include book reading data</string>
+    <string name="backup_server_book_state_help">Bookmarks, highlights, statistics, subtitle match and positions, keyed by the book file so they come back after a reinstall.</string>
+    <string name="backup_server_backup_now">Back up now</string>
+    <string name="backup_server_restore">Restore settings from server…</string>
+    <string name="backup_server_restore_pick">Restore settings from</string>
+    <string name="backup_server_index_empty">No backups on the server yet.</string>
+    <string name="backup_server_settings_uploaded">Settings uploaded</string>
+    <string name="backup_server_settings_unchanged">Settings unchanged</string>
+    <string name="backup_server_result_format">%1$s · %2$d books updated</string>
+    <string name="backup_server_failed_format">Backup failed: %1$s</string>
+    <string name="backup_server_uploading">Uploading…</string>
+    <string name="backup_server_downloading">Downloading…</string>
+    <string name="sync_sheet_restore_from_server">Restore reading data from server</string>
+    <string name="sync_sheet_restore_from_server_confirm">Replace this book\'s bookmark, highlights, statistics and audiobook data with the server copy?</string>
+    <string name="sync_sheet_restore_from_server_done">Reading data restored from the server.</string>
+    <string name="sync_sheet_restore_from_server_none">The server has no copy of this book.</string>
     <string name="advanced_audio">Audio</string>
     <string name="advanced_statistics" comment="Advanced settings row label, intentionally matching reader statistics label.">Statistics</string>
     <string name="advanced_statistics_subtitle">Track per-book reading time, speed, and characters read</string>

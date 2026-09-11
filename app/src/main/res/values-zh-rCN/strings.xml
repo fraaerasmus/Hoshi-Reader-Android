@@ -668,6 +668,28 @@
     <string name="backup_settings_credentials_warning">包含明文的 Google Drive 和 Anki 凭据。请妥善保管此文件，并在导入后将其删除。</string>
     <string name="backup_exporting">正在导出...</string>
     <string name="backup_importing" comment="ッツ backup import progress label, intentionally matching the generic importing progress text.">正在导入...</string>
+    <string name="backup_server" comment="Backup section label for the WebDAV server, distinct from the kosync server field.">服务器</string>
+    <string name="backup_server_description">将设置和书籍阅读数据备份到你自己的 WebDAV 共享。</string>
+    <string name="backup_server_address">服务器地址</string>
+    <string name="backup_server_device_name">设备名称</string>
+    <string name="backup_server_auto">自动备份</string>
+    <string name="backup_server_auto_help">离开应用时上传已更改的设置和书籍数据。</string>
+    <string name="backup_server_book_state">包含书籍阅读数据</string>
+    <string name="backup_server_book_state_help">书签、标注、统计、字幕匹配和位置，以书籍文件为键，重装后可恢复。</string>
+    <string name="backup_server_backup_now">立即备份</string>
+    <string name="backup_server_restore">从服务器恢复设置…</string>
+    <string name="backup_server_restore_pick">从以下设备恢复设置</string>
+    <string name="backup_server_index_empty">服务器上还没有备份。</string>
+    <string name="backup_server_settings_uploaded">设置已上传</string>
+    <string name="backup_server_settings_unchanged">设置未更改</string>
+    <string name="backup_server_result_format">%1$s · 已更新 %2$d 本书</string>
+    <string name="backup_server_failed_format">备份失败：%1$s</string>
+    <string name="backup_server_uploading">正在上传…</string>
+    <string name="backup_server_downloading">正在下载…</string>
+    <string name="sync_sheet_restore_from_server">从服务器恢复阅读数据</string>
+    <string name="sync_sheet_restore_from_server_confirm">用服务器副本替换本书的书签、标注、统计和有声书数据？</string>
+    <string name="sync_sheet_restore_from_server_done">已从服务器恢复阅读数据。</string>
+    <string name="sync_sheet_restore_from_server_none">服务器上没有本书的副本。</string>
     <string name="advanced_audio">音频</string>
     <string name="advanced_statistics" comment="Advanced settings row label, intentionally matching reader statistics label.">统计</string>
     <string name="advanced_statistics_subtitle">跟踪每本书的阅读时间、速度和已读字符数</string>
