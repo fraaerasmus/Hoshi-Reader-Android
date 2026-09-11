@@ -72,18 +72,23 @@ class SyncManager private constructor(
     )
 
     /** Where the Drive record stands against the local bookmark, without creating anything on Drive. */
-    suspend fun status(entry: BookEntry): SyncComparison {
+    suspend fun status(entry: BookEntry): RemoteProgressStatus {
         val localBookmark = bookRepository.loadBookmark(entry.root)
-        val title = entry.metadata.title ?: return if (localBookmark == null) SyncComparison.NoRecord else SyncComparison.LocalNewer
+        val absent = RemoteProgressStatus(if (localBookmark == null) SyncComparison.NoRecord else SyncComparison.LocalNewer)
+        val title = entry.metadata.title ?: return absent
         val folderName = TtuSyncRules.sanitizeTtuFilename(title)
         val folder = drive.listBooks(drive.findRootFolder()).firstOrNull { it.name == folderName }
-        val progressFile = folder?.let { drive.listSyncFiles(it.id).progress }
-        if (progressFile == null) return if (localBookmark == null) SyncComparison.NoRecord else SyncComparison.LocalNewer
-        return when (TtuSyncRules.determineDirection(localBookmark, progressFile)) {
+        val progressFile = folder?.let { drive.listSyncFiles(it.id).progress } ?: return absent
+        val comparison = when (TtuSyncRules.determineDirection(localBookmark, progressFile)) {
             SyncDirection.ImportFromTtu -> SyncComparison.ServerNewer
             SyncDirection.ExportToTtu -> SyncComparison.LocalNewer
             SyncDirection.Synced -> SyncComparison.Synced
         }
+        return RemoteProgressStatus(
+            comparison,
+            percentage = TtuSyncRules.parseProgressValue(progressFile),
+            modifiedAtMillis = TtuSyncRules.parseProgressTimestampMillis(progressFile),
+        )
     }
 
     suspend fun syncBook(

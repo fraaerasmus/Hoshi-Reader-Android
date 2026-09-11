@@ -1046,7 +1046,7 @@ private fun SasayakiErrorMessage(message: String) {
     )
 }
 
-private fun formatDuration(seconds: Double): String {
+internal fun formatDuration(seconds: Double): String {
     val totalSeconds = seconds.nonNegativeFiniteSeconds().toLong()
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60

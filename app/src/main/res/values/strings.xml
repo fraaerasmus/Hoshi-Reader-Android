@@ -590,25 +590,30 @@
     <string name="reader_synced_from_format">Synced from %1$s · %2$d%%</string>
     <string name="reader_sync_failed_format">%1$s: %2$s</string>
     <string name="reader_sync" comment="Reader menu entry for the current book sync controls.">Sync</string>
-    <string name="sync_sheet_local_position">This device</string>
+    <string name="sync_sheet_title" comment="Heading of the per-book sync panel.">Sync</string>
     <string name="sync_sheet_saved_format">Saved %1$s</string>
-    <string name="sync_sheet_sync_all">Sync all now</string>
+    <string name="sync_sheet_checking">Checking…</string>
+    <string name="sync_sheet_server_position_format">Server %1$d%%</string>
+    <string name="sync_sheet_sync_now">Sync now</string>
     <string name="sync_sheet_audiobook" comment="Sync panel section heading for audiobook and reading position controls.">Audiobook</string>
     <string name="sync_sheet_move_audio_to_text">Move audio to reading position</string>
     <string name="sync_sheet_move_text_to_audio">Move reading position to audio</string>
+    <string name="sync_sheet_audio_position_format">Audio at %1$s · ≈%2$d%%</string>
     <string name="sync_sheet_recent_positions">Recent positions</string>
     <string name="sync_sheet_trail_entry_format">%1$d%% · %2$s · %3$s</string>
+    <string name="sync_sheet_show_all_format">Show all (%1$d)</string>
     <string name="sync_sheet_document_id">KOReader document ID</string>
-    <string name="sync_chip_synced">In sync</string>
-    <string name="sync_chip_server_newer">Server is ahead</string>
-    <string name="sync_chip_local_newer">This device is ahead</string>
-    <string name="sync_chip_no_record">No server record</string>
-    <string name="sync_chip_offline">Unavailable</string>
-    <string name="sync_source_kosync">from KOReader</string>
-    <string name="sync_source_drive">from ッツ</string>
-    <string name="sync_source_audio">from the audiobook</string>
+    <string name="sync_state_synced">in sync</string>
+    <string name="sync_state_ahead">server ahead</string>
+    <string name="sync_state_behind">this device ahead</string>
+    <string name="sync_state_no_record">no server record</string>
+    <string name="sync_state_unavailable">unavailable</string>
+    <string name="sync_source_kosync">before KOReader</string>
+    <string name="sync_source_drive">before ッツ</string>
+    <string name="sync_source_audio">before the audiobook</string>
     <string name="sync_source_jump">before a jump</string>
-    <string name="sync_source_undo">undone</string>
+    <string name="sync_source_undo">before going back</string>
+    <string name="time_just_now">just now</string>
     <string name="sync_last_sync_format">Last sync: %1$s</string>
     <string name="sync_last_error_format">Last error: %1$s · %2$s</string>
     <string name="sync_error_offline">No internet connection.</string>

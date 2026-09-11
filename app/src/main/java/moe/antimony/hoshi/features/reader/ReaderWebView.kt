@@ -48,7 +48,6 @@ import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -57,7 +56,9 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.content.ContentLanguageProfile
+import moe.antimony.hoshi.features.kosync.KosyncSettings
 import moe.antimony.hoshi.features.sync.BookSyncSheetContent
+import moe.antimony.hoshi.features.sync.SyncSettings
 import moe.antimony.hoshi.navigation.ReaderSyncJump
 import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.EpubBook
@@ -143,10 +144,15 @@ fun ReaderWebView(
     val statisticsDateProvider = appContainer.statisticsDateProvider
     val bookRepository = appContainer.bookRepository
     var sasayakiSettings by remember { mutableStateOf(SasayakiSettings()) }
-    var syncBackendsEnabled by remember { mutableStateOf(false) }
-    LaunchedEffect(appContainer) {
-        syncBackendsEnabled = appContainer.syncSettingsRepository.settings.first().enabled ||
-            appContainer.kosyncSettingsRepository.settings.first().enabled
+    val syncSettings by appContainer.syncSettingsRepository.settings.collectAsStateWithLifecycle(initialValue = SyncSettings())
+    val kosyncSettings by appContainer.kosyncSettingsRepository.settings.collectAsStateWithLifecycle(initialValue = KosyncSettings())
+    val syncBackendsEnabled = syncSettings.enabled || kosyncSettings.enabled
+    // Audio-driven moves only record where the text was before listening started; the next jump reopens the run.
+    val lastDisplacementSource = remember(bookRoot) { arrayOfNulls<String>(1) }
+    fun displacePosition(displaced: ReaderChapterPosition, source: String) {
+        if (source == PositionTrailEntry.SourceAudio && lastDisplacementSource[0] == PositionTrailEntry.SourceAudio) return
+        lastDisplacementSource[0] = source
+        onPositionDisplaced(displaced, source)
     }
     var sasayakiMatchData by remember(bookRoot) { mutableStateOf<SasayakiMatchData?>(null) }
     var sasayakiSheetMatchData by remember(bookRoot) { mutableStateOf<SasayakiMatchData?>(null) }
@@ -413,7 +419,7 @@ fun ReaderWebView(
         val statistics = statisticsForSave()
         val displaced = stateHolder.readerPosition.displayedPosition
         val savedPosition = stateHolder.jumpToWithHistory(position, fragment)
-        if (savedPosition != displaced) onPositionDisplaced(displaced, PositionTrailEntry.SourceJump)
+        if (savedPosition != displaced) displacePosition(displaced, PositionTrailEntry.SourceJump)
         resetStatisticsBaseline()
         saveReaderPosition(savedPosition, statistics)
     }
@@ -1446,7 +1452,7 @@ fun ReaderWebView(
                         Handler(Looper.getMainLooper()).post {
                             val displaced = stateHolder.readerPosition.displayedPosition
                             if (displaced != ReaderChapterPosition(chapterIndex, progress)) {
-                                onPositionDisplaced(displaced, PositionTrailEntry.SourceAudio)
+                                displacePosition(displaced, PositionTrailEntry.SourceAudio)
                             }
                             onSaveBookmark(chapterIndex, progress, null)
                         }

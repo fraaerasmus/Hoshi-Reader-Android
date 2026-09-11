@@ -96,6 +96,13 @@ data class DriveSyncFiles(
     val audioBook: DriveFile?,
 )
 
+/** A backend's stored position (fraction, unix millis) next to how it compares with the local bookmark. */
+data class RemoteProgressStatus(
+    val comparison: SyncComparison,
+    val percentage: Double? = null,
+    val modifiedAtMillis: Long? = null,
+)
+
 /** How a backend's stored position relates to the local bookmark. */
 enum class SyncComparison {
     NoRecord,

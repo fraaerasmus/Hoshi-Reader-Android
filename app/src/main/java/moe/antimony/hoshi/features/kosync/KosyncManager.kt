@@ -14,6 +14,7 @@ import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubBookParser
+import moe.antimony.hoshi.features.sync.RemoteProgressStatus
 import moe.antimony.hoshi.features.sync.SyncBackoff
 import moe.antimony.hoshi.features.sync.SyncComparison
 import moe.antimony.hoshi.features.sync.TtuSyncRules
@@ -78,14 +79,19 @@ class KosyncManager private constructor(
     }
 
     /** Where the server's record stands against the local bookmark; null when kosync is off or the book has no id. */
-    suspend fun status(entry: BookEntry): SyncComparison? {
+    suspend fun status(entry: BookEntry): RemoteProgressStatus? {
         if (!settingsProvider().enabled) return null
         val credentials = credentialsProvider() ?: return null
         val document = documentId(entry) ?: return null
         val remote = guarded { api.getProgress(credentials, document) }
-        return kosyncComparison(bookRepository.loadBookmark(entry.root), remote)
+        return RemoteProgressStatus(
+            kosyncComparison(bookRepository.loadBookmark(entry.root), remote),
+            percentage = remote?.percentage,
+            modifiedAtMillis = remote?.timestamp?.let { it * 1_000 },
+        )
     }
 
+    /** [force] takes the server's record even when it is older or our own; manual actions use it. */
     suspend fun pull(entry: BookEntry, book: EpubBook? = null, force: Boolean = false): KosyncResult {
         val settings = settingsProvider()
         if (!settings.enabled) return KosyncResult.Skipped
@@ -95,9 +101,10 @@ class KosyncManager private constructor(
         val title = entry.displayTitle
         val remote = guarded { api.getProgress(credentials, document) } ?: return KosyncResult.Skipped
         val percentage = remote.percentage ?: return KosyncResult.Skipped
-        if (remote.deviceId == deviceIdProvider()) return KosyncResult.UpToDate(title)
         val local = bookRepository.loadBookmark(entry.root)
-        if (kosyncComparison(local, remote) != SyncComparison.ServerNewer) return KosyncResult.UpToDate(title)
+        if (!force && (remote.deviceId == deviceIdProvider() || kosyncComparison(local, remote) != SyncComparison.ServerNewer)) {
+            return KosyncResult.UpToDate(title)
+        }
         val remoteTimestamp = remote.timestamp
         val bookmark = remoteBookmark(entry, book, remote.progress, percentage, remoteTimestamp)
             ?: return KosyncResult.Skipped
@@ -114,7 +121,7 @@ class KosyncManager private constructor(
         val title = entry.displayTitle
         val bookmark = bookRepository.loadBookmark(entry.root) ?: return KosyncResult.Skipped
         val state = loadState(entry)
-        if (state.lastSyncedCharacterCount == bookmark.characterCount) return KosyncResult.UpToDate(title)
+        if (!force && state.lastSyncedCharacterCount == bookmark.characterCount) return KosyncResult.UpToDate(title)
         val document = documentId(entry) ?: return KosyncResult.Skipped
         val bookInfo = bookRepository.loadBookInfo(entry.root) ?: return KosyncResult.Skipped
         val percentage = if (bookInfo.characterCount > 0) {

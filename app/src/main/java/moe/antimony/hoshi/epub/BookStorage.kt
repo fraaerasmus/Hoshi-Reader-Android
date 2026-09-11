@@ -49,14 +49,17 @@ data class PositionTrailEntry(
 
 @Serializable
 data class PositionTrail(val entries: List<PositionTrailEntry> = emptyList()) {
-    /** Newest last; consecutive audio-driven moves collapse into one entry so listening does not flood the trail. */
+    /**
+     * Newest last. A position already on top is not repeated, and a run of audio-driven moves keeps only its
+     * first entry — where the text was before listening started. Returns `this` when nothing changes.
+     */
     fun pushed(entry: PositionTrailEntry, max: Int = 20): PositionTrail {
-        val kept = if (entry.source == PositionTrailEntry.SourceAudio && entries.lastOrNull()?.source == PositionTrailEntry.SourceAudio) {
-            entries.dropLast(1)
-        } else {
-            entries
+        val last = entries.lastOrNull()
+        if (last != null) {
+            if (last.chapterIndex == entry.chapterIndex && last.characterCount == entry.characterCount) return this
+            if (last.source == PositionTrailEntry.SourceAudio && entry.source == PositionTrailEntry.SourceAudio) return this
         }
-        return PositionTrail((kept + entry).takeLast(max))
+        return PositionTrail((entries + entry).takeLast(max))
     }
 }
 

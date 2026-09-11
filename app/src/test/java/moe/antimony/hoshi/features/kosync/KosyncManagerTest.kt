@@ -10,6 +10,7 @@ import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubChapter
+import moe.antimony.hoshi.features.sync.RemoteProgressStatus
 import moe.antimony.hoshi.features.sync.SyncBackoff
 import moe.antimony.hoshi.features.sync.SyncComparison
 import moe.antimony.hoshi.features.sync.TtuSyncRules
@@ -202,10 +203,27 @@ class KosyncManagerTest {
         manager.setDocumentIdOverride(entry, null)
         assertEquals(computed, manager.documentId(entry))
 
-        assertEquals(SyncComparison.LocalNewer, manager.status(entry))
+        assertEquals(RemoteProgressStatus(SyncComparison.LocalNewer, 0.6, 4_000_000), manager.status(entry))
         assertEquals(SyncComparison.ServerNewer, kosyncComparison(null, api.remote))
         assertEquals(SyncComparison.NoRecord, kosyncComparison(Bookmark(0, 0.0, 0, 1.0), null))
         assertEquals(SyncComparison.Synced, kosyncComparison(Bookmark(0, 0.0, 0, TtuSyncRules.unixMillisToAppleReferenceSeconds(4_000_000)), api.remote))
+    }
+
+    @Test
+    fun forcedPullAndPushIgnoreTheTimestampAndUnchangedCountRules() = runBlocking {
+        val repository = BookRepository(tempFolder.root)
+        val entry = repository.createEntry()
+        repository.saveBookmark(entry.root, Bookmark(0, 0.1, 10, TtuSyncRules.unixMillisToAppleReferenceSeconds(5_000_000)))
+        val api = FakeKosyncApi(remote = KosyncRemoteProgress("doc", "/body/DocFragment[2]/body", 0.6, "Kobo", "kobo-id", 4_000))
+        val manager = manager(repository, api)
+
+        assertTrue(manager.pull(entry, book()) is KosyncResult.UpToDate)
+        val pulled = manager.pull(entry, book(), force = true) as KosyncResult.Pulled
+        assertEquals(pulled.bookmark, repository.loadBookmark(entry.root))
+
+        assertTrue(manager.push(entry, book()) is KosyncResult.UpToDate)
+        assertTrue(manager.push(entry, book(), force = true) is KosyncResult.Pushed)
+        assertEquals(1, api.pushCount)
     }
 
     private fun book(): EpubBook {

@@ -1,17 +1,29 @@
 package moe.antimony.hoshi.features.sync
 
-import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CloudDownload
+import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -23,14 +35,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import moe.antimony.hoshi.HoshiUiDependencies
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.epub.BookEntry
@@ -39,11 +51,16 @@ import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.PositionTrailEntry
 import moe.antimony.hoshi.features.reader.ReaderChapterPosition
+import moe.antimony.hoshi.features.reader.tocLabelAt
+import moe.antimony.hoshi.features.sasayaki.SasayakiAudioPosition
+import moe.antimony.hoshi.features.sasayaki.formatDuration
 import moe.antimony.hoshi.ui.hoshiOutlinedTextFieldColors
 import moe.antimony.hoshi.ui.resolve
 
+private const val TrailPreviewCount = 5
+
 /**
- * Everything one book's sync backends know, in one panel: where the local position is, how each backend compares,
+ * Everything one book's sync backends know, in one panel: where the local position is, what each server holds,
  * per-backend Pull/Push, the audiobook bridge, recent positions to jump back to, and the kosync document id.
  *
  * [onApplyLocalPosition] is non-null in the reader, where a position change is a jump rather than a bookmark write.
@@ -57,20 +74,12 @@ internal fun BookSyncSheetContent(
     modifier: Modifier = Modifier,
 ) {
     val deps = LocalHoshiUiDependencies.current
+    val resources = LocalResources.current
     val scope = rememberCoroutineScope()
     val state = remember(entry.metadata.id) { BookSyncSheetState(entry, deps) }
     var editingDocumentId by remember { mutableStateOf(false) }
+    var showAllPositions by remember { mutableStateOf(false) }
     LaunchedEffect(state) { state.refresh() }
-
-    /** A backend wrote a new bookmark; in the reader that has to become an actual jump. */
-    fun presentApplied(report: ProgressSyncReport) {
-        val bookmark = report.applied?.bookmark ?: return
-        if (onApplyLocalPosition != null) {
-            onApplyLocalPosition(ReaderChapterPosition(bookmark.chapterIndex, bookmark.progress))
-        } else {
-            onLocalPositionChanged()
-        }
-    }
 
     fun applyPosition(chapterIndex: Int, progress: Double, source: String) {
         scope.launch {
@@ -84,117 +93,149 @@ internal fun BookSyncSheetContent(
         }
     }
 
+    /** A backend that wrote a new bookmark becomes a jump in the reader and a shelf refresh in the bookshelf. */
+    fun runSync(busy: Set<SyncBackend>, action: suspend (SyncOptions) -> ProgressSyncReport) {
+        scope.launch {
+            val bookmark = state.perform(busy, action).applied?.bookmark ?: return@launch
+            if (onApplyLocalPosition != null) {
+                onApplyLocalPosition(ReaderChapterPosition(bookmark.chapterIndex, bookmark.progress))
+            } else {
+                onLocalPositionChanged()
+            }
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxWidth()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .navigationBarsPadding()
+            .padding(bottom = 8.dp),
     ) {
-        BookSyncHeader(state)
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(stringResource(R.string.sync_sheet_title), style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = state.headerLine(book),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         state.backends.forEach { backend ->
-            HorizontalDivider()
-            BookSyncBackendRow(
+            BackendRow(
                 backend = backend,
                 status = state.statuses.firstOrNull { it.backend == backend },
-                busy = state.busy != null,
+                loaded = state.statusesLoaded,
+                busy = backend in state.busy,
+                idle = state.busy.isEmpty(),
+                hasLocalBookmark = state.bookmark != null,
                 onPull = {
-                    scope.launch {
-                        presentApplied(
-                            state.perform(backend) { options ->
-                                deps.progressSyncCoordinator.pull(entry, book, options, manual = true, backends = setOf(backend))
-                            },
-                        )
+                    runSync(setOf(backend)) { options ->
+                        deps.progressSyncCoordinator.pull(entry, book, options, manual = true, backends = setOf(backend))
                     }
                 },
                 onPush = {
-                    scope.launch {
-                        state.perform(backend) { options ->
-                            deps.progressSyncCoordinator.push(entry, book, options, manual = true, backends = setOf(backend))
-                        }
+                    runSync(setOf(backend)) { options ->
+                        deps.progressSyncCoordinator.push(entry, book, options, manual = true, backends = setOf(backend))
                     }
                 },
             )
         }
-        if (state.backends.isNotEmpty()) {
-            HorizontalDivider()
-            TextButton(
-                enabled = state.busy == null,
+        if (state.backends.size > 1) {
+            FilledTonalButton(
+                enabled = state.busy.isEmpty(),
                 onClick = {
-                    scope.launch {
-                        presentApplied(
-                            state.perform(null) { options ->
-                                deps.progressSyncCoordinator.syncAll(entry, book, options, direction = null)
-                            },
+                    runSync(state.backends.toSet()) { options ->
+                        deps.progressSyncCoordinator.syncAll(entry, book, options, direction = null)
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+            ) {
+                Icon(Icons.Rounded.Sync, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.sync_sheet_sync_now))
+            }
+        }
+        state.lastReport?.toUiText()?.let { outcome ->
+            Text(
+                text = outcome.resolve(resources),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (state.lastReport?.failures.isNullOrEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            )
+        }
+        if (state.hasAudioMatch) {
+            SectionLabel(stringResource(R.string.sync_sheet_audiobook))
+            ListItem(
+                colors = transparentListItemColors(),
+                headlineContent = { Text(stringResource(R.string.sync_sheet_move_audio_to_text)) },
+                modifier = Modifier.clickable { scope.launch { state.alignAudioToText() } },
+            )
+            val audio = state.audioPosition
+            ListItem(
+                colors = transparentListItemColors(),
+                headlineContent = { Text(stringResource(R.string.sync_sheet_move_text_to_audio)) },
+                supportingContent = if (audio == null) {
+                    null
+                } else {
+                    {
+                        Text(
+                            stringResource(
+                                R.string.sync_sheet_audio_position_format,
+                                formatDuration(audio.seconds),
+                                state.percentOf(state.characterCountAt(audio.chapterIndex, audio.progress)),
+                            ),
                         )
                     }
                 },
-            ) {
-                Text(stringResource(R.string.sync_sheet_sync_all))
-            }
-        }
-        if (state.hasAudioMatch) {
-            HorizontalDivider()
-            Text(stringResource(R.string.sync_sheet_audiobook), style = MaterialTheme.typography.titleSmall)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(onClick = { scope.launch { state.alignAudioToText() } }) {
-                    Text(stringResource(R.string.sync_sheet_move_audio_to_text))
-                }
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            state.readerPositionAtAudio()?.let { (chapterIndex, progress) ->
-                                applyPosition(chapterIndex, progress, PositionTrailEntry.SourceAudio)
-                            }
-                        }
-                    },
-                ) {
-                    Text(stringResource(R.string.sync_sheet_move_text_to_audio))
-                }
-            }
+                modifier = Modifier.clickable(enabled = audio != null) {
+                    audio?.let { applyPosition(it.chapterIndex, it.progress, PositionTrailEntry.SourceAudio) }
+                },
+            )
         }
         if (state.trail.isNotEmpty()) {
-            HorizontalDivider()
-            Text(stringResource(R.string.sync_sheet_recent_positions), style = MaterialTheme.typography.titleSmall)
-            state.trail.asReversed().forEach { trailEntry ->
-                Text(
-                    text = stringResource(
-                        R.string.sync_sheet_trail_entry_format,
-                        state.percentOf(trailEntry.characterCount),
-                        stringResource(positionTrailSourceLabel(trailEntry.source)),
-                        relativeTime(trailEntry.recordedAt),
-                    ),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            applyPosition(trailEntry.chapterIndex, trailEntry.progress, PositionTrailEntry.SourceUndo)
-                        }
-                        .padding(vertical = 6.dp),
+            SectionLabel(stringResource(R.string.sync_sheet_recent_positions))
+            val newestFirst = state.trail.asReversed()
+            val visible = if (showAllPositions) newestFirst else newestFirst.take(TrailPreviewCount)
+            visible.forEach { trailEntry ->
+                val isCurrent = state.isCurrentPosition(trailEntry)
+                ListItem(
+                    colors = transparentListItemColors(),
+                    leadingContent = { Icon(Icons.Rounded.History, contentDescription = null) },
+                    headlineContent = {
+                        Text(
+                            stringResource(
+                                R.string.sync_sheet_trail_entry_format,
+                                state.percentOf(trailEntry.characterCount),
+                                stringResource(positionTrailSourceLabel(trailEntry.source)),
+                                relativeTimeText(TtuSyncRules.appleReferenceSecondsToUnixMillis(trailEntry.recordedAt)),
+                            ),
+                            color = if (isCurrent) MaterialTheme.colorScheme.onSurfaceVariant else Color.Unspecified,
+                        )
+                    },
+                    modifier = Modifier.clickable(enabled = !isCurrent) {
+                        applyPosition(trailEntry.chapterIndex, trailEntry.progress, PositionTrailEntry.SourceUndo)
+                    },
                 )
+            }
+            if (!showAllPositions && newestFirst.size > TrailPreviewCount) {
+                TextButton(onClick = { showAllPositions = true }, modifier = Modifier.padding(horizontal = 8.dp)) {
+                    Text(stringResource(R.string.sync_sheet_show_all_format, newestFirst.size))
+                }
             }
         }
         if (state.kosyncEnabled) {
-            HorizontalDivider()
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.sync_sheet_document_id), style = MaterialTheme.typography.titleSmall)
-                    Text(
-                        text = state.documentId.orEmpty(),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                TextButton(onClick = { editingDocumentId = true }) {
-                    Text(stringResource(R.string.action_edit))
-                }
-            }
+            ListItem(
+                colors = transparentListItemColors(),
+                headlineContent = { Text(stringResource(R.string.sync_sheet_document_id)) },
+                supportingContent = { Text(state.documentId.orEmpty(), style = MaterialTheme.typography.bodySmall) },
+                trailingContent = {
+                    IconButton(onClick = { editingDocumentId = true }) {
+                        Icon(Icons.Rounded.Edit, contentDescription = stringResource(R.string.action_edit))
+                    }
+                },
+            )
         }
     }
 
@@ -223,13 +264,18 @@ internal fun BookSyncSheetContent(
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        editingDocumentId = false
-                        scope.launch { state.setDocumentIdOverride(null) }
-                    },
-                ) {
-                    Text(stringResource(R.string.action_clear))
+                Row {
+                    TextButton(
+                        onClick = {
+                            editingDocumentId = false
+                            scope.launch { state.setDocumentIdOverride(null) }
+                        },
+                    ) {
+                        Text(stringResource(R.string.action_reset))
+                    }
+                    TextButton(onClick = { editingDocumentId = false }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
                 }
             },
         )
@@ -237,60 +283,72 @@ internal fun BookSyncSheetContent(
 }
 
 @Composable
-private fun BookSyncHeader(state: BookSyncSheetState) {
-    val bookmark = state.bookmark
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(stringResource(R.string.sync_sheet_local_position), style = MaterialTheme.typography.titleSmall)
-        Text(
-            text = "${state.percentOf(bookmark?.characterCount ?: 0)}%",
-            style = MaterialTheme.typography.bodyLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        bookmark?.lastModified?.let {
-            Text(
-                text = stringResource(R.string.sync_sheet_saved_format, relativeTime(it)),
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-    }
-}
-
-@Composable
-private fun BookSyncBackendRow(
+private fun BackendRow(
     backend: SyncBackend,
     status: BackendStatus?,
+    loaded: Boolean,
     busy: Boolean,
+    idle: Boolean,
+    hasLocalBookmark: Boolean,
     onPull: () -> Unit,
     onPush: () -> Unit,
 ) {
-    val comparison = status?.comparison
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        val resources = LocalResources.current
-        Column(modifier = Modifier.weight(1f)) {
-            Text(backend.displayName, style = MaterialTheme.typography.titleSmall)
-            val chip = status?.error?.resolve(resources) ?: stringResource(syncComparisonChipLabel(comparison))
-            AssistChip(onClick = {}, enabled = false, label = { Text(chip, maxLines = 1, overflow = TextOverflow.Ellipsis) })
-        }
-        TextButton(enabled = !busy && comparison == SyncComparison.ServerNewer, onClick = onPull) {
-            Text(stringResource(R.string.action_pull))
-        }
-        TextButton(
-            enabled = !busy && (comparison == SyncComparison.LocalNewer || comparison == SyncComparison.NoRecord),
-            onClick = onPush,
-        ) {
-            Text(stringResource(R.string.action_push))
-        }
+    val resources = LocalResources.current
+    val remote = status?.status
+    val error = status?.error
+    val supporting = when {
+        error != null -> error.resolve(resources)
+        !loaded -> stringResource(R.string.sync_sheet_checking)
+        remote == null -> stringResource(R.string.sync_state_unavailable)
+        else -> listOfNotNull(
+            remote.percentage?.let { stringResource(R.string.sync_sheet_server_position_format, it.toPercent()) },
+            remote.modifiedAtMillis?.let { relativeTimeText(it) },
+            stringResource(syncComparisonLabel(remote.comparison)),
+        ).joinToString(" · ")
     }
+    ListItem(
+        colors = transparentListItemColors(),
+        headlineContent = {
+            Text(if (backend == SyncBackend.Ttu) stringResource(R.string.sync_title) else backend.displayName)
+        },
+        supportingContent = {
+            Text(supporting, color = if (error != null) MaterialTheme.colorScheme.error else Color.Unspecified)
+        },
+        trailingContent = {
+            if (busy) {
+                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+            } else {
+                Row {
+                    IconButton(onClick = onPull, enabled = idle && remote?.percentage != null) {
+                        Icon(Icons.Rounded.CloudDownload, contentDescription = stringResource(R.string.action_pull))
+                    }
+                    IconButton(onClick = onPush, enabled = idle && hasLocalBookmark) {
+                        Icon(Icons.Rounded.CloudUpload, contentDescription = stringResource(R.string.action_push))
+                    }
+                }
+            }
+        },
+    )
 }
 
-private fun syncComparisonChipLabel(comparison: SyncComparison?): Int =
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun transparentListItemColors() = ListItemDefaults.colors(containerColor = Color.Transparent)
+
+private fun syncComparisonLabel(comparison: SyncComparison): Int =
     when (comparison) {
-        SyncComparison.Synced -> R.string.sync_chip_synced
-        SyncComparison.ServerNewer -> R.string.sync_chip_server_newer
-        SyncComparison.LocalNewer -> R.string.sync_chip_local_newer
-        SyncComparison.NoRecord -> R.string.sync_chip_no_record
-        null -> R.string.sync_chip_offline
+        SyncComparison.Synced -> R.string.sync_state_synced
+        SyncComparison.ServerNewer -> R.string.sync_state_ahead
+        SyncComparison.LocalNewer -> R.string.sync_state_behind
+        SyncComparison.NoRecord -> R.string.sync_state_no_record
     }
 
 private fun positionTrailSourceLabel(source: String): Int =
@@ -302,16 +360,9 @@ private fun positionTrailSourceLabel(source: String): Int =
         else -> R.string.sync_source_undo
     }
 
-private fun relativeTime(appleReferenceSeconds: Double): String =
-    DateUtils.getRelativeTimeSpanString(
-        TtuSyncRules.appleReferenceSecondsToUnixMillis(appleReferenceSeconds),
-        System.currentTimeMillis(),
-        DateUtils.MINUTE_IN_MILLIS,
-    ).toString()
-
 internal class BookSyncSheetState(
     private val entry: BookEntry,
-    private val deps: moe.antimony.hoshi.HoshiUiDependencies,
+    private val deps: HoshiUiDependencies,
 ) {
     var bookmark by mutableStateOf<Bookmark?>(null)
         private set
@@ -322,19 +373,39 @@ internal class BookSyncSheetState(
         private set
     var statuses by mutableStateOf<List<BackendStatus>>(emptyList())
         private set
+    var statusesLoaded by mutableStateOf(false)
+        private set
     var backends by mutableStateOf<List<SyncBackend>>(emptyList())
         private set
-    var busy by mutableStateOf<SyncBackend?>(null)
+    var busy by mutableStateOf<Set<SyncBackend>>(emptySet())
+        private set
+    var lastReport by mutableStateOf<ProgressSyncReport?>(null)
         private set
     var documentId by mutableStateOf<String?>(null)
         private set
     var hasAudioMatch by mutableStateOf(false)
+        private set
+    var audioPosition by mutableStateOf<SasayakiAudioPosition?>(null)
         private set
     var kosyncEnabled by mutableStateOf(false)
         private set
 
     fun percentOf(characterCount: Int): Int =
         if (characterTotal > 0) (characterCount.toDouble() / characterTotal).coerceIn(0.0, 1.0).toPercent() else 0
+
+    fun isCurrentPosition(trailEntry: PositionTrailEntry): Boolean =
+        bookmark?.let { it.chapterIndex == trailEntry.chapterIndex && it.characterCount == trailEntry.characterCount } == true
+
+    /** "Title · Chapter · 14% · Saved just now"; the chapter needs the parsed book, so only the reader shows it. */
+    @Composable
+    fun headerLine(book: EpubBook?): String {
+        val bookmark = bookmark
+        val chapter = if (bookmark != null && book != null) book.tocLabelAt(ReaderChapterPosition(bookmark.chapterIndex, bookmark.progress)) else null
+        val saved = bookmark?.lastModified?.let {
+            stringResource(R.string.sync_sheet_saved_format, relativeTimeText(TtuSyncRules.appleReferenceSecondsToUnixMillis(it)))
+        }
+        return listOfNotNull(entry.displayTitle, chapter, "${percentOf(bookmark?.characterCount ?: 0)}%", saved).joinToString(" · ")
+    }
 
     suspend fun refresh() {
         bookmark = deps.bookRepository.loadBookmark(entry.root)
@@ -343,46 +414,48 @@ internal class BookSyncSheetState(
         chapterInfo = bookInfo?.chapterInfo
         trail = deps.bookRepository.loadPositionTrail(entry.root).entries
         hasAudioMatch = deps.bookRepository.loadSasayakiMatch(entry.root)?.matches?.isNotEmpty() == true
+        audioPosition = if (hasAudioMatch) deps.sasayakiPositionSync.audioPosition(entry) else null
         kosyncEnabled = deps.kosyncSettingsRepository.settings.first().enabled
         documentId = if (kosyncEnabled) deps.kosyncManager.documentId(entry) else null
         backends = deps.progressSyncCoordinator.enabledBackends(manual = true).sortedBy { it.ordinal }
+        statusesLoaded = false
         statuses = deps.progressSyncCoordinator.status(entry)
+        statusesLoaded = true
     }
 
-    /** Runs one sync action with [backend] marked busy (null means "all backends"), then reloads the panel. */
-    suspend fun perform(backend: SyncBackend?, action: suspend (SyncOptions) -> ProgressSyncReport): ProgressSyncReport {
-        busy = backend ?: SyncBackend.Ttu
+    /** Runs one sync action with [backends] marked busy, keeps its report for the outcome line, then reloads the panel. */
+    suspend fun perform(backends: Set<SyncBackend>, action: suspend (SyncOptions) -> ProgressSyncReport): ProgressSyncReport {
+        busy = backends
         val report = try {
             action(syncOptions())
         } finally {
-            busy = null
+            busy = emptySet()
         }
+        lastReport = report
         refresh()
         return report
     }
 
     suspend fun saveLocalPosition(chapterIndex: Int, progress: Double, source: String) {
-        val now = deps.bookRepository.currentAppleReferenceDateSeconds()
         val target = PositionTrailEntry(
             chapterIndex = chapterIndex,
             progress = progress,
             characterCount = characterCountAt(chapterIndex, progress),
             source = source,
-            recordedAt = now,
+            recordedAt = deps.bookRepository.currentAppleReferenceDateSeconds(),
         )
         deps.progressSyncCoordinator.restorePosition(entry, target, source)
     }
 
-    private fun characterCountAt(chapterIndex: Int, progress: Double): Int {
+    fun characterCountAt(chapterIndex: Int, progress: Double): Int {
         val info = chapterInfo?.values?.firstOrNull { it.spineIndex == chapterIndex } ?: return 0
         return (info.currentTotal + (info.chapterCount * progress.coerceIn(0.0, 1.0)).toInt()).coerceIn(0, characterTotal)
     }
 
     suspend fun alignAudioToText() {
         deps.sasayakiPositionSync.alignAudioToBookmark(entry)
+        audioPosition = deps.sasayakiPositionSync.audioPosition(entry)
     }
-
-    suspend fun readerPositionAtAudio(): Pair<Int, Double>? = deps.sasayakiPositionSync.readerPositionAtAudio(entry)
 
     suspend fun setDocumentIdOverride(documentId: String?) {
         deps.kosyncManager.setDocumentIdOverride(entry, documentId)

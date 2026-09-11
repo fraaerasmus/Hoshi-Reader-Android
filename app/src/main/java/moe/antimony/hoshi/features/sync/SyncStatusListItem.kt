@@ -16,9 +16,9 @@ internal fun SyncStatusListItem(status: SyncStatus) {
     val error = status.lastError
     val text = when {
         error != null && status.lastErrorAtMillis != null ->
-            stringResource(R.string.sync_last_error_format, relativeMillis(status.lastErrorAtMillis), error)
+            stringResource(R.string.sync_last_error_format, relativeTimeText(status.lastErrorAtMillis), error)
         status.lastSyncAtMillis != null ->
-            stringResource(R.string.sync_last_sync_format, relativeMillis(status.lastSyncAtMillis))
+            stringResource(R.string.sync_last_sync_format, relativeTimeText(status.lastSyncAtMillis))
         else -> return
     }
     ListItem(
@@ -27,5 +27,10 @@ internal fun SyncStatusListItem(status: SyncStatus) {
     )
 }
 
-private fun relativeMillis(millis: Long): String =
-    DateUtils.getRelativeTimeSpanString(millis, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
+/** "just now", "5 min. ago", "yesterday" … for a unix timestamp. */
+@Composable
+internal fun relativeTimeText(unixMillis: Long): String {
+    val now = System.currentTimeMillis()
+    if (now - unixMillis < DateUtils.MINUTE_IN_MILLIS) return stringResource(R.string.time_just_now)
+    return DateUtils.getRelativeTimeSpanString(unixMillis, now, DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE).toString()
+}

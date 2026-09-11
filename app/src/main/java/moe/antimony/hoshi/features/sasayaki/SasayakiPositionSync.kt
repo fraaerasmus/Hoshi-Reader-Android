@@ -13,18 +13,20 @@ internal class SasayakiPositionSync @Inject constructor(
     private val bookRepository: BookRepository,
     private val runtime: SasayakiPlaybackServiceRuntime,
 ) {
-    /** Where the text sits under the audiobook's current position: the live controller if there is one, else the sidecar. */
-    suspend fun readerPositionAtAudio(entry: BookEntry): Pair<Int, Double>? {
+    /** The audiobook's current position (live controller if there is one, else the sidecar) and the text under it. */
+    suspend fun audioPosition(entry: BookEntry): SasayakiAudioPosition? {
         val match = bookRepository.loadSasayakiMatch(entry.root)?.takeIf { it.matches.isNotEmpty() } ?: return null
         val bookInfo = bookRepository.loadBookInfo(entry.root) ?: return null
         val live = runtime.activePlayback(entry.metadata.id)
-        val cue = if (live != null) {
-            SasayakiPositionBridge.cueAtAudioTime(match, live.currentTime, live.delay)
+        val (time, delay) = if (live != null) {
+            live.currentTime to live.delay
         } else {
             val playback = bookRepository.loadSasayakiPlayback(entry.root) ?: return null
-            SasayakiPositionBridge.cueAtAudioTime(match, playback.lastPosition, playback.delay)
-        } ?: return null
-        return SasayakiPositionBridge.readerPositionForCue(cue, bookInfo)
+            playback.lastPosition to playback.delay
+        }
+        val cue = SasayakiPositionBridge.cueAtAudioTime(match, time, delay) ?: return null
+        val (chapterIndex, progress) = SasayakiPositionBridge.readerPositionForCue(cue, bookInfo) ?: return null
+        return SasayakiAudioPosition(seconds = time, chapterIndex = chapterIndex, progress = progress)
     }
 
     /** Returns true when the audio position was moved. Audio that is currently playing is left alone. */
@@ -51,3 +53,5 @@ internal class SasayakiPositionSync @Inject constructor(
         return true
     }
 }
+
+data class SasayakiAudioPosition(val seconds: Double, val chapterIndex: Int, val progress: Double)

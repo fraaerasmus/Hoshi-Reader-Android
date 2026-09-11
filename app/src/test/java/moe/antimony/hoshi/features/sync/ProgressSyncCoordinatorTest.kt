@@ -2,6 +2,9 @@ package moe.antimony.hoshi.features.sync
 
 import java.net.SocketTimeoutException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.runBlocking
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.epub.BookEntry
@@ -109,6 +112,26 @@ class ProgressSyncCoordinatorTest {
         assertTrue(checkNotNull(restored.lastModified) > 5.0)
         assertEquals(listOf(PositionTrailEntry.SourceUndo), repository.loadPositionTrail(entry.root).entries.map { it.source })
         assertEquals(150, repository.loadPositionTrail(entry.root).entries.single().characterCount)
+    }
+
+    @Test
+    fun statusCarriesEachServersPositionAndConcurrentDisplacementsAllLand() = runBlocking {
+        val repository = BookRepository(tempFolder.root)
+        val entry = repository.createEntry()
+        repository.saveBookmark(entry.root, Bookmark(0, 0.1, 10, TtuSyncRules.unixMillisToAppleReferenceSeconds(1_000)))
+        val api = FakeKosyncApi(remote = KosyncRemoteProgress("doc", null, 0.6, "Kobo", "kobo-id", 2_000))
+        val coordinator = coordinator(repository, FakeDriveSyncDataSource(), api)
+
+        val statuses = coordinator.status(entry).associateBy { it.backend }
+        assertEquals(RemoteProgressStatus(SyncComparison.ServerNewer, 0.6, 2_000_000), statuses.getValue(SyncBackend.Kosync).status)
+        assertEquals(RemoteProgressStatus(SyncComparison.LocalNewer), statuses.getValue(SyncBackend.Ttu).status)
+
+        coroutineScope {
+            (1..20).map { count ->
+                async { coordinator.recordDisplacement(entry, Bookmark(0, 0.0, count, null), PositionTrailEntry.SourceJump) }
+            }.awaitAll()
+        }
+        assertEquals((1..20).toSet(), repository.loadPositionTrail(entry.root).entries.map { it.characterCount }.toSet())
     }
 
     private fun coordinator(

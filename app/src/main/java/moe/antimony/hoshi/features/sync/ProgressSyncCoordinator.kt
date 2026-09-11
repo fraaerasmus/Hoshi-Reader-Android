@@ -9,6 +9,8 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.BookRepository
@@ -49,7 +51,7 @@ data class ProgressSyncReport(val outcomes: List<BackendOutcome>) {
     }
 }
 
-data class BackendStatus(val backend: SyncBackend, val comparison: SyncComparison?, val error: UiText?)
+data class BackendStatus(val backend: SyncBackend, val status: RemoteProgressStatus?, val error: UiText?)
 
 val SyncBackend.displayName: String
     get() = when (this) {
@@ -123,7 +125,9 @@ internal class ProgressSyncCoordinator private constructor(
         val outcomes = mutableListOf<BackendOutcome>()
         if (SyncBackend.Ttu in targets) {
             outcomes += attempt(SyncBackend.Ttu) {
-                driveOutcome(entry, syncManager.syncBook(entry, null, options.syncStats, options.statsSyncMode, options.syncAudioBook, importOnly = true), previous)
+                // A forced pull takes the Drive record even when the local bookmark is newer.
+                val direction = if (force) SyncDirection.ImportFromTtu else null
+                driveOutcome(entry, syncManager.syncBook(entry, direction, options.syncStats, options.statsSyncMode, options.syncAudioBook, importOnly = true), previous)
             }
         }
         if (SyncBackend.Kosync in targets) {
@@ -207,10 +211,15 @@ internal class ProgressSyncCoordinator private constructor(
     }
 
     suspend fun recordDisplacement(entry: BookEntry, displaced: Bookmark, source: String) {
-        val trail = bookRepository.loadPositionTrail(entry.root)
         val entryToPush = PositionTrailEntry.of(displaced, source, bookRepository.currentAppleReferenceDateSeconds())
-        bookRepository.savePositionTrail(entry.root, trail.pushed(entryToPush))
+        trailMutex.withLock {
+            val trail = bookRepository.loadPositionTrail(entry.root)
+            val pushed = trail.pushed(entryToPush)
+            if (pushed != trail) bookRepository.savePositionTrail(entry.root, pushed)
+        }
     }
+
+    private val trailMutex = Mutex()
 
     private suspend fun attempt(backend: SyncBackend, block: suspend () -> BackendOutcome): BackendOutcome {
         val outcome = try {

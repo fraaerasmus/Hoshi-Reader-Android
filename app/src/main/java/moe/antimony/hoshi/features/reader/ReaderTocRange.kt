@@ -68,3 +68,17 @@ internal fun String.readerHrefBase(): String =
         .removePrefix("/")
         .substringBefore('#')
         .substringBefore('?')
+
+/** The label of the deepest TOC entry that starts at or before [position]; null when the TOC has none. */
+internal fun EpubBook.tocLabelAt(position: ReaderChapterPosition): String? {
+    val absoluteCharacter = characterCountAt(position.index, position.progress)
+    var best: Pair<Int, String>? = null
+    fun visit(item: EpubTocItem) {
+        item.href?.let(::tocCharacterStart)?.let { start ->
+            if (start <= absoluteCharacter && start >= (best?.first ?: -1)) best = start to item.label
+        }
+        item.children.forEach(::visit)
+    }
+    toc.forEach(::visit)
+    return best?.second?.trim()?.takeIf { it.isNotEmpty() }
+}

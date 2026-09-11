@@ -23,6 +23,20 @@ class SyncManagerTest {
     val tempFolder = TemporaryFolder()
 
     @Test
+    fun statusReadsTheDriveProgressFileWithoutWriting() = runBlocking {
+        val repository = BookRepository(tempFolder.root)
+        val entry = repository.createEntry()
+        repository.saveBookmark(entry.root, Bookmark(1, 0.5, 100, TtuSyncRules.unixMillisToAppleReferenceSeconds(1_000)))
+        val drive = FakeDriveSyncDataSource(progress = TtuProgress(7, 150, 0.75, 2_000))
+
+        val status = SyncManager(repository, drive, nowUnixMillis = { 9_999 }).status(entry)
+
+        assertEquals(RemoteProgressStatus(SyncComparison.ServerNewer, 0.75, 2_000), status)
+        assertEquals(RemoteProgressStatus(SyncComparison.LocalNewer), SyncManager(repository, FakeDriveSyncDataSource(), nowUnixMillis = { 9_999 }).status(entry))
+        assertNull(drive.updatedProgress)
+    }
+
+    @Test
     fun importFromTtuUpdatesProgressStatisticsAndOnlySasayakiPosition() = runBlocking {
         val repository = BookRepository(tempFolder.root)
         val entry = repository.createEntry()
@@ -495,6 +509,9 @@ internal class FakeDriveSyncDataSource(
     var uploadBookDataCalls = 0
 
     override suspend fun findRootFolder(): String = "root"
+
+    override suspend fun listBooks(rootFolderId: String): List<DriveFile> =
+        listOf(DriveFile("book-folder", TtuSyncRules.sanitizeTtuFilename("Title")))
 
     override suspend fun ensureBookFolder(
         bookTitle: String,
