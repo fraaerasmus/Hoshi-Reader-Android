@@ -756,6 +756,7 @@ private fun UiText?.testString(): String? =
             R.string.dictionary_update_failed_list_format -> "Failed to update:\n${args[0]}"
             else -> "resource:$id:${args.joinToString()}"
         }
+        is UiText.Multi -> parts.joinToString(separator) { it.testString().orEmpty() }
         is UiText.Plural -> "plural:$id:$quantity:${args.joinToString()}"
     }
 

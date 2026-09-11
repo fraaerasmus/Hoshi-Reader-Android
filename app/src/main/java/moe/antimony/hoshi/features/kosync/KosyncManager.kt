@@ -60,6 +60,7 @@ class KosyncManager private constructor(
         deviceId: String,
         bookLoader: suspend (BookEntry) -> EpubBook?,
         ioDispatcher: CoroutineDispatcher,
+        backoff: SyncBackoff = SyncBackoff(),
     ) : this(
         bookRepository = bookRepository,
         api = api,
@@ -68,6 +69,7 @@ class KosyncManager private constructor(
         deviceIdProvider = { deviceId },
         bookLoader = bookLoader,
         ioDispatcher = ioDispatcher,
+        backoff = backoff,
     )
 
     suspend fun testConnection() {
