@@ -252,9 +252,11 @@ class RemoteBackupManager private constructor(
     }
 
     companion object {
-        const val IndexFileName = "index.json"
-        const val DevicesDir = "devices"
-        const val BooksDir = "books"
+        /** Everything lives under one app folder so a shared backup share can hold other apps beside it. */
+        const val RootDir = "Hoshi"
+        const val IndexFileName = "$RootDir/index.json"
+        const val DevicesDir = "$RootDir/devices"
+        const val BooksDir = "$RootDir/books"
         const val MetaFileName = "meta.json"
 
         /** The per-book files worth keeping; the EPUB, cover and audio come back by other means. */

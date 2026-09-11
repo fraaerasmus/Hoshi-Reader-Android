@@ -41,10 +41,10 @@ class RemoteBackupManagerTest {
 
         assertEquals(RemoteBackupResult(settingsUploaded = true, booksUploaded = 1), first)
         val key = KosyncDocumentId.partialMd5(checkNotNull(repository.epubFile(entry)))
-        assertEquals(snapshot.encoded, store.text("devices/Pixel/settings.json"))
-        assertNull(store.text("devices/Pixel/settings.previous.json"))
-        assertTrue(store.text("books/$key/bookmark.json")!!.contains("150"))
-        assertNull(store.text("books/$key/statistics.json"))
+        assertEquals(snapshot.encoded, store.text("Hoshi/devices/Pixel/settings.json"))
+        assertNull(store.text("Hoshi/devices/Pixel/settings.previous.json"))
+        assertTrue(store.text("Hoshi/books/$key/bookmark.json")!!.contains("150"))
+        assertNull(store.text("Hoshi/books/$key/statistics.json"))
         val index = manager.listIndex()
         assertEquals(listOf("Pixel"), index.devices.map { it.name })
         assertEquals(listOf(key to "Title"), index.books.map { it.key to it.title })
@@ -54,8 +54,8 @@ class RemoteBackupManagerTest {
 
         snapshot.value = "changed"
         assertEquals(RemoteBackupResult(settingsUploaded = true, booksUploaded = 0), manager.backupAll())
-        assertEquals(snapshot.encoded, store.text("devices/Pixel/settings.json"))
-        assertTrue(store.text("devices/Pixel/settings.previous.json")!!.contains("\"first\""))
+        assertEquals(snapshot.encoded, store.text("Hoshi/devices/Pixel/settings.json"))
+        assertTrue(store.text("Hoshi/devices/Pixel/settings.previous.json")!!.contains("\"first\""))
         assertEquals(1, manager.listIndex().devices.size)
     }
 
