@@ -46,6 +46,7 @@ class RemoteBackupManagerTest {
         assertTrue(store.text("Hoshi/books/$key/bookmark.json")!!.contains("150"))
         assertNull(store.text("Hoshi/books/$key/statistics.json"))
         val index = manager.listIndex()
+        assertEquals(listOf("Hoshi", "Hoshi/devices", "Hoshi/devices/Pixel", "Hoshi/books", "Hoshi/books/$key"), store.folders)
         assertEquals(listOf("Pixel"), index.devices.map { it.name })
         assertEquals(listOf(key to "Title"), index.books.map { it.key to it.title })
 
@@ -133,6 +134,15 @@ class RemoteBackupManagerTest {
         }
 
         override suspend fun get(credentials: RemoteBackupCredentials, path: String): ByteArray? = files[path]
+
+        val folders = mutableListOf<String>()
+
+        override suspend fun mkcol(credentials: RemoteBackupCredentials, path: String) {
+            // Like rclone: the parent must exist already.
+            val parent = path.substringBeforeLast('/', "")
+            check(parent.isEmpty() || parent in folders) { "parent missing for $path" }
+            folders += path
+        }
 
         fun text(path: String): String? = files[path]?.decodeToString()
     }

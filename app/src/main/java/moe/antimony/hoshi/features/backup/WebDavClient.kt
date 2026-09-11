@@ -17,14 +17,18 @@ interface RemoteBackupStore {
 
     /** null when the file does not exist. */
     suspend fun get(credentials: RemoteBackupCredentials, path: String): ByteArray?
+
+    /** Creates one folder whose parent already exists; a folder that is already there is not an error. */
+    suspend fun mkcol(credentials: RemoteBackupCredentials, path: String)
 }
 
 class RemoteBackupException(message: String, val statusCode: Int? = null) : IOException(message)
 
 /**
- * Plain PUT/GET over `HttpURLConnection`: `rclone serve webdav` creates parent folders on PUT and the app
- * keeps its own index, so the non-standard `MKCOL`/`PROPFIND` verbs (which `HttpURLConnection` rejects)
- * are never needed.
+ * PUT/GET/MKCOL over `HttpURLConnection`. WebDAV servers (rclone included) refuse a PUT whose parent
+ * folder is missing, so folders are created with MKCOL first; `HttpURLConnection` only knows the classic
+ * verbs, so MKCOL is set through the protected `method` field. The app keeps its own index, so PROPFIND
+ * is never needed.
  */
 @Singleton
 class WebDavClient @Inject constructor(
@@ -38,13 +42,17 @@ class WebDavClient @Inject constructor(
     override suspend fun get(credentials: RemoteBackupCredentials, path: String): ByteArray? =
         request(credentials, "GET", path, null)
 
+    override suspend fun mkcol(credentials: RemoteBackupCredentials, path: String) {
+        request(credentials, "MKCOL", path, null)
+    }
+
     private suspend fun request(credentials: RemoteBackupCredentials, method: String, path: String, body: ByteArray?): ByteArray? =
         withContext(ioDispatcher) {
             val url = URL(webDavUrl(credentials.serverUrl, path))
             preflight.check(url.host)
             val connection = url.openConnection() as HttpURLConnection
             try {
-                connection.requestMethod = method
+                connection.setMethodIncludingWebDav(method)
                 connection.connectTimeout = ConnectTimeoutMillis
                 connection.readTimeout = ReadTimeoutMillis
                 connection.instanceFollowRedirects = false
@@ -62,6 +70,8 @@ class WebDavClient @Inject constructor(
                 when {
                     status in 200..299 -> if (method == "GET") connection.inputStream.use { it.readBytes() } else ByteArray(0)
                     status == 404 && method == "GET" -> null
+                    // 405 is "collection already exists" on most WebDAV servers (rclone answers 201 either way).
+                    status == 405 && method == "MKCOL" -> ByteArray(0)
                     status == 401 || status == 403 -> throw RemoteBackupException("Authentication failed (HTTP $status).", status)
                     else -> throw RemoteBackupException("Server returned HTTP $status.", status)
                 }
@@ -69,6 +79,17 @@ class WebDavClient @Inject constructor(
                 connection.disconnect()
             }
         }
+
+    private fun HttpURLConnection.setMethodIncludingWebDav(method: String) {
+        try {
+            requestMethod = method
+        } catch (error: java.net.ProtocolException) {
+            // MKCOL is not in HttpURLConnection's fixed verb list; the base class stores the verb in a protected field.
+            runCatching {
+                HttpURLConnection::class.java.getDeclaredField("method").apply { isAccessible = true }.set(this, method)
+            }.getOrElse { throw RemoteBackupException("This device cannot create folders on the server ($method unsupported).") }
+        }
+    }
 
     companion object {
         private const val ConnectTimeoutMillis = 3_000

@@ -119,6 +119,27 @@ class RemoteBackupManager private constructor(
 
     private val mutex = Mutex()
 
+    /** Folders already created this process; MKCOL needs each parent first and is cheap to skip afterwards. */
+    private val knownFolders = mutableSetOf<String>()
+
+    /** PUT with the file's folder chain created first (top-down, each level once per process). */
+    private suspend fun putFile(credentials: RemoteBackupCredentials, path: String, bytes: ByteArray) {
+        val segments = path.split('/').dropLast(1)
+        var folder = ""
+        for (segment in segments) {
+            folder = if (folder.isEmpty()) segment else "$folder/$segment"
+            if (knownFolders.add(folder)) {
+                try {
+                    store.mkcol(credentials, folder)
+                } catch (error: Exception) {
+                    knownFolders.remove(folder)
+                    throw error
+                }
+            }
+        }
+        store.put(credentials, path, bytes)
+    }
+
     /** Settings when their fingerprint changed (or [force]), then every book whose sidecars changed. */
     suspend fun backupAll(force: Boolean = false): RemoteBackupResult = guarded {
         val settings = settings()
@@ -175,8 +196,8 @@ class RemoteBackupManager private constructor(
         val bytes = settingsBackup.encode(envelope).toByteArray()
         val device = settings.deviceName.ifBlank { "device" }
         // Keep exactly one older copy as a rollback; the share never grows past two files per device.
-        store.get(credentials, settingsPath(device))?.let { store.put(credentials, previousSettingsPath(device), it) }
-        store.put(credentials, settingsPath(device), bytes)
+        store.get(credentials, settingsPath(device))?.let { putFile(credentials, previousSettingsPath(device), it) }
+        putFile(credentials, settingsPath(device), bytes)
         updateIndex(credentials) { index ->
             index.copy(devices = index.devices.filterNot { it.name == device } + RemoteBackupIndex.Device(device, nowMillis(), appVersion))
         }
@@ -195,13 +216,13 @@ class RemoteBackupManager private constructor(
                 if (file.isFile) name to file else null
             }
         }
-        files.forEach { (name, file) -> store.put(credentials, bookPath(key, name), withContext(ioDispatcher) { file.readBytes() }) }
+        files.forEach { (name, file) -> putFile(credentials, bookPath(key, name), withContext(ioDispatcher) { file.readBytes() }) }
         val state = RemoteBookState(
             title = entry.displayTitle,
             updatedAtMillis = nowMillis(),
             files = files.associate { (name, file) -> name to file.lastModified() },
         )
-        store.put(credentials, bookPath(key, MetaFileName), json.encodeToString(RemoteBookState.serializer(), state).toByteArray())
+        putFile(credentials, bookPath(key, MetaFileName), json.encodeToString(RemoteBookState.serializer(), state).toByteArray())
         updateIndex(credentials) { index ->
             index.copy(books = index.books.filterNot { it.key == key } + RemoteBackupIndex.Book(key, entry.displayTitle, state.updatedAtMillis))
         }
@@ -216,7 +237,7 @@ class RemoteBackupManager private constructor(
 
     private suspend fun updateIndex(credentials: RemoteBackupCredentials, transform: (RemoteBackupIndex) -> RemoteBackupIndex) {
         val next = transform(readIndex(credentials))
-        store.put(credentials, IndexFileName, json.encodeToString(RemoteBackupIndex.serializer(), next).toByteArray())
+        putFile(credentials, IndexFileName, json.encodeToString(RemoteBackupIndex.serializer(), next).toByteArray())
     }
 
     private suspend fun bookKey(entry: BookEntry): String? = withContext(ioDispatcher) {
