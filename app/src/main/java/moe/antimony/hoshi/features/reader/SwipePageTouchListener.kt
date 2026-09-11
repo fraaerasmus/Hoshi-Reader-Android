@@ -2,35 +2,113 @@ package moe.antimony.hoshi.features.reader
 
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import kotlin.math.abs
 
-abstract class SwipePageTouchListener(
+internal abstract class SwipePageTouchListener(
     swipeDistance: Float = DEFAULT_SWIPE_DISTANCE,
 ) : View.OnTouchListener {
     private val tracker = ReaderSwipeGestureTracker(minDistance = swipeDistance)
     private val edgeTracker = ReaderEdgeSwipeGestureTracker()
+    private var tapHoldTracker: ReaderEdgeTapHoldTracker? = null
+    private var holdView: View? = null
+    private val holdTimeout = Runnable { onEdgeHoldTimeout() }
+    private var pendingTap: Runnable? = null
 
     override fun onTouch(view: View, event: MotionEvent): Boolean {
         if (shouldIgnoreReaderGesture(event)) {
             tracker.suppressCurrentGesture()
             edgeTracker.onCancel()
+            cancelEdgeHold(view)
             return false
         }
-        if (isEdgeSwipeEnabled() && handleEdgeSwipe(view, event)) {
+        if (handleEdgeTapHold(view, event)) {
             tracker.suppressCurrentGesture()
+            edgeTracker.onCancel()
+            return true
+        }
+        if (handleEdgeSwipe(view, event)) {
+            tracker.suppressCurrentGesture()
+            cancelEdgeHold(view)
             return true
         }
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> tracker.onDown(event.x, event.y, event.eventTime)
             MotionEvent.ACTION_POINTER_DOWN -> tracker.onAdditionalPointerDown()
             MotionEvent.ACTION_MOVE -> dispatch(tracker.onMove(event.x, event.y, event.eventTime))
-            MotionEvent.ACTION_UP -> dispatch(tracker.onUp(event.x, event.y, event.eventTime))
+            MotionEvent.ACTION_UP -> dispatch(tracker.onUp(event.x, event.y, event.eventTime), view)
             MotionEvent.ACTION_CANCEL -> tracker.onCancel()
         }
         return false
     }
 
-    /** Returns true when the event is consumed by an active edge-zone brightness/volume drag. */
+    /**
+     * Hold and double-tap in the edge zones. The WebView keeps receiving the touch until a hold starts,
+     * at which point its in-flight gesture is cancelled so no text selection appears under the finger.
+     */
+    private fun handleEdgeTapHold(view: View, event: MotionEvent): Boolean {
+        val tapHold = tapHoldTracker ?: ReaderEdgeTapHoldTracker(
+            slopPx = ViewConfiguration.get(view.context).scaledTouchSlop.toFloat(),
+            doubleTapTimeoutMs = ViewConfiguration.getDoubleTapTimeout().toLong(),
+        ).also { tapHoldTracker = it }
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                val edge = readerEdgeForTouch(event.x, view.width, view.resources.displayMetrics.density)
+                val schedule = tapHold.onDown(
+                    edge = edge,
+                    x = event.x,
+                    y = event.y,
+                    holdEnabled = isEdgeHoldEnabled(edge),
+                    doubleTapEnabled = isEdgeDoubleTapEnabled(edge),
+                )
+                if (schedule) {
+                    holdView = view
+                    view.postDelayed(holdTimeout, EDGE_HOLD_TIMEOUT_MS)
+                }
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> cancelEdgeHold(view)
+            MotionEvent.ACTION_MOVE -> {
+                if (tapHold.isHolding) return true
+                if (tapHold.onMove(event.x, event.y)) view.removeCallbacks(holdTimeout)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                view.removeCallbacks(holdTimeout)
+                val result = if (event.actionMasked == MotionEvent.ACTION_UP) tapHold.onUp(event.eventTime) else tapHold.onCancel().let { null }
+                when (result) {
+                    ReaderEdgeTapHoldTracker.Result.HoldEnd -> {
+                        onEdgeHoldEnd()
+                        return true
+                    }
+                    is ReaderEdgeTapHoldTracker.Result.DoubleTap -> {
+                        pendingTap?.let(view::removeCallbacks)
+                        pendingTap = null
+                        tracker.suppressCurrentGesture()
+                        onEdgeDoubleTap(result.edge)
+                        return true
+                    }
+                    else -> Unit
+                }
+            }
+        }
+        return false
+    }
+
+    private fun onEdgeHoldTimeout() {
+        val view = holdView ?: return
+        val tapHold = tapHoldTracker ?: return
+        if (!tapHold.onHoldTimeout()) return
+        tracker.suppressCurrentGesture()
+        edgeTracker.onCancel()
+        cancelWebViewGesture(view, null)
+        onEdgeHoldStart(tapHold.edge)
+    }
+
+    private fun cancelEdgeHold(view: View) {
+        view.removeCallbacks(holdTimeout)
+        tapHoldTracker?.onCancel()
+    }
+
+    /** Returns true when the event is consumed by an active edge-zone drag. */
     private fun handleEdgeSwipe(view: View, event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> edgeTracker.onDown(
@@ -44,11 +122,12 @@ abstract class SwipePageTouchListener(
                 val wasActive = edgeTracker.isActive
                 // A page turn already won this gesture; don't also start an edge adjustment.
                 if (!wasActive && tracker.didDispatchSwipe) return false
+                if (!wasActive && !isEdgeDragEnabled(edgeTracker.edge)) return false
                 if (edgeTracker.onMove(event.x, event.y)) {
                     // First take-over: cancel the WebView's in-flight long-press/scroll so it does
                     // not leave a stray text selection or half-applied scroll behind.
                     if (!wasActive) cancelWebViewGesture(view, event)
-                    dispatchEdgeDrag()
+                    onEdgeDrag(edgeTracker.edge, edgeTracker.fraction)
                     return true
                 }
             }
@@ -64,20 +143,13 @@ abstract class SwipePageTouchListener(
         return false
     }
 
-    private fun cancelWebViewGesture(view: View, event: MotionEvent) {
-        val cancel = MotionEvent.obtain(event)
+    private fun cancelWebViewGesture(view: View, event: MotionEvent?) {
+        val now = android.os.SystemClock.uptimeMillis()
+        val cancel = if (event != null) MotionEvent.obtain(event) else MotionEvent.obtain(now, now, MotionEvent.ACTION_CANCEL, 0f, 0f, 0)
         cancel.action = MotionEvent.ACTION_CANCEL
         // Deliver straight to the View's own handler, bypassing this OnTouchListener.
         view.onTouchEvent(cancel)
         cancel.recycle()
-    }
-
-    private fun dispatchEdgeDrag() {
-        when (edgeTracker.edge) {
-            ReaderEdgeSwipeGestureTracker.Edge.Left -> onEdgeBrightnessDrag(edgeTracker.fraction)
-            ReaderEdgeSwipeGestureTracker.Edge.Right -> onEdgeVolumeDrag(edgeTracker.fraction)
-            ReaderEdgeSwipeGestureTracker.Edge.None -> Unit
-        }
     }
 
     open fun onLeftSwipe() = Unit
@@ -85,22 +157,42 @@ abstract class SwipePageTouchListener(
     open fun onTap(x: Float, y: Float) = Unit
     open fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean = false
 
-    open fun isEdgeSwipeEnabled(): Boolean = false
-    open fun onEdgeBrightnessDrag(fraction: Float) = Unit
-    open fun onEdgeVolumeDrag(fraction: Float) = Unit
+    open fun isEdgeHoldEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean = false
+    open fun isEdgeDoubleTapEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean = false
+    open fun isEdgeDragEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean = false
+    open fun onEdgeHoldStart(edge: ReaderEdgeSwipeGestureTracker.Edge) = Unit
+    open fun onEdgeHoldEnd() = Unit
+    open fun onEdgeDoubleTap(edge: ReaderEdgeSwipeGestureTracker.Edge) = Unit
+    open fun onEdgeDrag(edge: ReaderEdgeSwipeGestureTracker.Edge, fraction: Float) = Unit
     open fun onEdgeDragEnd() = Unit
 
-    private fun dispatch(result: ReaderSwipeGestureTracker.Result) {
+    private fun dispatch(result: ReaderSwipeGestureTracker.Result, view: View? = null) {
         when (result) {
             ReaderSwipeGestureTracker.Result.LeftSwipe -> onLeftSwipe()
             ReaderSwipeGestureTracker.Result.RightSwipe -> onRightSwipe()
-            is ReaderSwipeGestureTracker.Result.Tap -> onTap(result.x, result.y)
+            is ReaderSwipeGestureTracker.Result.Tap -> {
+                // A tap in an edge zone with a double-tap bound waits out the double-tap window first.
+                val edge = view?.let { readerEdgeForTouch(result.x, it.width, it.resources.displayMetrics.density) }
+                if (view != null && edge != null && isEdgeDoubleTapEnabled(edge)) {
+                    pendingTap?.let(view::removeCallbacks)
+                    val runnable = Runnable {
+                        pendingTap = null
+                        onTap(result.x, result.y)
+                    }
+                    pendingTap = runnable
+                    view.postDelayed(runnable, ViewConfiguration.getDoubleTapTimeout().toLong())
+                } else {
+                    onTap(result.x, result.y)
+                }
+            }
             ReaderSwipeGestureTracker.Result.None -> Unit
         }
     }
 
     private companion object {
         const val DEFAULT_SWIPE_DISTANCE = 72f
+        /** Shorter than the WebView's own long-press so the hold wins the race and text selection never starts. */
+        const val EDGE_HOLD_TIMEOUT_MS = 320L
     }
 }
 
@@ -221,14 +313,7 @@ internal class ReaderEdgeSwipeGestureTracker {
     fun onDown(x: Float, y: Float, viewWidthPx: Int, viewHeightPx: Int, density: Float) {
         reset()
         if (viewWidthPx <= 0 || viewHeightPx <= 0) return
-        val zoneWidth = (viewWidthPx * EDGE_ZONE_FRACTION)
-            .coerceAtMost(MAX_EDGE_ZONE_DP * density)
-            .coerceAtLeast(MIN_EDGE_ZONE_DP * density)
-        edge = when {
-            x <= zoneWidth -> Edge.Left
-            x >= viewWidthPx - zoneWidth -> Edge.Right
-            else -> Edge.None
-        }
+        edge = readerEdgeForTouch(x, viewWidthPx, density)
         if (edge == Edge.None) return
         downX = x
         downY = y
@@ -264,9 +349,6 @@ internal class ReaderEdgeSwipeGestureTracker {
     }
 
     private companion object {
-        const val EDGE_ZONE_FRACTION = 0.08f
-        const val MIN_EDGE_ZONE_DP = 24f
-        const val MAX_EDGE_ZONE_DP = 64f
         const val ACTIVATION_DP = 16f
     }
 }

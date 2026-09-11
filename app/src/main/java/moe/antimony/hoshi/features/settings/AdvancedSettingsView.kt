@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Wallpaper
@@ -36,6 +37,7 @@ import moe.antimony.hoshi.features.audio.AudioSettingsView
 import moe.antimony.hoshi.features.backup.BackupSettingsView
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.reader.ReaderStatisticsSettingsView
+import moe.antimony.hoshi.features.reader.input.ReaderGesturesView
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsView
 import moe.antimony.hoshi.features.kosync.KosyncSettingsView
 import moe.antimony.hoshi.features.sync.SyncSettingsView
@@ -68,6 +70,16 @@ fun AdvancedSettingsView(
     }
     if (destination == AdvancedDestination.Sasayaki) {
         SasayakiSettingsView(
+            onClose = { destination = null },
+            onOpenGestures = { destination = AdvancedDestination.Gestures },
+            modifier = modifier,
+        )
+        return
+    }
+    if (destination == AdvancedDestination.Gestures) {
+        ReaderGesturesView(
+            readerSettings = readerSettings,
+            onReaderSettingsChange = onReaderSettingsChange,
             onClose = { destination = null },
             modifier = modifier,
         )
@@ -161,6 +173,7 @@ internal enum class AdvancedDestination {
     Audio,
     Statistics,
     Sasayaki,
+    Gestures,
     Backup,
     Syncing,
     KoreaderSync,
@@ -172,6 +185,7 @@ internal enum class AdvancedSettingsIcon {
     Speaker,
     Chart,
     Waveform,
+    Touch,
     Cloud,
     AnkiConnect,
     ExternalDrive,
@@ -209,6 +223,12 @@ internal fun advancedSettingsSections(): List<AdvancedSettingsSection> =
                     destination = AdvancedDestination.Sasayaki,
                     icon = AdvancedSettingsIcon.Waveform,
                     subtitleRes = R.string.advanced_sasayaki_subtitle,
+                ),
+                AdvancedSettingsRow(
+                    titleRes = R.string.gestures_title,
+                    destination = AdvancedDestination.Gestures,
+                    icon = AdvancedSettingsIcon.Touch,
+                    subtitleRes = R.string.advanced_gestures_subtitle,
                 ),
             ),
         ),
@@ -263,6 +283,7 @@ private fun AdvancedSettingsIcon.imageVector(): ImageVector =
         AdvancedSettingsIcon.Speaker -> Icons.AutoMirrored.Rounded.VolumeUp
         AdvancedSettingsIcon.Chart -> Icons.AutoMirrored.Rounded.ShowChart
         AdvancedSettingsIcon.Waveform -> Icons.Rounded.GraphicEq
+        AdvancedSettingsIcon.Touch -> Icons.Rounded.TouchApp
         AdvancedSettingsIcon.Cloud -> Icons.Rounded.Cloud
         AdvancedSettingsIcon.AnkiConnect -> Icons.Rounded.Link
         AdvancedSettingsIcon.ExternalDrive -> Icons.Rounded.Storage

@@ -13,7 +13,7 @@ class AdvancedSettingsRowsTest {
 
         assertEquals(
             listOf(
-                listOf(R.string.advanced_audio, R.string.advanced_statistics, R.string.advanced_sasayaki_audiobooks),
+                listOf(R.string.advanced_audio, R.string.advanced_statistics, R.string.advanced_sasayaki_audiobooks, R.string.gestures_title),
                 listOf(R.string.advanced_sync_ttu, R.string.kosync_title),
                 listOf(R.string.anki_connect_use),
                 listOf(R.string.settings_book_cover_wallpaper),

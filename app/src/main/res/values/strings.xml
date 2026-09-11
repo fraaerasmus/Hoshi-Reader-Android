@@ -697,6 +697,35 @@
     <string name="advanced_statistics_subtitle">Track per-book reading time, speed, and characters read</string>
     <string name="advanced_sasayaki_audiobooks">Sasayaki (Audiobooks)</string>
     <string name="advanced_sasayaki_subtitle">Read along with matched audiobook subtitles</string>
+    <string name="gestures_title">Gestures &amp; Shortcuts</string>
+    <string name="advanced_gestures_subtitle">Where the playback controls sit, and what screen edges and volume keys do.</string>
+    <string name="gestures_section_controls">Playback controls</string>
+    <string name="gestures_controls_placement">Placement</string>
+    <string name="gestures_placement_bottom" comment="Playback controls placement option.">Bottom</string>
+    <string name="gestures_placement_left" comment="Playback controls placement option, intentionally matching other Left labels.">Left</string>
+    <string name="gestures_placement_right" comment="Playback controls placement option, intentionally matching other Right labels.">Right</string>
+    <string name="gestures_dock_reset">Reset dock position</string>
+    <string name="gestures_dock_help">Drag the handle along the edge to move it; tap it to show the controls.</string>
+    <string name="gestures_section_edges">Screen edges</string>
+    <string name="gestures_edge_left_hold">Hold left edge</string>
+    <string name="gestures_edge_right_hold">Hold right edge</string>
+    <string name="gestures_edge_left_double_tap">Double-tap left edge</string>
+    <string name="gestures_edge_right_double_tap">Double-tap right edge</string>
+    <string name="gestures_edge_left_drag">Drag along left edge</string>
+    <string name="gestures_edge_right_drag">Drag along right edge</string>
+    <string name="gestures_section_volume">Volume keys</string>
+    <string name="gestures_volume_hold">Hold a volume key</string>
+    <string name="input_action_none" comment="Gesture binding option meaning the gesture does nothing.">Nothing</string>
+    <string name="input_action_toggle_playback">Play / pause</string>
+    <string name="input_action_skip_forward">Skip forward</string>
+    <string name="input_action_skip_backward">Skip back</string>
+    <string name="input_action_page_forward">Next page</string>
+    <string name="input_action_page_backward">Previous page</string>
+    <string name="input_action_toggle_focus">Toggle focus mode</string>
+    <string name="input_action_boost">Speed up while held</string>
+    <string name="input_action_scrub">Scrub audio</string>
+    <string name="input_action_brightness" comment="Gesture binding option, intentionally matching other Brightness labels.">Brightness</string>
+    <string name="input_action_volume" comment="Gesture binding option, intentionally matching other Volume labels.">Volume</string>
     <string name="audio_sources">Sources</string>
     <string name="audio_add_source">Add Source</string>
     <string name="audio_name" comment="Name label in audio source management.">Name</string>

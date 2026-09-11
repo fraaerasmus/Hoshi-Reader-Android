@@ -45,6 +45,7 @@ import moe.antimony.hoshi.features.audio.AudioSettingsRepository
 import moe.antimony.hoshi.features.bookshelf.BookshelfSettingsRepository
 import moe.antimony.hoshi.features.dictionary.DictionarySettingsRepository
 import moe.antimony.hoshi.features.reader.ReaderSettingsRepository
+import moe.antimony.hoshi.features.reader.input.ReaderGesturesRepository
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsRepository
 import moe.antimony.hoshi.features.sync.DeviceCodeDriveAuthorizer
 import moe.antimony.hoshi.features.kosync.KosyncSettingsRepository
@@ -75,6 +76,7 @@ class SettingsBackupRepository @Inject constructor(
     private val driveAuthorizer: DeviceCodeDriveAuthorizer,
     private val profileRepository: ProfileRepository,
     private val remoteBackupSettingsRepository: RemoteBackupSettingsRepository,
+    private val readerGesturesRepository: ReaderGesturesRepository,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : SettingsBackupSnapshot {
     suspend fun exportSettings(contentResolver: ContentResolver, uri: Uri) {
@@ -117,6 +119,7 @@ class SettingsBackupRepository @Inject constructor(
         val kosync = kosyncSettingsRepository.exportEntries()
         val update = updateSettingsRepository.exportEntries()
         val remoteBackup = remoteBackupSettingsRepository.exportEntries()
+        val gestures = readerGesturesRepository.exportEntries()
         val driveCredentials = driveAuthorizer.exportCredentials()
         val profiles = profileRepository.exportProfilesBackup()
         return buildJsonObject {
@@ -137,6 +140,7 @@ class SettingsBackupRepository @Inject constructor(
                     put(STORE_KOSYNC, kosync)
                     put(STORE_UPDATE, update)
                     put(STORE_REMOTE_BACKUP, remoteBackup)
+                    put(STORE_GESTURES, gestures)
                 },
             )
             put(
@@ -164,6 +168,7 @@ class SettingsBackupRepository @Inject constructor(
         stores.store(STORE_KOSYNC)?.let { kosyncSettingsRepository.importEntries(it) }
         stores.store(STORE_UPDATE)?.let { updateSettingsRepository.importEntries(it) }
         stores.store(STORE_REMOTE_BACKUP)?.let { remoteBackupSettingsRepository.importEntries(it) }
+        stores.store(STORE_GESTURES)?.let { readerGesturesRepository.importEntries(it) }
 
         envelope[KEY_CREDENTIALS]?.jsonObject?.store(CREDENTIAL_DRIVE)
             ?.let { driveAuthorizer.importCredentials(it) }
@@ -201,6 +206,7 @@ class SettingsBackupRepository @Inject constructor(
         const val STORE_KOSYNC = "kosync"
         const val STORE_UPDATE = "update"
         const val STORE_REMOTE_BACKUP = "remoteBackup"
+        const val STORE_GESTURES = "gestures"
         const val CREDENTIAL_DRIVE = "drive"
         const val CREDENTIAL_KOSYNC = "kosync"
         const val CREDENTIAL_OPDS = "opds"

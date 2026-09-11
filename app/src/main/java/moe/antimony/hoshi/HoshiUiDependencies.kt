@@ -26,6 +26,7 @@ import moe.antimony.hoshi.features.sync.DeviceCodeDriveAuthorizer
 import moe.antimony.hoshi.features.sync.SyncManager
 import moe.antimony.hoshi.features.kosync.KosyncManager
 import moe.antimony.hoshi.features.kosync.KosyncSettingsRepository
+import moe.antimony.hoshi.features.reader.input.ReaderGesturesRepository
 import moe.antimony.hoshi.features.opds.OpdsCatalogRepository
 import moe.antimony.hoshi.features.sync.ProgressSyncCoordinator
 import moe.antimony.hoshi.features.sync.SyncStatusRepository
@@ -65,6 +66,7 @@ internal class HoshiUiDependencies @Inject constructor(
     private val settingsBackupRepositoryProvider: Lazy<SettingsBackupRepository>,
     private val remoteBackupSettingsRepositoryProvider: Lazy<RemoteBackupSettingsRepository>,
     private val remoteBackupManagerProvider: Lazy<RemoteBackupManager>,
+    private val readerGesturesRepositoryProvider: Lazy<ReaderGesturesRepository>,
     private val storageCleanupRepositoryProvider: Lazy<StorageCleanupRepository>,
     private val deviceCodeDriveAuthorizerProvider: Lazy<DeviceCodeDriveAuthorizer>,
     private val syncManagerProvider: Lazy<SyncManager>,
@@ -100,6 +102,7 @@ internal class HoshiUiDependencies @Inject constructor(
     val settingsBackupRepository: SettingsBackupRepository get() = settingsBackupRepositoryProvider.get()
     val remoteBackupSettingsRepository: RemoteBackupSettingsRepository get() = remoteBackupSettingsRepositoryProvider.get()
     val remoteBackupManager: RemoteBackupManager get() = remoteBackupManagerProvider.get()
+    val readerGesturesRepository: ReaderGesturesRepository get() = readerGesturesRepositoryProvider.get()
     val storageCleanupRepository: StorageCleanupRepository get() = storageCleanupRepositoryProvider.get()
     val deviceCodeDriveAuthorizer: DeviceCodeDriveAuthorizer get() = deviceCodeDriveAuthorizerProvider.get()
     val syncManager: SyncManager get() = syncManagerProvider.get()

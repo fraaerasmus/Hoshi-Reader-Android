@@ -2,6 +2,7 @@ package moe.antimony.hoshi.features.sasayaki
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +52,7 @@ import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
 @Composable
 fun SasayakiSettingsView(
     onClose: () -> Unit,
+    onOpenGestures: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val appContainer = LocalHoshiUiDependencies.current
@@ -163,48 +165,15 @@ fun SasayakiSettingsView(
                                     )
                                 },
                             )
-                            SettingsDivider()
-                            ListItem(
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                headlineContent = { Text(stringResource(R.string.sasayaki_drag_playback_controls_to_scrub)) },
-                                supportingContent = { Text(stringResource(R.string.sasayaki_drag_playback_controls_to_scrub_help)) },
-                                trailingContent = {
-                                    Switch(
-                                        checked = loadedSettings.dragPlaybackControlsToScrub,
-                                        onCheckedChange = {
-                                            save(loadedSettings.copy(dragPlaybackControlsToScrub = it))
-                                        },
-                                    )
-                                },
-                            )
-                            SettingsDivider()
-                            ListItem(
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                headlineContent = { Text(stringResource(R.string.sasayaki_hold_playback_controls_to_boost)) },
-                                supportingContent = { Text(stringResource(R.string.sasayaki_hold_playback_controls_to_boost_help)) },
-                                trailingContent = {
-                                    Switch(
-                                        checked = loadedSettings.holdPlaybackControlsToBoost,
-                                        onCheckedChange = {
-                                            save(loadedSettings.copy(holdPlaybackControlsToBoost = it))
-                                        },
-                                    )
-                                },
-                            )
-                            SettingsDivider()
-                            ListItem(
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                headlineContent = { Text(stringResource(R.string.sasayaki_double_tap_playback_controls_to_toggle)) },
-                                supportingContent = { Text(stringResource(R.string.sasayaki_double_tap_playback_controls_to_toggle_help)) },
-                                trailingContent = {
-                                    Switch(
-                                        checked = loadedSettings.doubleTapPlaybackControlsToToggle,
-                                        onCheckedChange = {
-                                            save(loadedSettings.copy(doubleTapPlaybackControlsToToggle = it))
-                                        },
-                                    )
-                                },
-                            )
+                            if (onOpenGestures != null) {
+                                SettingsDivider()
+                                ListItem(
+                                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                    headlineContent = { Text(stringResource(R.string.gestures_title)) },
+                                    supportingContent = { Text(stringResource(R.string.advanced_gestures_subtitle)) },
+                                    modifier = Modifier.clickable(onClick = onOpenGestures),
+                                )
+                            }
                         }
                         SettingsDivider()
                         ListItem(

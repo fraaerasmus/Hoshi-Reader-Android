@@ -762,21 +762,6 @@ private fun SasayakiSettingsTab(
                 checked = settings.reverseVerticalReaderSkipButtons,
                 onCheckedChange = { onSettingsChange(settings.copy(reverseVerticalReaderSkipButtons = it)) },
             )
-            SasayakiSettingsSwitchRow(
-                label = stringResource(R.string.sasayaki_drag_playback_controls_to_scrub),
-                checked = settings.dragPlaybackControlsToScrub,
-                onCheckedChange = { onSettingsChange(settings.copy(dragPlaybackControlsToScrub = it)) },
-            )
-            SasayakiSettingsSwitchRow(
-                label = stringResource(R.string.sasayaki_hold_playback_controls_to_boost),
-                checked = settings.holdPlaybackControlsToBoost,
-                onCheckedChange = { onSettingsChange(settings.copy(holdPlaybackControlsToBoost = it)) },
-            )
-            SasayakiSettingsSwitchRow(
-                label = stringResource(R.string.sasayaki_double_tap_playback_controls_to_toggle),
-                checked = settings.doubleTapPlaybackControlsToToggle,
-                onCheckedChange = { onSettingsChange(settings.copy(doubleTapPlaybackControlsToToggle = it)) },
-            )
         }
         SasayakiSettingsActionRow(
             label = stringResource(R.string.sasayaki_skip_action),

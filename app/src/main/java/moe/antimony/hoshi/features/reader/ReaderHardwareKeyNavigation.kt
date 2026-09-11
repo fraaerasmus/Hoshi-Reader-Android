@@ -17,6 +17,8 @@ internal sealed interface ReaderHardwareKeyAction {
     data object SasayakiHoldBoostStart : ReaderHardwareKeyAction
     /** Play key released: end a running boost, else toggle playback. */
     data object SasayakiPlayKeyReleased : ReaderHardwareKeyAction
+    /** Volume key released: end a running boost; the tap action already fired on key-down. */
+    data object SasayakiVolumeKeyReleased : ReaderHardwareKeyAction
 }
 
 internal data class ReaderHardwareKeyEventResult(
@@ -72,6 +74,7 @@ internal fun readerHardwareKeyEventForKeyEvent(
     textEditorFocused: Boolean = false,
     hasLookupPopup: Boolean = false,
     sasayakiHoldToBoost: Boolean = false,
+    volumeKeysHoldToBoost: Boolean = false,
 ): ReaderHardwareKeyEventResult {
     return when (keyCode) {
         KeyEvent.KEYCODE_PAGE_DOWN -> pageKeyResult(
@@ -89,10 +92,12 @@ internal fun readerHardwareKeyEventForKeyEvent(
         -> volumeKeyResult(
             keyCode = keyCode,
             action = action,
+            repeatCount = repeatCount,
             settings = settings,
             sasayakiEnabled = sasayakiEnabled,
             hasSasayakiAudio = hasSasayakiAudio,
             hasLookupPopup = hasLookupPopup,
+            holdToBoost = volumeKeysHoldToBoost && sasayakiEnabled && hasSasayakiAudio,
         )
         KeyEvent.KEYCODE_SPACE,
         KeyEvent.KEYCODE_K,
@@ -163,10 +168,12 @@ private fun pageKeyResult(
 private fun volumeKeyResult(
     keyCode: Int,
     action: Int,
+    repeatCount: Int,
     settings: ReaderSettings,
     sasayakiEnabled: Boolean,
     hasSasayakiAudio: Boolean,
     hasLookupPopup: Boolean,
+    holdToBoost: Boolean,
 ): ReaderHardwareKeyEventResult {
     val keyAction = readerVolumeKeyAction(
         keyCode = keyCode,
@@ -174,7 +181,18 @@ private fun volumeKeyResult(
         sasayakiEnabled = sasayakiEnabled,
         hasSasayakiAudio = hasSasayakiAudio,
         hasLookupPopup = hasLookupPopup,
-    ) ?: return ReaderHardwareKeyEventResult(consumed = false)
+    )
+    if (keyAction == null && !holdToBoost) return ReaderHardwareKeyEventResult(consumed = false)
+    if (holdToBoost) {
+        // The tap action fires on the first key-down as before; auto-repeat becomes the boost instead of repeating it.
+        val holdAction = when {
+            action == KeyEvent.ACTION_UP -> ReaderHardwareKeyAction.SasayakiVolumeKeyReleased
+            action == KeyEvent.ACTION_DOWN && repeatCount == 0 -> keyAction
+            action == KeyEvent.ACTION_DOWN && repeatCount == 1 -> ReaderHardwareKeyAction.SasayakiHoldBoostStart
+            else -> null
+        }
+        return ReaderHardwareKeyEventResult(consumed = true, action = holdAction)
+    }
     return ReaderHardwareKeyEventResult(
         consumed = true,
         action = keyAction.takeIf { action == KeyEvent.ACTION_DOWN },

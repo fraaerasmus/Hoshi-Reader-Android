@@ -12,6 +12,7 @@ import java.io.File
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import moe.antimony.hoshi.BuildConfig
@@ -34,6 +35,8 @@ import moe.antimony.hoshi.features.sync.DriveSyncDataSource
 import moe.antimony.hoshi.features.backup.RemoteBackupSettingsRepository
 import moe.antimony.hoshi.features.backup.remoteBackupSettingsRepository
 import moe.antimony.hoshi.features.kosync.KosyncSettingsRepository
+import moe.antimony.hoshi.features.reader.input.ReaderGesturesRepository
+import moe.antimony.hoshi.features.reader.input.readerGesturesRepository
 import moe.antimony.hoshi.features.kosync.kosyncSettingsRepository
 import moe.antimony.hoshi.features.opds.OpdsCatalogRepository
 import moe.antimony.hoshi.features.opds.opdsCatalogRepository
@@ -166,6 +169,14 @@ internal object HoshiAppModule {
     @Singleton
     fun provideRemoteBackupSettingsRepository(@ApplicationContext context: Context): RemoteBackupSettingsRepository =
         context.remoteBackupSettingsRepository()
+
+    @Provides
+    @Singleton
+    fun provideReaderGesturesRepository(
+        @ApplicationContext context: Context,
+        readerSettingsRepository: ReaderSettingsRepository,
+    ): ReaderGesturesRepository =
+        context.readerGesturesRepository { readerSettingsRepository.settings.first().edgeSwipeControls }
 
     @Provides
     @Singleton

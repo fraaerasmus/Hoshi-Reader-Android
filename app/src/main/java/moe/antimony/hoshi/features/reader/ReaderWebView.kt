@@ -57,6 +57,10 @@ import kotlinx.serialization.json.Json
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.features.kosync.KosyncSettings
+import moe.antimony.hoshi.features.reader.input.ReaderGestureSettings
+import moe.antimony.hoshi.features.reader.input.ReaderInputAction
+import moe.antimony.hoshi.features.reader.input.ReaderInputSource
+import moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement
 import moe.antimony.hoshi.features.sync.BookSyncSheetContent
 import moe.antimony.hoshi.features.sync.SyncSettings
 import moe.antimony.hoshi.navigation.ReaderSyncJump
@@ -147,6 +151,8 @@ fun ReaderWebView(
     val syncSettings by appContainer.syncSettingsRepository.settings.collectAsStateWithLifecycle(initialValue = SyncSettings())
     val kosyncSettings by appContainer.kosyncSettingsRepository.settings.collectAsStateWithLifecycle(initialValue = KosyncSettings())
     val syncBackendsEnabled = syncSettings.enabled || kosyncSettings.enabled
+    val gestureSettings by appContainer.readerGesturesRepository.settings.collectAsStateWithLifecycle(initialValue = ReaderGestureSettings())
+    val inputBindings = gestureSettings.bindings
     // Audio-driven moves only record where the text was before listening started; the next jump reopens the run.
     val lastDisplacementSource = remember(bookRoot) { arrayOfNulls<String>(1) }
     fun displacePosition(displaced: ReaderChapterPosition, source: String) {
@@ -1563,6 +1569,7 @@ fun ReaderWebView(
             textEditorFocused = textEditorFocused,
             hasLookupPopup = stateHolder.lookupPopups.isNotEmpty(),
             sasayakiHoldToBoost = sasayakiSettings.holdPlaybackControlsToBoost,
+            volumeKeysHoldToBoost = inputBindings.action(ReaderInputSource.VolumeKeyHold) == ReaderInputAction.BoostWhileHeld,
         )
         if (!keyEvent.consumed) return@rememberUpdatedState false
         when (val action = keyEvent.action) {
@@ -1596,6 +1603,12 @@ fun ReaderWebView(
                     endSasayakiBoost()
                 } else {
                     sasayakiPlayer?.togglePlayback()
+                }
+            }
+            ReaderHardwareKeyAction.SasayakiVolumeKeyReleased -> {
+                if (sasayakiKeyBoosting[0]) {
+                    sasayakiKeyBoosting[0] = false
+                    endSasayakiBoost()
                 }
             }
             null -> Unit
@@ -1769,6 +1782,7 @@ fun ReaderWebView(
         centered = effectiveSettings.sasayakiControlsCentered,
         scalePercent = effectiveSettings.sasayakiControlsScalePercent,
     )
+    val sasayakiControlsDocked = gestureSettings.controlsPlacement != SasayakiControlsPlacement.Bottom
     val sasayakiBottomSkipButtonActions = readerSasayakiBottomSkipButtonActions(
         verticalWriting = effectiveSettings.verticalWriting,
         reverseVerticalReaderSkipButtons = sasayakiSettings.reverseVerticalReaderSkipButtons,
@@ -1780,9 +1794,9 @@ fun ReaderWebView(
         }
     }
     var sasayakiScrubHud by remember { mutableStateOf<ReaderSasayakiScrubHudState?>(null) }
-    fun previewSasayakiScrub(dragSteps: Int) {
+    /** [steps] are already signed in audio time (+ forward); vertical drags on the dock and edges use this directly. */
+    fun previewSasayakiScrubSigned(steps: Int) {
         val player = sasayakiPlayer ?: return
-        val steps = readerSasayakiScrubSignedSteps(dragSteps, sasayakiBottomSkipButtonActions)
         val preview = player.skipPreview(steps)
         sasayakiScrubHud = ReaderSasayakiScrubHudState(
             steps = steps,
@@ -1793,11 +1807,90 @@ fun ReaderWebView(
             duration = player.duration,
         )
     }
-    fun commitSasayakiScrub(dragSteps: Int) {
+    fun commitSasayakiScrubSigned(steps: Int) {
         sasayakiScrubHud = null
         val player = sasayakiPlayer ?: return
-        val steps = readerSasayakiScrubSignedSteps(dragSteps, sasayakiBottomSkipButtonActions)
         if (steps != 0) player.seekTo(player.skipPreview(steps).targetTime)
+    }
+    fun previewSasayakiScrub(dragSteps: Int) =
+        previewSasayakiScrubSigned(readerSasayakiScrubSignedSteps(dragSteps, sasayakiBottomSkipButtonActions))
+    fun commitSasayakiScrub(dragSteps: Int) =
+        commitSasayakiScrubSigned(readerSasayakiScrubSignedSteps(dragSteps, sasayakiBottomSkipButtonActions))
+    /** One tap-kind binding, from any source. */
+    fun performReaderInputAction(action: ReaderInputAction) {
+        when (action) {
+            ReaderInputAction.TogglePlayback -> sasayakiPlayer?.togglePlayback()
+            ReaderInputAction.SkipForward -> sasayakiPlayer?.nextCue()
+            ReaderInputAction.SkipBackward -> sasayakiPlayer?.previousCue()
+            ReaderInputAction.PageForward -> navigateReaderPage(ReaderNavigationDirection.Forward)
+            ReaderInputAction.PageBackward -> navigateReaderPage(ReaderNavigationDirection.Backward)
+            ReaderInputAction.ToggleFocusMode -> handleReaderTapOutside()
+            ReaderInputAction.None,
+            ReaderInputAction.BoostWhileHeld,
+            ReaderInputAction.Scrub,
+            ReaderInputAction.Brightness,
+            ReaderInputAction.Volume,
+            -> Unit
+        }
+    }
+    // Edge drags: brightness/volume go to the edge-adjust controller, scrub to the HUD; steps per full-height drag.
+    val edgeScrubSteps = remember { intArrayOf(0) }
+    val edgeDragAction = remember { arrayOf(ReaderInputAction.None) }
+    val hasSasayakiAudioForGestures = sasayakiPlayer?.hasAudio == true
+    val edgeGestures = remember(inputBindings, hasSasayakiAudioForGestures, sasayakiPlayer) {
+        fun source(edge: ReaderEdgeSwipeGestureTracker.Edge, left: ReaderInputSource, right: ReaderInputSource): ReaderInputSource? =
+            when (edge) {
+                ReaderEdgeSwipeGestureTracker.Edge.Left -> left
+                ReaderEdgeSwipeGestureTracker.Edge.Right -> right
+                ReaderEdgeSwipeGestureTracker.Edge.None -> null
+            }
+        fun bound(edge: ReaderEdgeSwipeGestureTracker.Edge, left: ReaderInputSource, right: ReaderInputSource): ReaderInputAction =
+            source(edge, left, right)?.let(inputBindings::action) ?: ReaderInputAction.None
+        fun needsAudio(action: ReaderInputAction) =
+            action == ReaderInputAction.BoostWhileHeld || action == ReaderInputAction.Scrub ||
+                action == ReaderInputAction.TogglePlayback || action == ReaderInputAction.SkipForward || action == ReaderInputAction.SkipBackward
+        object : ReaderEdgeGestureHandler {
+            override fun holdEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean =
+                bound(edge, ReaderInputSource.EdgeLeftHold, ReaderInputSource.EdgeRightHold) == ReaderInputAction.BoostWhileHeld && hasSasayakiAudioForGestures
+            override fun doubleTapEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean {
+                val action = bound(edge, ReaderInputSource.EdgeLeftDoubleTap, ReaderInputSource.EdgeRightDoubleTap)
+                return action != ReaderInputAction.None && (!needsAudio(action) || hasSasayakiAudioForGestures)
+            }
+            override fun dragEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean {
+                val action = bound(edge, ReaderInputSource.EdgeLeftDrag, ReaderInputSource.EdgeRightDrag)
+                return action != ReaderInputAction.None && (!needsAudio(action) || hasSasayakiAudioForGestures)
+            }
+            override fun onHoldStart(edge: ReaderEdgeSwipeGestureTracker.Edge) = startSasayakiBoost()
+            override fun onHoldEnd() = endSasayakiBoost()
+            override fun onDoubleTap(edge: ReaderEdgeSwipeGestureTracker.Edge) =
+                performReaderInputAction(bound(edge, ReaderInputSource.EdgeLeftDoubleTap, ReaderInputSource.EdgeRightDoubleTap))
+            override fun onDrag(edge: ReaderEdgeSwipeGestureTracker.Edge, fraction: Float) {
+                val action = bound(edge, ReaderInputSource.EdgeLeftDrag, ReaderInputSource.EdgeRightDrag)
+                edgeDragAction[0] = action
+                when (action) {
+                    ReaderInputAction.Brightness -> edgeAdjust.onBrightnessDrag(fraction)
+                    ReaderInputAction.Volume -> edgeAdjust.onVolumeDrag(fraction)
+                    ReaderInputAction.Scrub -> {
+                        val steps = (fraction * EDGE_SCRUB_STEPS_PER_HEIGHT).toInt()
+                        if (steps != edgeScrubSteps[0] || sasayakiScrubHud == null) {
+                            edgeScrubSteps[0] = steps
+                            previewSasayakiScrubSigned(steps)
+                        }
+                    }
+                    else -> Unit
+                }
+            }
+            override fun onDragEnd() {
+                when (edgeDragAction[0]) {
+                    ReaderInputAction.Scrub -> {
+                        commitSasayakiScrubSigned(edgeScrubSteps[0])
+                        edgeScrubSteps[0] = 0
+                    }
+                    else -> edgeAdjust.onDragEnd()
+                }
+                edgeDragAction[0] = ReaderInputAction.None
+            }
+        }
     }
     val showSasayakiTopToggle = sasayakiSettings.enabled &&
         sasayakiSettings.showReaderToggle &&
@@ -1997,10 +2090,7 @@ fun ReaderWebView(
                         readerPopupFrames = readerLookupPopupPayloads,
                         fontManager = fontManager,
                         systemDark = systemDarkTheme,
-                        edgeSwipeEnabled = effectiveSettings.edgeSwipeControls,
-                        onEdgeBrightnessDrag = edgeAdjust::onBrightnessDrag,
-                        onEdgeVolumeDrag = edgeAdjust::onVolumeDrag,
-                        onEdgeDragEnd = edgeAdjust::onDragEnd,
+                        edgeGestures = edgeGestures,
                         onBeforeRestoreVisible = { restoredWebView ->
                             sasayakiRestoreBeforeVisibleAction(
                                 restoredWebView = restoredWebView,
@@ -2073,7 +2163,7 @@ fun ReaderWebView(
             colors = readerChromeColors(effectiveSettings, systemDarkTheme),
             metrics = bottomChromeMetrics,
             focusMode = focusMode,
-            sasayakiPlaybackControls = sasayakiBottomPlaybackControls,
+            sasayakiPlaybackControls = if (sasayakiControlsDocked) sasayakiBottomPlaybackControls.copy(visible = false) else sasayakiBottomPlaybackControls,
             sasayakiPlaying = sasayakiPlayer?.isPlaying == true,
             onTapSafeArea = ::handleReaderTapOutside,
             onSasayakiSkipBackward = { performSasayakiBottomSkipAction(sasayakiBottomSkipButtonActions.left) },
@@ -2089,6 +2179,28 @@ fun ReaderWebView(
             sasayakiDoubleTapEnabled = sasayakiSettings.doubleTapPlaybackControlsToToggle,
             modifier = Modifier.align(Alignment.BottomCenter),
         )
+        if (sasayakiControlsDocked) {
+            ReaderSasayakiSideDock(
+                placement = gestureSettings.controlsPlacement,
+                offsetFraction = gestureSettings.dockOffsetFraction,
+                onOffsetFractionChange = { fraction ->
+                    scope.launch { appContainer.readerGesturesRepository.update { it.copy(dockOffsetFraction = fraction) } }
+                },
+                controls = sasayakiBottomPlaybackControls,
+                colors = readerChromeColors(effectiveSettings, systemDarkTheme),
+                sasayakiPlaying = sasayakiPlayer?.isPlaying == true,
+                onSkipBackward = { performSasayakiBottomSkipAction(ReaderSasayakiBottomSkipButtonAction.Backward) },
+                onTogglePlayback = { sasayakiPlayer?.togglePlayback() },
+                onSkipForward = { performSasayakiBottomSkipAction(ReaderSasayakiBottomSkipButtonAction.Forward) },
+                scrubEnabled = sasayakiSettings.dragPlaybackControlsToScrub,
+                onScrubSteps = ::previewSasayakiScrubSigned,
+                onScrubEnd = ::commitSasayakiScrubSigned,
+                onScrubCancel = { sasayakiScrubHud = null },
+                holdEnabled = sasayakiSettings.holdPlaybackControlsToBoost,
+                onHoldStart = ::startSasayakiBoost,
+                onHoldEnd = ::endSasayakiBoost,
+            )
+        }
         if (chromeVisibility.showBottomChrome) ReaderBottomChrome(
             state = chromeState,
             settings = effectiveSettings,
@@ -2328,3 +2440,6 @@ private data class SasayakiCueRevealResult(
 
 private fun SasayakiPlaybackData?.hasStoredAudioSource(): Boolean =
     this?.audioUri?.isNotBlank() == true || this?.audioFileName?.isNotBlank() == true
+
+/** A full-height edge drag scrubs this many steps. */
+private const val EDGE_SCRUB_STEPS_PER_HEIGHT = 16f

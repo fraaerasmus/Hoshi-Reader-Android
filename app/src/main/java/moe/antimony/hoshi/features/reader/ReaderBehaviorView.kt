@@ -51,48 +51,6 @@ fun ReaderBehaviorScreen(
                 val loadedUpdateSettings = updateSettings ?: return@item
                 BehaviorSettingsCard {
                     BehaviorSwitchRow(
-                        label = stringResource(ReaderBehaviorRow.VolumeKeysTurnPages.labelRes),
-                        checked = settings.volumeKeysTurnPages,
-                        onCheckedChange = {
-                            onSettingsChange(settings.copy(volumeKeysTurnPages = it))
-                        },
-                    )
-                    BehaviorDivider()
-                    BehaviorSwitchRow(
-                        label = stringResource(ReaderBehaviorRow.VolumeKeysNavigatePopupTerms.labelRes),
-                        checked = settings.volumeKeysNavigatePopupTerms,
-                        onCheckedChange = {
-                            onSettingsChange(settings.copy(volumeKeysNavigatePopupTerms = it))
-                        },
-                    )
-                    readerBehaviorSasayakiRows().forEach { labelRes ->
-                        BehaviorDivider()
-                        BehaviorSwitchRow(
-                            label = stringResource(labelRes),
-                            checked = settings.volumeKeysSeekSasayaki,
-                            onCheckedChange = {
-                                onSettingsChange(settings.copy(volumeKeysSeekSasayaki = it))
-                            },
-                        )
-                    }
-                    BehaviorDivider()
-                    BehaviorSwitchRow(
-                        label = stringResource(ReaderBehaviorRow.ReverseVolumeKeyDirection.labelRes),
-                        checked = settings.reverseVolumeKeyDirection,
-                        onCheckedChange = {
-                            onSettingsChange(settings.copy(reverseVolumeKeyDirection = it))
-                        },
-                    )
-                    BehaviorDivider()
-                    BehaviorSwitchRow(
-                        label = stringResource(ReaderBehaviorRow.EdgeSwipeControls.labelRes),
-                        checked = settings.edgeSwipeControls,
-                        onCheckedChange = {
-                            onSettingsChange(settings.copy(edgeSwipeControls = it))
-                        },
-                    )
-                    BehaviorDivider()
-                    BehaviorSwitchRow(
                         label = stringResource(ReaderBehaviorRow.KeepScreenOn.labelRes),
                         checked = settings.keepScreenOnWhileReading,
                         onCheckedChange = {
@@ -139,17 +97,9 @@ fun ReaderBehaviorScreen(
     }
 }
 
-internal fun readerBehaviorSasayakiRows(): List<Int> =
-    listOf(ReaderBehaviorRow.VolumeKeysSeekSasayaki.labelRes)
-
 internal fun readerBehaviorRows(): List<Int> = ReaderBehaviorRow.entries.map { it.labelRes }
 
 private enum class ReaderBehaviorRow(val labelRes: Int) {
-    VolumeKeysTurnPages(R.string.reader_behavior_volume_keys_turn_pages),
-    VolumeKeysNavigatePopupTerms(R.string.reader_behavior_volume_keys_navigate_popup_terms),
-    VolumeKeysSeekSasayaki(R.string.reader_behavior_volume_keys_seek_sasayaki),
-    ReverseVolumeKeyDirection(R.string.reader_behavior_reverse_volume_key_direction),
-    EdgeSwipeControls(R.string.reader_behavior_edge_swipe_controls),
     KeepScreenOn(R.string.reader_behavior_keep_screen_on),
     LockCurrentOrientation(R.string.reader_behavior_lock_current_orientation),
     OpenLastReadBookOnLaunch(R.string.reader_behavior_open_last_read_book_on_launch),

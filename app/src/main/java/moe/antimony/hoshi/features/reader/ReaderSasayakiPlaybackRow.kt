@@ -6,7 +6,9 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.horizontalDrag
+import androidx.compose.foundation.gestures.verticalDrag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -30,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
@@ -146,35 +149,46 @@ internal fun ReaderSasayakiPlaybackRow(
  * [onSteps] gets the drag-direction step count (+ rightward); [onEnd] fires once on release.
  */
 @Composable
-private fun Modifier.sasayakiScrub(
+internal fun Modifier.sasayakiScrub(
     onSteps: (Int) -> Unit,
     onEnd: (Int) -> Unit,
     onCancel: () -> Unit,
+    vertical: Boolean = false,
 ): Modifier {
     val stepPx = with(LocalDensity.current) { SASAYAKI_SCRUB_STEP_DP.dp.toPx() }
     val haptic = LocalHapticFeedback.current
     val currentOnSteps = rememberUpdatedState(onSteps)
     val currentOnEnd = rememberUpdatedState(onEnd)
     val currentOnCancel = rememberUpdatedState(onCancel)
-    return pointerInput(stepPx) {
+    return pointerInput(stepPx, vertical) {
         val tracker = ReaderSasayakiScrubGestureTracker(stepPx)
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             tracker.reset()
-            val start = awaitHorizontalTouchSlopOrCancellation(down.id) { change, overSlop ->
-                change.consume()
-                tracker.onDrag(overSlop)
-            } ?: return@awaitEachGesture
+            // Vertical drags scrub upward = forward, so the sign flips.
+            val slop = if (vertical) {
+                awaitVerticalTouchSlopOrCancellation(down.id) { change, overSlop ->
+                    change.consume()
+                    tracker.onDrag(-overSlop)
+                }
+            } else {
+                awaitHorizontalTouchSlopOrCancellation(down.id) { change, overSlop ->
+                    change.consume()
+                    tracker.onDrag(overSlop)
+                }
+            }
+            val start = slop ?: return@awaitEachGesture
             currentOnSteps.value(tracker.steps)
-            val completed = horizontalDrag(start.id) { change ->
+            val onChange: (PointerInputChange) -> Unit = { change ->
                 // Read the delta before consuming: a consumed change reports zero movement.
-                val dx = change.positionChange().x
+                val delta = if (vertical) -change.positionChange().y else change.positionChange().x
                 change.consume()
-                if (tracker.onDrag(dx)) {
+                if (tracker.onDrag(delta)) {
                     haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
                     currentOnSteps.value(tracker.steps)
                 }
             }
+            val completed = if (vertical) verticalDrag(start.id, onChange) else horizontalDrag(start.id, onChange)
             if (completed) currentOnEnd.value(tracker.steps) else currentOnCancel.value()
         }
     }
@@ -182,7 +196,7 @@ private fun Modifier.sasayakiScrub(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ReaderSasayakiPlaybackButton(
+internal fun ReaderSasayakiPlaybackButton(
     controls: ReaderSasayakiBottomPlaybackControls,
     colors: ReaderChromeColors,
     icon: ImageVector,

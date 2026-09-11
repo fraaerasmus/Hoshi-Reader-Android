@@ -97,10 +97,7 @@ internal fun ChapterWebView(
     readerPopupFrames: List<ReaderLookupPopupFramePayload>,
     fontManager: ReaderFontManager,
     systemDark: Boolean,
-    edgeSwipeEnabled: Boolean,
-    onEdgeBrightnessDrag: (Float) -> Unit,
-    onEdgeVolumeDrag: (Float) -> Unit,
-    onEdgeDragEnd: () -> Unit,
+    edgeGestures: ReaderEdgeGestureHandler,
     onBeforeRestoreVisible: (WebView) -> ReaderRestoreBeforeVisibleAction? = { null },
     modifier: Modifier = Modifier,
 ) {
@@ -122,10 +119,7 @@ internal fun ChapterWebView(
     val currentWebViewRestoreEpoch = rememberUpdatedState(webViewRestoreEpoch)
     val currentOnRestoreStarted = rememberUpdatedState(onRestoreStarted)
     val currentOnRestoreCompleted = rememberUpdatedState(onRestoreCompleted)
-    val currentEdgeSwipeEnabled = rememberUpdatedState(edgeSwipeEnabled)
-    val currentOnEdgeBrightnessDrag = rememberUpdatedState(onEdgeBrightnessDrag)
-    val currentOnEdgeVolumeDrag = rememberUpdatedState(onEdgeVolumeDrag)
-    val currentOnEdgeDragEnd = rememberUpdatedState(onEdgeDragEnd)
+    val currentEdgeGestures = rememberUpdatedState(edgeGestures)
     val currentOnBeforeRestoreVisible = rememberUpdatedState(onBeforeRestoreVisible)
     val context = LocalContext.current
     val readerWebAssets = remember(context) { ReaderWebAssets.load(context) }
@@ -418,18 +412,33 @@ internal fun ChapterWebView(
                             override fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean =
                                 shouldIgnoreReaderGestureEvent(event)
 
-                            override fun isEdgeSwipeEnabled(): Boolean = currentEdgeSwipeEnabled.value
+                            override fun isEdgeHoldEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean =
+                                currentEdgeGestures.value.holdEnabled(edge)
 
-                            override fun onEdgeBrightnessDrag(fraction: Float) {
-                                currentOnEdgeBrightnessDrag.value(fraction)
+                            override fun isEdgeDoubleTapEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean =
+                                currentEdgeGestures.value.doubleTapEnabled(edge)
+
+                            override fun isEdgeDragEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean =
+                                currentEdgeGestures.value.dragEnabled(edge)
+
+                            override fun onEdgeHoldStart(edge: ReaderEdgeSwipeGestureTracker.Edge) {
+                                currentEdgeGestures.value.onHoldStart(edge)
                             }
 
-                            override fun onEdgeVolumeDrag(fraction: Float) {
-                                currentOnEdgeVolumeDrag.value(fraction)
+                            override fun onEdgeHoldEnd() {
+                                currentEdgeGestures.value.onHoldEnd()
+                            }
+
+                            override fun onEdgeDoubleTap(edge: ReaderEdgeSwipeGestureTracker.Edge) {
+                                currentEdgeGestures.value.onDoubleTap(edge)
+                            }
+
+                            override fun onEdgeDrag(edge: ReaderEdgeSwipeGestureTracker.Edge, fraction: Float) {
+                                currentEdgeGestures.value.onDrag(edge, fraction)
                             }
 
                             override fun onEdgeDragEnd() {
-                                currentOnEdgeDragEnd.value()
+                                currentEdgeGestures.value.onDragEnd()
                             }
 
                             override fun onTap(x: Float, y: Float) {

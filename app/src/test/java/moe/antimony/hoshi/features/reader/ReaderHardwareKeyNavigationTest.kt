@@ -640,6 +640,54 @@ class ReaderHardwareKeyNavigationTest {
     }
 
     @Test
+    fun volumeKeyHoldBoostsAfterTheTapActionFiredOnce() {
+        val settings = ReaderSettings(volumeKeysTurnPages = true)
+        fun event(action: Int, repeatCount: Int) = readerHardwareKeyEventForKeyEvent(
+            keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
+            action = action,
+            repeatCount = repeatCount,
+            settings = settings,
+            sasayakiEnabled = true,
+            hasSasayakiAudio = true,
+            volumeKeysHoldToBoost = true,
+        )
+
+        assertEquals(
+            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward),
+            event(KeyEvent.ACTION_DOWN, 0).action,
+        )
+        assertEquals(ReaderHardwareKeyAction.SasayakiHoldBoostStart, event(KeyEvent.ACTION_DOWN, 1).action)
+        assertNull(event(KeyEvent.ACTION_DOWN, 2).action)
+        assertTrue(event(KeyEvent.ACTION_DOWN, 2).consumed)
+        assertEquals(ReaderHardwareKeyAction.SasayakiVolumeKeyReleased, event(KeyEvent.ACTION_UP, 0).action)
+
+        // With no tap action bound the key is still held for boost, and nothing fires on the first press.
+        val boostOnly = readerHardwareKeyEventForKeyEvent(
+            keyCode = KeyEvent.KEYCODE_VOLUME_UP,
+            action = KeyEvent.ACTION_DOWN,
+            repeatCount = 0,
+            settings = ReaderSettings(),
+            sasayakiEnabled = true,
+            hasSasayakiAudio = true,
+            volumeKeysHoldToBoost = true,
+        )
+        assertTrue(boostOnly.consumed)
+        assertNull(boostOnly.action)
+        // Without audio the volume key falls back to the system.
+        assertFalse(
+            readerHardwareKeyEventForKeyEvent(
+                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
+                action = KeyEvent.ACTION_DOWN,
+                repeatCount = 0,
+                settings = ReaderSettings(),
+                sasayakiEnabled = true,
+                hasSasayakiAudio = false,
+                volumeKeysHoldToBoost = true,
+            ).consumed,
+        )
+    }
+
+    @Test
     fun enabledVolumeKeysConsumeKeyUpWithoutAction() {
         val settings = ReaderSettings(volumeKeysTurnPages = true)
 

@@ -695,6 +695,35 @@
     <string name="advanced_statistics_subtitle">跟踪每本书的阅读时间、速度和已读字符数</string>
     <string name="advanced_sasayaki_audiobooks">有声书</string>
     <string name="advanced_sasayaki_subtitle">配合已匹配的有声书字幕阅读</string>
+    <string name="gestures_title">手势与快捷键</string>
+    <string name="advanced_gestures_subtitle">播放控件的位置，以及屏幕边缘和音量键的功能。</string>
+    <string name="gestures_section_controls">播放控件</string>
+    <string name="gestures_controls_placement">位置</string>
+    <string name="gestures_placement_bottom" comment="Playback controls placement option.">底部</string>
+    <string name="gestures_placement_left" comment="Playback controls placement option, intentionally matching other Left labels.">左侧</string>
+    <string name="gestures_placement_right" comment="Playback controls placement option, intentionally matching other Right labels.">右侧</string>
+    <string name="gestures_dock_reset">重置停靠位置</string>
+    <string name="gestures_dock_help">沿边缘拖动手柄可移动；点按手柄显示控件。</string>
+    <string name="gestures_section_edges">屏幕边缘</string>
+    <string name="gestures_edge_left_hold">长按左边缘</string>
+    <string name="gestures_edge_right_hold">长按右边缘</string>
+    <string name="gestures_edge_left_double_tap">双击左边缘</string>
+    <string name="gestures_edge_right_double_tap">双击右边缘</string>
+    <string name="gestures_edge_left_drag">沿左边缘拖动</string>
+    <string name="gestures_edge_right_drag">沿右边缘拖动</string>
+    <string name="gestures_section_volume">音量键</string>
+    <string name="gestures_volume_hold">长按音量键</string>
+    <string name="input_action_none" comment="Gesture binding option meaning the gesture does nothing.">无</string>
+    <string name="input_action_toggle_playback">播放 / 暂停</string>
+    <string name="input_action_skip_forward">快进</string>
+    <string name="input_action_skip_backward">快退</string>
+    <string name="input_action_page_forward">下一页</string>
+    <string name="input_action_page_backward">上一页</string>
+    <string name="input_action_toggle_focus">切换专注模式</string>
+    <string name="input_action_boost">按住时加速</string>
+    <string name="input_action_scrub">拖动音频进度</string>
+    <string name="input_action_brightness" comment="Gesture binding option, intentionally matching other Brightness labels.">亮度</string>
+    <string name="input_action_volume" comment="Gesture binding option, intentionally matching other Volume labels.">音量</string>
     <string name="audio_sources">来源</string>
     <string name="audio_add_source">添加来源</string>
     <string name="audio_name" comment="Name label in audio source management.">名称</string>
