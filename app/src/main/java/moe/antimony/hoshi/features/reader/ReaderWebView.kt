@@ -48,6 +48,7 @@ import java.io.File
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -56,9 +57,12 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.content.ContentLanguageProfile
+import moe.antimony.hoshi.features.sync.BookSyncSheetContent
+import moe.antimony.hoshi.navigation.ReaderSyncJump
 import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.HighlightColor
+import moe.antimony.hoshi.epub.PositionTrailEntry
 import moe.antimony.hoshi.epub.ReadingStatistics
 import moe.antimony.hoshi.epub.ReaderHighlight
 import moe.antimony.hoshi.epub.SasayakiMatch
@@ -114,6 +118,9 @@ fun ReaderWebView(
     onSaveBookmark: (chapterIndex: Int, progress: Double, statistics: List<ReadingStatistics>?) -> Unit = { _, _, _ -> },
     onFlushAutoSyncExport: () -> Unit = {},
     onForegroundAutoSyncImport: () -> Unit = {},
+    pendingSyncJump: ReaderSyncJump? = null,
+    onPendingSyncJumpConsumed: () -> Unit = {},
+    onPositionDisplaced: (ReaderChapterPosition, String) -> Unit = { _, _ -> },
     onTextSelected: (ReaderSelectionData) -> Int? = { null },
     contentLanguageProfile: ContentLanguageProfile = ContentLanguageProfile.Default,
     onClose: () -> Unit,
@@ -136,6 +143,11 @@ fun ReaderWebView(
     val statisticsDateProvider = appContainer.statisticsDateProvider
     val bookRepository = appContainer.bookRepository
     var sasayakiSettings by remember { mutableStateOf(SasayakiSettings()) }
+    var syncBackendsEnabled by remember { mutableStateOf(false) }
+    LaunchedEffect(appContainer) {
+        syncBackendsEnabled = appContainer.syncSettingsRepository.settings.first().enabled ||
+            appContainer.kosyncSettingsRepository.settings.first().enabled
+    }
     var sasayakiMatchData by remember(bookRoot) { mutableStateOf<SasayakiMatchData?>(null) }
     var sasayakiSheetMatchData by remember(bookRoot) { mutableStateOf<SasayakiMatchData?>(null) }
     var isSasayakiMatchLoaded by remember(bookRoot) { mutableStateOf(bookRoot == null) }
@@ -315,6 +327,7 @@ fun ReaderWebView(
     val showReaderMenu = stateHolder.showReaderMenu
     val showAppearance = stateHolder.showAppearance
     val showGoTo = stateHolder.showGoTo
+    val showSync = stateHolder.showSync
     val showSasayaki = stateHolder.showSasayaki
     val showStatistics = stateHolder.showStatistics
     val focusMode = stateHolder.focusMode
@@ -398,7 +411,9 @@ fun ReaderWebView(
     fun jumpToPositionWithHistory(position: ReaderChapterPosition, fragment: String? = null) {
         cancelSasayakiAutoPage()
         val statistics = statisticsForSave()
+        val displaced = stateHolder.readerPosition.displayedPosition
         val savedPosition = stateHolder.jumpToWithHistory(position, fragment)
+        if (savedPosition != displaced) onPositionDisplaced(displaced, PositionTrailEntry.SourceJump)
         resetStatisticsBaseline()
         saveReaderPosition(savedPosition, statistics)
     }
@@ -1405,6 +1420,17 @@ fun ReaderWebView(
         }
         dispatchSasayakiCueToReader(pending.cue, pending.reveal, pending.source)
     }
+    LaunchedEffect(pendingSyncJump, stateHolder.isWebViewRestoring) {
+        val jump = pendingSyncJump ?: return@LaunchedEffect
+        if (stateHolder.isWebViewRestoring) return@LaunchedEffect
+        if (jump.seedOnly) {
+            jump.origin?.let(stateHolder::seedBackHistory)
+        } else {
+            closeLookupPopupsAndSelection()
+            jumpToPositionWithHistory(jump.target)
+        }
+        onPendingSyncJumpConsumed()
+    }
     LaunchedEffect(bookRoot, isSasayakiMatchLoaded, isSasayakiPlaybackLoaded, sasayakiPlaybackData) {
         cancelSasayakiAutoPage()
         sasayakiPlayer?.release()
@@ -1417,7 +1443,13 @@ fun ReaderWebView(
                     bookInfo = book.bookInfo,
                     matchProvider = { sasayakiMatchData },
                     onReaderPosition = { chapterIndex, progress ->
-                        Handler(Looper.getMainLooper()).post { onSaveBookmark(chapterIndex, progress, null) }
+                        Handler(Looper.getMainLooper()).post {
+                            val displaced = stateHolder.readerPosition.displayedPosition
+                            if (displaced != ReaderChapterPosition(chapterIndex, progress)) {
+                                onPositionDisplaced(displaced, PositionTrailEntry.SourceAudio)
+                            }
+                            onSaveBookmark(chapterIndex, progress, null)
+                        }
                     },
                 ),
                 bookTitle = book.title,
@@ -2064,6 +2096,7 @@ fun ReaderWebView(
             } else {
                 null
             },
+            onSync = if (bookEntry != null && syncBackendsEnabled) stateHolder::openSyncFromMenu else null,
             onSasayaki = if (sasayakiSettings.enabled && bookRoot != null) {
                 {
                     stateHolder.openSasayakiFromMenu(
@@ -2092,6 +2125,24 @@ fun ReaderWebView(
                 fontManager = fontManager,
                 onDismiss = stateHolder::dismissAppearance,
             )
+        }
+        if (showSync && bookEntry != null) {
+            ReaderBottomPanel(
+                sheetStyle = readerSheetStyle(),
+                onDismiss = stateHolder::dismissSync,
+            ) {
+                BookSyncSheetContent(
+                    entry = bookEntry,
+                    book = book,
+                    onApplyLocalPosition = { target ->
+                        closeLookupPopupsAndSelection()
+                        jumpToPositionWithHistory(target)
+                        stateHolder.dismissSync()
+                    },
+                    onLocalPositionChanged = {},
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
         if (showGoTo) {
             ReaderGoToSheet(

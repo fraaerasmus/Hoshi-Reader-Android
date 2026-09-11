@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.features.reader.ReaderSettings
@@ -87,6 +88,8 @@ fun SyncSettingsView(
     val resources = LocalResources.current
     val appContainer = LocalHoshiUiDependencies.current
     val repository = appContainer.syncSettingsRepository
+    val driveSyncStatus by appContainer.syncStatusRepository.status(SyncBackend.Ttu)
+        .collectAsStateWithLifecycle(initialValue = SyncStatus())
     val readerSettingsRepository = appContainer.readerSettingsRepository
     val sasayakiSettingsRepository = appContainer.sasayakiSettingsRepository
     val authorizer = appContainer.deviceCodeDriveAuthorizer
@@ -435,6 +438,7 @@ fun SyncSettingsView(
                         headlineContent = { Text(stringResource(R.string.sync_google_drive)) },
                         supportingContent = { Text(currentAuthStatus.labelText()) },
                     )
+                    SyncStatusListItem(driveSyncStatus)
                     SettingsDivider()
                     Column(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),

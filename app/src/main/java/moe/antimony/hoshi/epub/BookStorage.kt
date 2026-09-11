@@ -15,6 +15,51 @@ data class Bookmark(
     val lastModified: Double? = null,
 )
 
+/** A position the reader was moved away from (by a sync, the audiobook, a jump, or an undo). */
+@Serializable
+data class PositionTrailEntry(
+    val chapterIndex: Int,
+    val progress: Double,
+    val characterCount: Int,
+    val lastModified: Double? = null,
+    val source: String,
+    val recordedAt: Double,
+) {
+    fun toBookmark(lastModified: Double?): Bookmark =
+        Bookmark(chapterIndex = chapterIndex, progress = progress, characterCount = characterCount, lastModified = lastModified)
+
+    companion object {
+        const val SourceKosync = "kosync"
+        const val SourceDrive = "drive"
+        const val SourceAudio = "audio"
+        const val SourceJump = "jump"
+        const val SourceUndo = "undo"
+
+        fun of(bookmark: Bookmark, source: String, recordedAt: Double): PositionTrailEntry =
+            PositionTrailEntry(
+                chapterIndex = bookmark.chapterIndex,
+                progress = bookmark.progress,
+                characterCount = bookmark.characterCount,
+                lastModified = bookmark.lastModified,
+                source = source,
+                recordedAt = recordedAt,
+            )
+    }
+}
+
+@Serializable
+data class PositionTrail(val entries: List<PositionTrailEntry> = emptyList()) {
+    /** Newest last; consecutive audio-driven moves collapse into one entry so listening does not flood the trail. */
+    fun pushed(entry: PositionTrailEntry, max: Int = 20): PositionTrail {
+        val kept = if (entry.source == PositionTrailEntry.SourceAudio && entries.lastOrNull()?.source == PositionTrailEntry.SourceAudio) {
+            entries.dropLast(1)
+        } else {
+            entries
+        }
+        return PositionTrail((kept + entry).takeLast(max))
+    }
+}
+
 @Serializable
 data class BookInfo(
     val characterCount: Int,

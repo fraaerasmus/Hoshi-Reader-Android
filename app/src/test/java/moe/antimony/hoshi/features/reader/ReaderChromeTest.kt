@@ -870,6 +870,18 @@ class ReaderChromeTest {
     }
 
     @Test
+    fun bottomMenuPutsSyncRightAfterGoTo() {
+        assertEquals(
+            listOf(
+                ReaderMenuDestination.GoTo,
+                ReaderMenuDestination.Sync,
+                ReaderMenuDestination.Appearance,
+            ),
+            readerBottomMenuVisualOrder(showStatistics = false, showSasayaki = false, showSync = true),
+        )
+    }
+
+    @Test
     fun bottomMenuGoToUsesNavigationIconInsteadOfChapterListIcon() {
         assertEquals(Icons.Rounded.TravelExplore, readerBottomMenuIcon(ReaderMenuDestination.GoTo))
     }

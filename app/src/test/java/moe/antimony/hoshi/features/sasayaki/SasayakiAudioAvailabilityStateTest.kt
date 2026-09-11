@@ -64,4 +64,25 @@ class SasayakiAudioAvailabilityStateTest {
         assertFalse(state.hasAudio)
         assertNull(state.errorMessage)
     }
+
+    @Test
+    fun restoreFailureNamesTheRootCauseBehindMedia3sGenericSourceError() {
+        val state = SasayakiAudioAvailabilityState()
+
+        state.markRestoreFailed(IllegalStateException("Source error", OutOfMemoryError("Failed to allocate")))
+
+        assertEquals(
+            UiText.Literal("Source error \u2014 OutOfMemoryError: Failed to allocate"),
+            state.errorMessage,
+        )
+    }
+
+    @Test
+    fun restoreFailureWithoutACauseKeepsTheBareMessage() {
+        val state = SasayakiAudioAvailabilityState()
+
+        state.markRestoreFailed(IllegalStateException("still visible"))
+
+        assertEquals(UiText.Literal("still visible"), state.errorMessage)
+    }
 }

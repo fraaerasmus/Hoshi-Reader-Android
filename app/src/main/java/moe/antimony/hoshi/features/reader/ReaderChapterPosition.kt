@@ -1,6 +1,6 @@
 package moe.antimony.hoshi.features.reader
 
-internal data class ReaderChapterPosition(
+data class ReaderChapterPosition(
     val index: Int,
     val progress: Double = 0.0,
 ) {

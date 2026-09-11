@@ -17,6 +17,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import moe.antimony.hoshi.di.IoDispatcher
+import moe.antimony.hoshi.features.sync.NetworkPreflight
 
 interface KosyncApi {
     suspend fun authorize(credentials: KosyncCredentials)
@@ -38,6 +39,7 @@ interface KosyncApi {
 @Singleton
 class KosyncClient @Inject constructor(
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    private val preflight: NetworkPreflight,
 ) : KosyncApi {
     override suspend fun authorize(credentials: KosyncCredentials) {
         request(credentials, "GET", "/users/auth")
@@ -82,7 +84,9 @@ class KosyncClient @Inject constructor(
         payload: JsonObject? = null,
         notFoundIsNull: Boolean = false,
     ): JsonObject? = withContext(ioDispatcher) {
-        val connection = URL(normalizeServerUrl(credentials.serverUrl) + path).openConnection() as HttpURLConnection
+        val url = URL(normalizeServerUrl(credentials.serverUrl) + path)
+        preflight.check(url.host)
+        val connection = url.openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method
             connection.connectTimeout = ConnectTimeoutMillis
@@ -116,7 +120,7 @@ class KosyncClient @Inject constructor(
         this[key]?.jsonPrimitive?.contentOrNull?.takeIf { it.isNotBlank() }
 
     companion object {
-        private const val ConnectTimeoutMillis = 10_000
+        private const val ConnectTimeoutMillis = 3_000
         private const val ReadTimeoutMillis = 15_000
         private val json = Json { ignoreUnknownKeys = true }
 

@@ -16,7 +16,7 @@ class SasayakiAudioAvailabilityState(
         private set
 
     fun markRestoreFailed(error: Throwable) {
-        errorMessage = error.localizedMessage?.let(UiText::Literal)
+        errorMessage = sasayakiRestoreFailureMessage(error)?.let(UiText::Literal)
             ?: UiText.Resource(R.string.sasayaki_import_audiobook_failed)
         hasAudio = false
     }
@@ -38,4 +38,12 @@ class SasayakiAudioAvailabilityState(
     fun markAudioUnavailable() {
         hasAudio = false
     }
+}
+
+/** Media3 reports "Source error" for everything; append the root cause so a 66 h m4b OOM is identifiable. */
+internal fun sasayakiRestoreFailureMessage(error: Throwable): String? {
+    val message = error.localizedMessage
+    val root = generateSequence(error.cause) { it.cause }.lastOrNull() ?: return message
+    val rootText = "${root::class.java.simpleName}: ${root.localizedMessage ?: ""}".trimEnd(':', ' ')
+    return if (message == null) rootText else if (message.contains(rootText)) message else "$message — $rootText"
 }

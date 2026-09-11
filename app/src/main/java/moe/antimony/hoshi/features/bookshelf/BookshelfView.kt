@@ -77,6 +77,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -130,9 +131,12 @@ import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.BookShelf
 import moe.antimony.hoshi.epub.BookSortOption
 import moe.antimony.hoshi.features.reader.ReaderSettings
+import moe.antimony.hoshi.features.kosync.KosyncSettings
 import moe.antimony.hoshi.features.sync.DriveAuthStatus
 import moe.antimony.hoshi.features.opds.OpdsView
 import moe.antimony.hoshi.features.sync.SyncDirection
+import moe.antimony.hoshi.features.sync.BookSyncSheetContent
+import moe.antimony.hoshi.features.sync.SyncOptions
 import moe.antimony.hoshi.features.sync.SyncMode
 import moe.antimony.hoshi.features.sync.SyncSettings
 import moe.antimony.hoshi.importing.DirectoryImportContent
@@ -165,12 +169,20 @@ fun BookshelfView(
     val syncSettings by appContainer.syncSettingsRepository.settings.collectAsStateWithLifecycle(
         initialValue = SyncSettings(),
     )
+    val kosyncSettings by appContainer.kosyncSettingsRepository.settings.collectAsStateWithLifecycle(
+        initialValue = KosyncSettings(),
+    )
     var driveAuthStatus by remember { mutableStateOf<DriveAuthStatus?>(null) }
     val readerSettings by appContainer.readerSettingsRepository.settings.collectAsStateWithLifecycle(
         initialValue = ReaderSettings(),
     )
     val sasayakiSettings by appContainer.sasayakiSettingsRepository.settings.collectAsStateWithLifecycle(
         initialValue = moe.antimony.hoshi.features.sasayaki.SasayakiSettings(),
+    )
+    val syncOptions = SyncOptions(
+        syncStats = readerSettings.statisticsSyncEnabled,
+        statsSyncMode = readerSettings.statisticsSyncMode,
+        syncAudioBook = sasayakiSettings.enabled && sasayakiSettings.syncEnabled,
     )
     val booksViewModel: BookshelfViewModel = hiltViewModel()
     val uiState by booksViewModel.uiState.collectAsStateWithLifecycle()
@@ -188,6 +200,7 @@ fun BookshelfView(
     val renameScrollState = rememberScrollState()
     var showBulkDeleteConfirmation by remember { mutableStateOf(false) }
     var showShelfManagement by remember { mutableStateOf(false) }
+    var syncSheetEntry by remember { mutableStateOf<BookEntry?>(null) }
     var showOpdsCatalogs by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -326,7 +339,12 @@ fun BookshelfView(
         onImportFolder = ::launchBookFolderImporter,
         onImportOpds = { showOpdsCatalogs = true },
         onOpenBook = booksViewModel::openBook,
-        onRefreshRemoteBooks = booksViewModel::refreshRemoteBooks,
+        onRefreshRemoteBooks = {
+            booksViewModel.refreshAndSync(
+                options = syncOptions,
+                includeRemoteBooks = shouldLoadRemoteBooks(syncSettings, driveAuthStatus ?: DriveAuthStatus.NotConnected),
+            )
+        },
         onImportRemoteBook = { entry ->
             booksViewModel.importRemoteBook(
                 entry = entry,
@@ -358,15 +376,12 @@ fun BookshelfView(
         onSetBookProfile = booksViewModel::setBookProfile,
         syncSettings = syncSettings,
         driveAuthStatus = driveAuthStatus,
+        kosyncEnabled = kosyncSettings.enabled,
+        syncMenuState = bookSyncMenuState(syncSettings, kosyncSettings.enabled),
         onSyncBook = { entry, direction ->
-            booksViewModel.syncBook(
-                entry = entry,
-                direction = direction,
-                syncStats = readerSettings.statisticsSyncEnabled,
-                statsSyncMode = readerSettings.statisticsSyncMode,
-                syncAudioBook = sasayakiSettings.enabled && sasayakiSettings.syncEnabled,
-            )
+            booksViewModel.syncBook(entry = entry, direction = direction, options = syncOptions)
         },
+        onSyncDetails = { syncSheetEntry = it },
     )
         if (showOpdsCatalogs) {
             OpdsView(
@@ -540,6 +555,17 @@ fun BookshelfView(
                 }
             },
         )
+    }
+
+    syncSheetEntry?.let { entry ->
+        ModalBottomSheet(onDismissRequest = { syncSheetEntry = null }) {
+            BookSyncSheetContent(
+                entry = entry,
+                book = null,
+                onApplyLocalPosition = null,
+                onLocalPositionChanged = booksViewModel::refreshProgressAfterSync,
+            )
+        }
     }
 
     if (showShelfManagement) {
@@ -763,14 +789,27 @@ internal fun isRemoteBookContextMenuExpanded(
 ): Boolean =
     activeTarget == remoteBookContextMenuTarget(entry)
 
+/** Which sync entries the book context menu offers: any backend can sync, only ッツ has an explicit direction. */
+internal data class BookSyncMenuState(
+    val available: Boolean,
+    val showDirectionMenu: Boolean,
+)
+
+internal fun bookSyncMenuState(syncSettings: SyncSettings, kosyncEnabled: Boolean): BookSyncMenuState =
+    BookSyncMenuState(
+        available = syncSettings.enabled || kosyncEnabled,
+        showDirectionMenu = syncSettings.enabled && syncSettings.mode == SyncMode.Manual,
+    )
+
 internal fun shouldEnableBookshelfPullRefresh(
     syncSettings: SyncSettings,
     authStatus: DriveAuthStatus?,
+    kosyncEnabled: Boolean = false,
     hasLoadedBooks: Boolean,
     isSelecting: Boolean,
     fileTaskBlocked: Boolean,
 ): Boolean =
-    shouldLoadRemoteBooks(syncSettings, authStatus ?: DriveAuthStatus.NotConnected) &&
+    (shouldLoadRemoteBooks(syncSettings, authStatus ?: DriveAuthStatus.NotConnected) || kosyncEnabled) &&
         hasLoadedBooks &&
         !isSelecting &&
         !fileTaskBlocked
@@ -926,7 +965,10 @@ private fun BooksTab(
     onSetBookProfile: (BookEntry, String?) -> Unit,
     syncSettings: SyncSettings,
     driveAuthStatus: DriveAuthStatus?,
+    kosyncEnabled: Boolean,
+    syncMenuState: BookSyncMenuState,
     onSyncBook: (BookEntry, SyncDirection?) -> Unit,
+    onSyncDetails: (BookEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val fileTaskBlocked = blockingProgressMessage != null
@@ -993,6 +1035,7 @@ private fun BooksTab(
                     val pullRefreshEnabled = shouldEnableBookshelfPullRefresh(
                         syncSettings = syncSettings,
                         authStatus = driveAuthStatus,
+                        kosyncEnabled = kosyncEnabled,
                         hasLoadedBooks = hasLoadedBooks,
                         isSelecting = isSelecting,
                         fileTaskBlocked = fileTaskBlocked,
@@ -1103,8 +1146,9 @@ private fun BooksTab(
                                             onExportCandidate = onExportCandidate,
                                             profileState = profileState,
                                             onSetBookProfile = onSetBookProfile,
-                                            syncSettings = syncSettings,
+                                            syncMenuState = syncMenuState,
                                             onSyncBook = onSyncBook,
+                                            onSyncDetails = onSyncDetails,
                                         )
                                     }
                                 }
@@ -1634,8 +1678,9 @@ private fun BookContextMenu(
     onExportCandidate: (BookEntry) -> Unit,
     profileState: ProfileState,
     onSetBookProfile: (BookEntry, String?) -> Unit,
-    syncSettings: SyncSettings,
+    syncMenuState: BookSyncMenuState,
     onSyncBook: (BookEntry, SyncDirection?) -> Unit,
+    onSyncDetails: (BookEntry) -> Unit,
 ) {
     var moveMenuExpanded by remember { mutableStateOf(false) }
     var syncMenuExpanded by remember { mutableStateOf(false) }
@@ -1653,8 +1698,8 @@ private fun BookContextMenu(
         expanded = expanded && !moveMenuExpanded && !syncMenuExpanded && !profileMenuExpanded,
         onDismissRequest = onDismiss,
     ) {
-        if (syncSettings.enabled) {
-            if (syncSettings.mode == SyncMode.Manual) {
+        if (syncMenuState.available) {
+            if (syncMenuState.showDirectionMenu) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bookshelf_sync)) },
                     trailingIcon = {
@@ -1674,6 +1719,13 @@ private fun BookContextMenu(
                     },
                 )
             }
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.bookshelf_sync_details)) },
+                onClick = {
+                    onSyncDetails(entry)
+                    onDismiss()
+                },
+            )
             HorizontalDivider()
         }
         if (!hideMove) {

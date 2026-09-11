@@ -178,6 +178,13 @@ class BookRepository private constructor(
         sidecarDataSource.saveBookmark(bookRoot, bookmark)
     }
 
+    suspend fun loadPositionTrail(bookRoot: File): PositionTrail =
+        sidecarDataSource.loadPositionTrail(bookRoot)
+
+    suspend fun savePositionTrail(bookRoot: File, trail: PositionTrail) {
+        sidecarDataSource.savePositionTrail(bookRoot, trail)
+    }
+
     override suspend fun loadStatistics(bookRoot: File): List<ReadingStatistics> =
         sidecarDataSource.loadStatistics(bookRoot).orEmpty()
 
@@ -630,6 +637,13 @@ class BookSidecarDataSource(
         saveJson(bookRoot, BOOKMARK_FILE_NAME, Bookmark.serializer(), bookmark)
     }
 
+    suspend fun loadPositionTrail(bookRoot: File): PositionTrail =
+        loadJson(PositionTrail.serializer(), bookRoot.resolve(POSITIONS_FILE_NAME)) ?: PositionTrail()
+
+    suspend fun savePositionTrail(bookRoot: File, trail: PositionTrail) {
+        saveJson(bookRoot, POSITIONS_FILE_NAME, PositionTrail.serializer(), trail)
+    }
+
     suspend fun loadStatistics(bookRoot: File): List<ReadingStatistics>? =
         loadJson(ListSerializer(ReadingStatistics.serializer()), bookRoot.resolve(STATISTICS_FILE_NAME))
             ?.deduplicateReadingStatistics()
@@ -708,6 +722,8 @@ private const val BOOKINFO_FILE_NAME = "bookinfo.json"
 private const val SHELVES_FILE_NAME = "shelves.json"
 private const val SASAYAKI_MATCH_FILE_NAME = "sasayaki_match.json"
 private const val SASAYAKI_PLAYBACK_FILE_NAME = "sasayaki_playback.json"
+private const val POSITIONS_FILE_NAME = "positions.json"
+private const val KOSYNC_FILE_NAME = "kosync.json"
 private const val SASAYAKI_DIRECTORY_NAME = "Sasayaki"
 private const val APPLE_REFERENCE_EPOCH_SECONDS = 978_307_200.0
 
@@ -719,6 +735,8 @@ private val bookSidecarFileNames = setOf(
     BOOKINFO_FILE_NAME,
     SASAYAKI_MATCH_FILE_NAME,
     SASAYAKI_PLAYBACK_FILE_NAME,
+    POSITIONS_FILE_NAME,
+    KOSYNC_FILE_NAME,
 )
 
 private fun String.sanitizeRootFileName(): String =

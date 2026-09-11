@@ -1,8 +1,6 @@
 package moe.antimony.hoshi.features.sync
 
 import android.content.Context
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.HttpURLConnection
@@ -33,11 +31,11 @@ import moe.antimony.hoshi.di.IoDispatcher
 class GoogleDriveClient @Inject constructor(
     @ApplicationContext context: Context,
     private val tokenProvider: DriveAccessTokenProvider,
+    private val preflight: NetworkPreflight,
     @param:CacheDir private val cacheDir: File,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
 ) : DriveSyncDataSource {
     private val cachePreferences = context.applicationContext.getSharedPreferences(CacheName, Context.MODE_PRIVATE)
-    private val connectivityManager = context.applicationContext.getSystemService(ConnectivityManager::class.java)
     private var rootFolderId: String? = cachePreferences.getString(RootFolderIdKey, null)
     private var titleToFolderId: MutableMap<String, String> = cachePreferences
         .getStringSet(TitleFolderIdsKey, emptySet())
@@ -478,16 +476,9 @@ class GoogleDriveClient @Inject constructor(
     }
 
     private fun checkValidatedInternet() {
-        val network = connectivityManager?.activeNetwork
-            ?: throw GoogleDriveApiException(GoogleDriveApiException.NoInternetConnectionMessage)
-        val capabilities = connectivityManager.getNetworkCapabilities(network)
-            ?: throw GoogleDriveApiException(GoogleDriveApiException.NoInternetConnectionMessage)
-        if (!shouldAttemptDriveRequest(
-                hasActiveNetwork = true,
-                hasInternetCapability = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
-                hasValidatedCapability = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
-            )
-        ) {
+        try {
+            preflight.check()
+        } catch (error: NetworkUnavailableException) {
             throw GoogleDriveApiException(GoogleDriveApiException.NoInternetConnectionMessage)
         }
     }

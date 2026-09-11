@@ -35,6 +35,8 @@ import moe.antimony.hoshi.features.kosync.KosyncSettingsRepository
 import moe.antimony.hoshi.features.kosync.kosyncSettingsRepository
 import moe.antimony.hoshi.features.opds.OpdsCatalogRepository
 import moe.antimony.hoshi.features.opds.opdsCatalogRepository
+import moe.antimony.hoshi.features.sync.SyncStatusRepository
+import moe.antimony.hoshi.features.sync.syncStatusRepository
 import moe.antimony.hoshi.features.sync.SyncSettingsRepository
 import moe.antimony.hoshi.features.sync.syncSettingsRepository
 import moe.antimony.hoshi.features.update.UpdateDownloadStore
@@ -147,6 +149,11 @@ internal object HoshiAppModule {
         drive: DriveSyncDataSource,
     ): SyncSettingsRepository =
         context.syncSettingsRepository(drive)
+
+    @Provides
+    @Singleton
+    fun provideSyncStatusRepository(@ApplicationContext context: Context): SyncStatusRepository =
+        context.syncStatusRepository()
 
     @Provides
     @Singleton

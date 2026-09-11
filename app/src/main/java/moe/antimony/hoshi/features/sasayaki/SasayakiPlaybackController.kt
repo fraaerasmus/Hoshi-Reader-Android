@@ -1,5 +1,6 @@
 package moe.antimony.hoshi.features.sasayaki
 
+import android.util.Log
 import moe.antimony.hoshi.epub.SasayakiPlaybackData
 import moe.antimony.hoshi.epub.SasayakiMatchData
 import moe.antimony.hoshi.epub.SasayakiMatch
@@ -480,6 +481,7 @@ internal class SasayakiPlaybackController(
     }
 
     private fun handleAudioRestoreFailure(error: Throwable) {
+        Log.w("SasayakiAudio", "Audio restore failed.", error)
         clearAutoPageHoldResume()
         onForegroundPlaybackRequestedChanged(false)
         audioAvailability.markRestoreFailed(error)

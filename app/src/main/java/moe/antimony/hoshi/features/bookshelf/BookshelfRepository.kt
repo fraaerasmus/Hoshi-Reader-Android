@@ -24,14 +24,14 @@ import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubBookParser
 import moe.antimony.hoshi.epub.LegacyBookMigrationProgress
 import moe.antimony.hoshi.epub.isUuidString
-import moe.antimony.hoshi.features.sync.StatisticsSyncMode
 import moe.antimony.hoshi.features.sync.DriveAuthStatus
 import moe.antimony.hoshi.features.sync.DriveAuthorizer
 import moe.antimony.hoshi.features.sync.DriveSyncDataSource
 import moe.antimony.hoshi.features.sync.GoogleDriveApiException
+import moe.antimony.hoshi.features.sync.ProgressSyncCoordinator
+import moe.antimony.hoshi.features.sync.ProgressSyncReport
 import moe.antimony.hoshi.features.sync.SyncDirection
-import moe.antimony.hoshi.features.sync.SyncManager
-import moe.antimony.hoshi.features.sync.SyncResult
+import moe.antimony.hoshi.features.sync.SyncOptions
 import moe.antimony.hoshi.features.sync.SyncSettingsRepository
 import moe.antimony.hoshi.features.sync.TtuBookDataConverter
 import moe.antimony.hoshi.features.sync.TtuProgress
@@ -81,13 +81,8 @@ internal interface BookshelfRepository {
     suspend fun changeShowReading(showReading: Boolean)
     suspend fun changeCoverMode(coverMode: BookshelfCoverMode)
     suspend fun rebuildLookupQuery()
-    suspend fun syncBook(
-        entry: BookEntry,
-        direction: SyncDirection?,
-        syncStats: Boolean,
-        statsSyncMode: StatisticsSyncMode,
-        syncAudioBook: Boolean,
-    ): SyncResult
+    suspend fun syncBook(entry: BookEntry, direction: SyncDirection?, options: SyncOptions): ProgressSyncReport
+    suspend fun pullBook(entry: BookEntry, options: SyncOptions): ProgressSyncReport
 }
 
 @Singleton
@@ -97,7 +92,7 @@ internal class AndroidBookshelfRepository @Inject constructor(
     private val dictionaryRepository: DictionaryRepository,
     private val settingsRepository: BookshelfSettingsRepository,
     private val syncSettingsRepository: SyncSettingsRepository,
-    private val syncManager: SyncManager,
+    private val progressSyncCoordinator: ProgressSyncCoordinator,
     private val drive: DriveSyncDataSource,
     private val driveAuthorizer: DriveAuthorizer,
     private val ttuBookDataConverter: TtuBookDataConverter,
@@ -312,23 +307,12 @@ internal class AndroidBookshelfRepository @Inject constructor(
         dictionaryRepository.rebuildLookupQuery()
     }
 
-    override suspend fun syncBook(
-        entry: BookEntry,
-        direction: SyncDirection?,
-        syncStats: Boolean,
-        statsSyncMode: StatisticsSyncMode,
-        syncAudioBook: Boolean,
-    ): SyncResult = withContext(ioDispatcher) {
-        val syncSettings = syncSettingsRepository.settings.first()
-        syncManager.syncBook(
-            entry = entry,
-            direction = direction,
-            syncStats = syncStats,
-            statsSyncMode = statsSyncMode,
-            syncAudioBook = syncAudioBook,
-            syncBookData = syncSettings.uploadBooks,
-        )
-    }
+    override suspend fun syncBook(entry: BookEntry, direction: SyncDirection?, options: SyncOptions): ProgressSyncReport =
+        withContext(ioDispatcher) { progressSyncCoordinator.syncAll(entry, options = options, direction = direction) }
+
+    /** Bulk refresh: manual enough to run with auto-sync off, but the backoff still caps a dead server at one attempt. */
+    override suspend fun pullBook(entry: BookEntry, options: SyncOptions): ProgressSyncReport =
+        withContext(ioDispatcher) { progressSyncCoordinator.pull(entry, options = options, manual = true, force = false) }
 
     private suspend fun saveMetadata(root: File, parsedBook: EpubBook, previous: BookMetadata? = null) {
         val metadata = BookMetadata(

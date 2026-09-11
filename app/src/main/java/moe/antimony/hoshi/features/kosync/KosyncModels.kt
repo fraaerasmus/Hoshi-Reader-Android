@@ -1,6 +1,7 @@
 package moe.antimony.hoshi.features.kosync
 
 import kotlinx.serialization.Serializable
+import moe.antimony.hoshi.epub.Bookmark
 
 data class KosyncSettings(
     val enabled: Boolean = false,
@@ -30,7 +31,7 @@ data class KosyncRemoteProgress(
 )
 
 sealed interface KosyncResult {
-    data class Pulled(val title: String, val percentage: Double) : KosyncResult
+    data class Pulled(val title: String, val percentage: Double, val bookmark: Bookmark, val previous: Bookmark?) : KosyncResult
     data class Pushed(val title: String, val percentage: Double) : KosyncResult
     data class UpToDate(val title: String) : KosyncResult
     data object Skipped : KosyncResult
@@ -41,6 +42,7 @@ sealed interface KosyncResult {
 data class KosyncBookState(
     val lastSyncedCharacterCount: Int? = null,
     val lastServerTimestamp: Long? = null,
+    val documentIdOverride: String? = null,
 )
 
 class KosyncException(message: String, val statusCode: Int? = null) : Exception(message)

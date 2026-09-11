@@ -23,6 +23,9 @@
     <string name="action_increase">增加</string>
     <string name="action_copy">复制</string>
     <string name="action_clear">清除</string>
+    <string name="action_undo">撤销</string>
+    <string name="action_pull">拉取</string>
+    <string name="action_push">推送</string>
     <string name="action_save">保存</string>
     <string name="action_edit">编辑</string>
     <string name="action_choose">选择</string>
@@ -159,9 +162,8 @@
     <string name="bookshelf_remote_book_import_failed">无法从 Google Drive 导入书籍。</string>
     <string name="bookshelf_remote_book_delete_failed">无法从 Google Drive 删除书籍。</string>
     <string name="bookshelf_syncing">正在同步...</string>
-    <string name="bookshelf_synced_to_ttu_format">已将 %1$s 同步到 ッツ\n%2$d 个字符</string>
-    <string name="bookshelf_synced_from_ttu_format">已从 ッツ 同步 %1$s\n%2$d 个字符</string>
-    <string name="bookshelf_already_synced_format">%1$s 已同步</string>
+    <string name="bookshelf_syncing_progress_format">正在同步 %1$d / %2$d...</string>
+    <string name="bookshelf_sync_summary_format">已更新 %1$d · 失败 %2$d</string>
     <string name="bookshelf_delete_book_title_format" comment="Delete confirmation, intentionally matching imported-font and profile delete confirmation formats.">删除“%1$s”？</string>
     <string name="bookshelf_delete_remote_book">从 Google Drive 删除</string>
     <string name="bookshelf_delete_remote_book_title_format">从 Google Drive 删除“%1$s”？</string>
@@ -190,6 +192,7 @@
     <string name="bookshelf_cover_mode_hide">隐藏</string>
     <string name="bookshelf_import_epub">导入 EPUB</string>
     <string name="bookshelf_sync">同步</string>
+    <string name="bookshelf_sync_details">同步…</string>
     <string name="bookshelf_move">移动</string>
     <string name="bookshelf_mark_read">标记已读</string>
     <string name="bookshelf_export_epub">导出 EPUB</string>
@@ -522,7 +525,10 @@
     <string name="reader_appearance_delete_font_title_format" comment="Imported-font delete confirmation, intentionally matching book and profile delete confirmation formats.">删除“%1$s”？</string>
     <string name="action_enable">启用</string>
     <string name="sync_ttu_sync">ッツ 同步</string>
-    <string name="sync_title">同步</string>
+    <string name="sync_title">ッツ / Google Drive</string>
+    <string name="advanced_sync_ttu">ッツ 同步 · Google Drive</string>
+    <string name="advanced_sync_ttu_subtitle">在 Google Drive 文件夹中同步进度、统计与书籍。</string>
+    <string name="advanced_sync_kosync_subtitle">与 KOReader 设备共享阅读位置。</string>
     <string name="sync_section_behaviour" comment="Sync settings group label, intentionally matching other settings group labels.">行为</string>
     <string name="sync_section_data">数据</string>
     <string name="sync_direction">方向</string>
@@ -576,6 +582,37 @@
     <string name="kosync_auto_sync_description">打开书籍或返回前台时拉取进度，阅读后推送进度。</string>
     <string name="kosync_push">推送进度到 KOReader</string>
     <string name="kosync_push_description">保存位置时即发送；KOReader 会打开到同一段落。</string>
+    <string name="sync_outcome_applied_format">%1$s：已从服务器同步 · %2$d%%</string>
+    <string name="sync_outcome_sent_format">%1$s：已发送到服务器 · %2$d%%</string>
+    <string name="sync_outcome_up_to_date_format">%1$s：已是最新</string>
+    <string name="reader_synced_from_format">已从 %1$s 同步 · %2$d%%</string>
+    <string name="reader_sync_failed_format">%1$s：%2$s</string>
+    <string name="reader_sync">同步</string>
+    <string name="sync_sheet_local_position">本机</string>
+    <string name="sync_sheet_saved_format">保存于 %1$s</string>
+    <string name="sync_sheet_sync_all">立即同步全部</string>
+    <string name="sync_sheet_audiobook">有声书</string>
+    <string name="sync_sheet_move_audio_to_text">将音频移到阅读位置</string>
+    <string name="sync_sheet_move_text_to_audio">将阅读位置移到音频</string>
+    <string name="sync_sheet_recent_positions">最近位置</string>
+    <string name="sync_sheet_trail_entry_format">%1$d%% · %2$s · %3$s</string>
+    <string name="sync_sheet_document_id">KOReader 文档 ID</string>
+    <string name="sync_chip_synced">已同步</string>
+    <string name="sync_chip_server_newer">服务器更新</string>
+    <string name="sync_chip_local_newer">本机更新</string>
+    <string name="sync_chip_no_record">服务器无记录</string>
+    <string name="sync_chip_offline">不可用</string>
+    <string name="sync_source_kosync">来自 KOReader</string>
+    <string name="sync_source_drive">来自 ッツ</string>
+    <string name="sync_source_audio">来自有声书</string>
+    <string name="sync_source_jump">跳转前</string>
+    <string name="sync_source_undo">已撤销</string>
+    <string name="sync_last_sync_format">上次同步：%1$s</string>
+    <string name="sync_last_error_format">上次错误：%1$s · %2$s</string>
+    <string name="sync_error_offline">没有网络连接。</string>
+    <string name="sync_error_tailscale_off">Tailscale VPN 未开启。</string>
+    <string name="sync_error_server_timeout">服务器没有响应。</string>
+    <string name="sync_error_server_unreachable">无法解析服务器地址。</string>
     <string name="bookshelf_import_opds">OPDS 目录</string>
     <string name="opds_title">OPDS 目录</string>
     <string name="opds_add_catalog">添加目录</string>

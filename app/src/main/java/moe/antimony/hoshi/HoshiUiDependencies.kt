@@ -25,6 +25,8 @@ import moe.antimony.hoshi.features.sync.SyncManager
 import moe.antimony.hoshi.features.kosync.KosyncManager
 import moe.antimony.hoshi.features.kosync.KosyncSettingsRepository
 import moe.antimony.hoshi.features.opds.OpdsCatalogRepository
+import moe.antimony.hoshi.features.sync.ProgressSyncCoordinator
+import moe.antimony.hoshi.features.sync.SyncStatusRepository
 import moe.antimony.hoshi.features.sync.SyncSettingsRepository
 import moe.antimony.hoshi.features.update.AndroidUpdateDownloadManager
 import moe.antimony.hoshi.features.update.UpdateCheckService
@@ -49,6 +51,8 @@ internal class HoshiUiDependencies @Inject constructor(
     private val syncSettingsRepositoryProvider: Lazy<SyncSettingsRepository>,
     private val kosyncSettingsRepositoryProvider: Lazy<KosyncSettingsRepository>,
     private val kosyncManagerProvider: Lazy<KosyncManager>,
+    private val syncStatusRepositoryProvider: Lazy<SyncStatusRepository>,
+    private val progressSyncCoordinatorProvider: Lazy<ProgressSyncCoordinator>,
     private val opdsCatalogRepositoryProvider: Lazy<OpdsCatalogRepository>,
     private val updateSettingsRepositoryProvider: Lazy<UpdateSettingsRepository>,
     private val updateDownloadStoreProvider: Lazy<UpdateDownloadStore>,
@@ -80,6 +84,8 @@ internal class HoshiUiDependencies @Inject constructor(
     val syncSettingsRepository: SyncSettingsRepository get() = syncSettingsRepositoryProvider.get()
     val kosyncSettingsRepository: KosyncSettingsRepository get() = kosyncSettingsRepositoryProvider.get()
     val kosyncManager: KosyncManager get() = kosyncManagerProvider.get()
+    val syncStatusRepository: SyncStatusRepository get() = syncStatusRepositoryProvider.get()
+    val progressSyncCoordinator: ProgressSyncCoordinator get() = progressSyncCoordinatorProvider.get()
     val opdsCatalogRepository: OpdsCatalogRepository get() = opdsCatalogRepositoryProvider.get()
     val updateSettingsRepository: UpdateSettingsRepository get() = updateSettingsRepositoryProvider.get()
     val updateDownloadStore: UpdateDownloadStore get() = updateDownloadStoreProvider.get()

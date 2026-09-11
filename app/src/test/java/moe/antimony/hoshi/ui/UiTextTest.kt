@@ -46,4 +46,11 @@ class UiTextTest {
             ),
         )
     }
+
+    @Test
+    fun multiJoinsResolvedPartsWithTheSeparator() {
+        val text = UiText.Multi(listOf(UiText.Literal("a"), UiText.Literal("b")), separator = " · ")
+
+        assertEquals("a · b", text.resolve(getString = { _, _ -> "" }, getQuantityString = { _, _, _ -> "" }))
+    }
 }

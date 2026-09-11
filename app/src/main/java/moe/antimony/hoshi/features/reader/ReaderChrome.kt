@@ -149,6 +149,7 @@ data class ReaderChromeVisibility(
 enum class ReaderMenuDestination {
     Appearance,
     GoTo,
+    Sync,
     Statistics,
     Sasayaki,
 }
@@ -373,10 +374,12 @@ private fun readerTopJumpHistoryIconSizeDp(topSafeAreaDp: Int): Int =
 fun readerBottomMenuVisualOrder(
     showStatistics: Boolean,
     showSasayaki: Boolean,
+    showSync: Boolean = false,
 ): List<ReaderMenuDestination> = buildList {
     if (showSasayaki) add(ReaderMenuDestination.Sasayaki)
     if (showStatistics) add(ReaderMenuDestination.Statistics)
     add(ReaderMenuDestination.GoTo)
+    if (showSync) add(ReaderMenuDestination.Sync)
     add(ReaderMenuDestination.Appearance)
 }
 

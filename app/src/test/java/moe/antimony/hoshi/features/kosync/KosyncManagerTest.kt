@@ -10,6 +10,8 @@ import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubChapter
+import moe.antimony.hoshi.features.sync.SyncBackoff
+import moe.antimony.hoshi.features.sync.SyncComparison
 import moe.antimony.hoshi.features.sync.TtuSyncRules
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -139,6 +141,7 @@ class KosyncManagerTest {
         settings: KosyncSettings = KosyncSettings(enabled = true, serverUrl = "http://kosync.test", username = "reader"),
         credentials: KosyncCredentials? = this.credentials,
         bookLoader: suspend (BookEntry) -> EpubBook? = { book() },
+        backoff: SyncBackoff = SyncBackoff(),
     ) = KosyncManager(
         bookRepository = repository,
         api = api,
@@ -147,7 +150,63 @@ class KosyncManagerTest {
         deviceId = "me",
         bookLoader = bookLoader,
         ioDispatcher = Dispatchers.Unconfined,
+        backoff = backoff,
     )
+
+    @Test
+    fun pulledCarriesTheDisplacedBookmark() = runBlocking {
+        val repository = BookRepository(tempFolder.root)
+        val entry = repository.createEntry()
+        val previous = Bookmark(0, 0.1, 10, TtuSyncRules.unixMillisToAppleReferenceSeconds(1_000_000))
+        repository.saveBookmark(entry.root, previous)
+        val api = FakeKosyncApi(remote = KosyncRemoteProgress("doc", "/body/DocFragment[2]/body", 0.6, "Kobo", "kobo-id", 2_000))
+
+        val result = manager(repository, api).pull(entry, book()) as KosyncResult.Pulled
+
+        assertEquals(previous, result.previous)
+        assertEquals(result.bookmark, repository.loadBookmark(entry.root))
+    }
+
+    @Test
+    fun failuresStartACooldownThatManualSyncBypasses() = runBlocking {
+        val repository = BookRepository(tempFolder.root)
+        val entry = repository.createEntry()
+        repository.saveBookmark(entry.root, Bookmark(1, 0.4, 140, 1.0))
+        val api = FakeKosyncApi(remote = null, failure = java.net.SocketTimeoutException("connect timed out"))
+        var now = 0L
+        val manager = manager(repository, api, backoff = SyncBackoff(cooldownMillis = 60_000L) { now })
+
+        assertTrue(runCatching { manager.pull(entry, book()) }.exceptionOrNull() is java.net.SocketTimeoutException)
+        assertTrue(manager.push(entry, book()) is KosyncResult.Skipped)
+        assertEquals(1, api.calls)
+        assertTrue(runCatching { manager.push(entry, book(), force = true) }.isFailure)
+        assertEquals(2, api.calls)
+        now = 61_000L
+        assertTrue(runCatching { manager.pull(entry, book()) }.isFailure)
+        assertEquals(3, api.calls)
+    }
+
+    @Test
+    fun documentIdOverrideReplacesTheHashAndStatusComparesTimestamps() = runBlocking {
+        val repository = BookRepository(tempFolder.root)
+        val entry = repository.createEntry()
+        repository.saveBookmark(entry.root, Bookmark(0, 0.1, 10, TtuSyncRules.unixMillisToAppleReferenceSeconds(5_000_000)))
+        val api = FakeKosyncApi(remote = KosyncRemoteProgress("doc", "/body/DocFragment[2]/body", 0.6, "Kobo", "kobo-id", 4_000))
+        val manager = manager(repository, api)
+
+        val computed = checkNotNull(manager.documentId(entry))
+        manager.setDocumentIdOverride(entry, " custom-id ")
+        assertEquals("custom-id", manager.documentId(entry))
+        manager.push(entry, book())
+        assertEquals("custom-id", checkNotNull(api.lastPush).document)
+        manager.setDocumentIdOverride(entry, null)
+        assertEquals(computed, manager.documentId(entry))
+
+        assertEquals(SyncComparison.LocalNewer, manager.status(entry))
+        assertEquals(SyncComparison.ServerNewer, kosyncComparison(null, api.remote))
+        assertEquals(SyncComparison.NoRecord, kosyncComparison(Bookmark(0, 0.0, 0, 1.0), null))
+        assertEquals(SyncComparison.Synced, kosyncComparison(Bookmark(0, 0.0, 0, TtuSyncRules.unixMillisToAppleReferenceSeconds(4_000_000)), api.remote))
+    }
 
     private fun book(): EpubBook {
         val root = File(tempFolder.root, "extracted").apply { mkdirs() }
@@ -174,10 +233,13 @@ class KosyncManagerTest {
     }
 }
 
-private class FakeKosyncApi(
-    private val remote: KosyncRemoteProgress?,
+internal class FakeKosyncApi(
+    val remote: KosyncRemoteProgress?,
     private val putTimestamp: Long? = null,
+    private val failure: Exception? = null,
 ) : KosyncApi {
+    var calls = 0
+
     data class Push(val document: String, val progress: String, val percentage: Double, val device: String, val deviceId: String)
 
     var lastPush: Push? = null
@@ -185,7 +247,11 @@ private class FakeKosyncApi(
 
     override suspend fun authorize(credentials: KosyncCredentials) = Unit
 
-    override suspend fun getProgress(credentials: KosyncCredentials, document: String): KosyncRemoteProgress? = remote
+    override suspend fun getProgress(credentials: KosyncCredentials, document: String): KosyncRemoteProgress? {
+        calls++
+        failure?.let { throw it }
+        return remote
+    }
 
     override suspend fun putProgress(
         credentials: KosyncCredentials,
@@ -195,6 +261,8 @@ private class FakeKosyncApi(
         device: String,
         deviceId: String,
     ): Long? {
+        calls++
+        failure?.let { throw it }
         lastPush = Push(document, progress, percentage, device, deviceId)
         pushCount++
         return putTimestamp

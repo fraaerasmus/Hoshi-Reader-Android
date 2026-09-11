@@ -17,9 +17,9 @@ import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.LegacyBookMigrationProgress
 import moe.antimony.hoshi.epub.BookSortOption
 import moe.antimony.hoshi.features.sync.GoogleDriveApiException
-import moe.antimony.hoshi.features.sync.StatisticsSyncMode
 import moe.antimony.hoshi.features.sync.SyncDirection
-import moe.antimony.hoshi.features.sync.SyncResult
+import moe.antimony.hoshi.features.sync.SyncOptions
+import moe.antimony.hoshi.features.sync.toUiText
 import moe.antimony.hoshi.ui.UiText
 
 internal data class BookImportItem(
@@ -658,29 +658,67 @@ internal class BookshelfViewModel : ViewModel {
         }
     }
 
-    fun syncBook(
-        entry: BookEntry,
-        direction: SyncDirection?,
-        syncStats: Boolean,
-        statsSyncMode: StatisticsSyncMode,
-        syncAudioBook: Boolean,
-    ) {
+    fun syncBook(entry: BookEntry, direction: SyncDirection?, options: SyncOptions) {
         runLoading(
             errorPrefix = UiText.Resource(R.string.bookshelf_sync_failed),
             blockingProgressMessage = UiText.Resource(R.string.bookshelf_syncing),
             replaceShelfWithLoading = false,
             block = {
-                val result = repository.syncBook(
-                    entry = entry,
-                    direction = direction,
-                    syncStats = syncStats,
-                    statsSyncMode = statsSyncMode,
-                    syncAudioBook = syncAudioBook,
-                )
-                if (result is SyncResult.Imported) {
+                val report = repository.syncBook(entry = entry, direction = direction, options = options)
+                if (report.applied != null) {
                     refreshBookProgress()
                 }
-                _uiState.update { it.copy(statusMessage = result.bookshelfMessage()) }
+                _uiState.update { it.copy(statusMessage = report.toUiText()) }
+            },
+        )
+    }
+
+    /** The sync sheet writes bookmarks behind the shelf's back; pick the new percentages up without a full reload. */
+    fun refreshProgressAfterSync() {
+        runLoading(
+            errorPrefix = UiText.Resource(R.string.bookshelf_sync_failed),
+            replaceShelfWithLoading = false,
+            block = { refreshBookProgress() },
+        )
+    }
+
+    /** Pull-to-refresh: the Drive shelf listing plus a progress pull for every local book. */
+    fun refreshAndSync(options: SyncOptions, includeRemoteBooks: Boolean) {
+        if (!_uiState.value.hasLoadedBooks) return
+        if (includeRemoteBooks) refreshRemoteBooks()
+        val entries = _uiState.value.bookEntries
+        if (entries.isEmpty()) return
+        runLoading(
+            errorPrefix = UiText.Resource(R.string.bookshelf_sync_failed),
+            blockingProgressMessage = UiText.Resource(R.string.bookshelf_syncing_progress_format, 0, entries.size),
+            replaceShelfWithLoading = false,
+            block = {
+                var updated = 0
+                var failed = 0
+                entries.forEachIndexed { index, entry ->
+                    _uiState.update {
+                        it.copy(
+                            blockingProgressMessage = UiText.Resource(
+                                R.string.bookshelf_syncing_progress_format,
+                                index + 1,
+                                entries.size,
+                            ),
+                        )
+                    }
+                    val report = repository.pullBook(entry, options)
+                    if (report.applied != null) updated++
+                    failed += report.failures.size
+                }
+                if (updated > 0) refreshBookProgress()
+                _uiState.update {
+                    it.copy(
+                        statusMessage = if (updated == 0 && failed == 0) {
+                            null
+                        } else {
+                            UiText.Resource(R.string.bookshelf_sync_summary_format, updated, failed)
+                        },
+                    )
+                }
             },
         )
     }
@@ -863,11 +901,3 @@ private fun PendingBookImport.failureDisplayName(): String =
     displayName?.takeIf { it.isNotBlank() }
         ?: importKey.substringAfterLast('/').takeIf { it.isNotBlank() }
         ?: "EPUB"
-
-private fun SyncResult.bookshelfMessage(): UiText? =
-    when (this) {
-        is SyncResult.Exported -> UiText.Resource(R.string.bookshelf_synced_to_ttu_format, title, characterCount)
-        is SyncResult.Imported -> UiText.Resource(R.string.bookshelf_synced_from_ttu_format, title, characterCount)
-        is SyncResult.Synced -> UiText.Resource(R.string.bookshelf_already_synced_format, title)
-        SyncResult.Skipped -> null
-    }

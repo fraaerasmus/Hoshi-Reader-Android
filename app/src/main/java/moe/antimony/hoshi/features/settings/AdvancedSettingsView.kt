@@ -215,15 +215,21 @@ internal fun advancedSettingsSections(): List<AdvancedSettingsSection> =
         AdvancedSettingsSection(
             rows = listOf(
                 AdvancedSettingsRow(
-                    titleRes = R.string.sync_ttu_sync,
+                    titleRes = R.string.advanced_sync_ttu,
                     destination = AdvancedDestination.Syncing,
                     icon = AdvancedSettingsIcon.Cloud,
+                    subtitleRes = R.string.advanced_sync_ttu_subtitle,
                 ),
                 AdvancedSettingsRow(
                     titleRes = R.string.kosync_title,
                     destination = AdvancedDestination.KoreaderSync,
                     icon = AdvancedSettingsIcon.Cloud,
+                    subtitleRes = R.string.advanced_sync_kosync_subtitle,
                 ),
+            ),
+        ),
+        AdvancedSettingsSection(
+            rows = listOf(
                 AdvancedSettingsRow(
                     titleRes = R.string.anki_connect_use,
                     destination = AdvancedDestination.AnkiConnect,

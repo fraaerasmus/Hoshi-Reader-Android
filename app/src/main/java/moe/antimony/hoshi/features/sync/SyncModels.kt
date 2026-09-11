@@ -96,6 +96,14 @@ data class DriveSyncFiles(
     val audioBook: DriveFile?,
 )
 
+/** How a backend's stored position relates to the local bookmark. */
+enum class SyncComparison {
+    NoRecord,
+    ServerNewer,
+    LocalNewer,
+    Synced,
+}
+
 data class ResolvedBookPosition(
     val spineIndex: Int,
     val progress: Double,

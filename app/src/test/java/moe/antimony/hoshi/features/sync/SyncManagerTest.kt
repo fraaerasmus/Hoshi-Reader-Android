@@ -467,7 +467,7 @@ class SyncManagerTest {
     }
 }
 
-private class FakeDriveSyncDataSource(
+internal class FakeDriveSyncDataSource(
     progress: TtuProgress? = null,
     statistics: List<ReadingStatistics>? = null,
     audioBook: TtuAudioBook? = null,

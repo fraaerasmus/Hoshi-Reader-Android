@@ -13,6 +13,20 @@ internal class SasayakiPositionSync @Inject constructor(
     private val bookRepository: BookRepository,
     private val runtime: SasayakiPlaybackServiceRuntime,
 ) {
+    /** Where the text sits under the audiobook's current position: the live controller if there is one, else the sidecar. */
+    suspend fun readerPositionAtAudio(entry: BookEntry): Pair<Int, Double>? {
+        val match = bookRepository.loadSasayakiMatch(entry.root)?.takeIf { it.matches.isNotEmpty() } ?: return null
+        val bookInfo = bookRepository.loadBookInfo(entry.root) ?: return null
+        val live = runtime.activePlayback(entry.metadata.id)
+        val cue = if (live != null) {
+            SasayakiPositionBridge.cueAtAudioTime(match, live.currentTime, live.delay)
+        } else {
+            val playback = bookRepository.loadSasayakiPlayback(entry.root) ?: return null
+            SasayakiPositionBridge.cueAtAudioTime(match, playback.lastPosition, playback.delay)
+        } ?: return null
+        return SasayakiPositionBridge.readerPositionForCue(cue, bookInfo)
+    }
+
     /** Returns true when the audio position was moved. Audio that is currently playing is left alone. */
     suspend fun alignAudioToBookmark(entry: BookEntry): Boolean {
         val bookmark = bookRepository.loadBookmark(entry.root) ?: return false

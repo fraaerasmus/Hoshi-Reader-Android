@@ -9,12 +9,16 @@ import moe.antimony.hoshi.epub.LegacyBookMigrationProgress
 import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.epub.BookShelf
 import moe.antimony.hoshi.epub.BookSortOption
+import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.features.sync.StatisticsSyncMode
 import moe.antimony.hoshi.features.sync.DriveFile
 import moe.antimony.hoshi.features.sync.DriveSyncFiles
 import moe.antimony.hoshi.features.sync.GoogleDriveApiException
 import moe.antimony.hoshi.features.sync.SyncDirection
-import moe.antimony.hoshi.features.sync.SyncResult
+import moe.antimony.hoshi.features.sync.BackendOutcome
+import moe.antimony.hoshi.features.sync.ProgressSyncReport
+import moe.antimony.hoshi.features.sync.SyncBackend
+import moe.antimony.hoshi.features.sync.SyncOptions
 import moe.antimony.hoshi.ui.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -1006,12 +1010,10 @@ class BookshelfViewModelTest {
         viewModel.syncBook(
             entry = entry,
             direction = SyncDirection.ExportToTtu,
-            syncStats = false,
-            statsSyncMode = StatisticsSyncMode.Merge,
-            syncAudioBook = false,
+            options = testSyncOptions,
         )
 
-        assertEquals("book-a is already synced", viewModel.uiState.value.statusMessage.testString())
+        assertEquals("ッツ: already synced", viewModel.uiState.value.statusMessage.testString())
 
         viewModel.consumeStatusMessage()
 
@@ -1033,9 +1035,7 @@ class BookshelfViewModelTest {
         viewModel.syncBook(
             entry = entry,
             direction = SyncDirection.ExportToTtu,
-            syncStats = false,
-            statsSyncMode = StatisticsSyncMode.Merge,
-            syncAudioBook = false,
+            options = testSyncOptions,
         )
 
         assertFalse(viewModel.uiState.value.isLoading)
@@ -1056,7 +1056,9 @@ class BookshelfViewModelTest {
             entries = listOf(entry),
             progressById = mapOf("book-a" to 0.0),
             settings = BookshelfSettings(showReading = true),
-            syncResult = SyncResult.Imported("book-a", characterCount = 100),
+            syncReport = ProgressSyncReport(
+                listOf(BackendOutcome.Applied(SyncBackend.Ttu, bookmark = Bookmark(0, 0.5, 100), previous = null, percentage = 0.5)),
+            ),
         )
         val viewModel = BookshelfViewModel(repository, testScope())
         viewModel.reloadBookEntries()
@@ -1066,9 +1068,7 @@ class BookshelfViewModelTest {
         viewModel.syncBook(
             entry = entry,
             direction = SyncDirection.ImportFromTtu,
-            syncStats = false,
-            statsSyncMode = StatisticsSyncMode.Merge,
-            syncAudioBook = false,
+            options = testSyncOptions,
         )
 
         assertEquals(mapOf("book-a" to 0.75), viewModel.uiState.value.bookProgressById)
@@ -1081,6 +1081,41 @@ class BookshelfViewModelTest {
     }
 
     @Test
+    fun refreshAndSyncPullsEveryLocalBookAndSummarisesTheOutcome() {
+        val first = bookEntry("book-a")
+        val second = bookEntry("book-b")
+        val repository = FakeBookshelfRepository(
+            entries = listOf(first, second),
+            progressById = mapOf("book-a" to 0.0, "book-b" to 0.0),
+            syncReport = ProgressSyncReport(
+                listOf(BackendOutcome.Applied(SyncBackend.Kosync, bookmark = Bookmark(0, 0.5, 100), previous = null, percentage = 0.5)),
+            ),
+        )
+        val viewModel = BookshelfViewModel(repository, testScope())
+        viewModel.reloadBookEntries()
+        repository.progressById = mapOf("book-a" to 0.5, "book-b" to 0.5)
+
+        viewModel.refreshAndSync(options = testSyncOptions, includeRemoteBooks = false)
+
+        assertEquals(listOf(first, second), repository.pulledBooks)
+        assertEquals("Updated 2 · Failed 0", viewModel.uiState.value.statusMessage.testString())
+        assertEquals(mapOf("book-a" to 0.5, "book-b" to 0.5), viewModel.uiState.value.bookProgressById)
+    }
+
+    @Test
+    fun refreshAndSyncStaysSilentWhenNothingChanged() {
+        val entry = bookEntry("book-a")
+        val repository = FakeBookshelfRepository(entries = listOf(entry))
+        val viewModel = BookshelfViewModel(repository, testScope())
+        viewModel.reloadBookEntries()
+
+        viewModel.refreshAndSync(options = testSyncOptions, includeRemoteBooks = false)
+
+        assertEquals(listOf(entry), repository.pulledBooks)
+        assertNull(viewModel.uiState.value.statusMessage.testString())
+    }
+
+    @Test
     fun importedSyncProgressRefreshDoesNotDropBooksAddedByConcurrentReload() {
         val first = bookEntry("book-a")
         val second = bookEntry("book-b")
@@ -1088,7 +1123,9 @@ class BookshelfViewModelTest {
         val repository = FakeBookshelfRepository(
             entries = listOf(first),
             progressById = mapOf("book-a" to 0.25),
-            syncResult = SyncResult.Imported("book-a", characterCount = 100),
+            syncReport = ProgressSyncReport(
+                listOf(BackendOutcome.Applied(SyncBackend.Ttu, bookmark = Bookmark(0, 0.5, 100), previous = null, percentage = 0.5)),
+            ),
             progressLoadGate = continueProgressLoad,
         )
         val viewModel = BookshelfViewModel(repository, testScope())
@@ -1097,9 +1134,7 @@ class BookshelfViewModelTest {
         viewModel.syncBook(
             entry = first,
             direction = SyncDirection.ImportFromTtu,
-            syncStats = false,
-            statsSyncMode = StatisticsSyncMode.Merge,
-            syncAudioBook = false,
+            options = testSyncOptions,
         )
         repository.entries = listOf(first, second)
         repository.progressById = mapOf("book-a" to 0.75, "book-b" to 0.5)
@@ -1199,7 +1234,7 @@ class BookshelfViewModelTest {
         val remoteImportProgress: List<Double> = emptyList(),
         val migrationProgressEvents: List<LegacyBookMigrationProgress> = emptyList(),
         val syncGate: CompletableDeferred<Unit>? = null,
-        val syncResult: SyncResult? = null,
+        val syncReport: ProgressSyncReport? = null,
         val progressLoadGate: CompletableDeferred<Unit>? = null,
         val createShelfAndMoveResult: Boolean = true,
         val createShelfAndMoveGate: CompletableDeferred<Unit>? = null,
@@ -1359,18 +1394,24 @@ class BookshelfViewModelTest {
 
         override suspend fun rebuildLookupQuery() = Unit
 
-        override suspend fun syncBook(
-            entry: BookEntry,
-            direction: SyncDirection?,
-            syncStats: Boolean,
-            statsSyncMode: StatisticsSyncMode,
-            syncAudioBook: Boolean,
-        ): SyncResult {
+        val syncedBooks = mutableListOf<Pair<BookEntry, SyncDirection?>>()
+        val pulledBooks = mutableListOf<BookEntry>()
+
+        override suspend fun syncBook(entry: BookEntry, direction: SyncDirection?, options: SyncOptions): ProgressSyncReport {
+            syncedBooks += entry to direction
             syncGate?.await()
-            return syncResult ?: SyncResult.Synced(entry.metadata.title.orEmpty())
+            return syncReport ?: ProgressSyncReport(listOf(BackendOutcome.UpToDate(SyncBackend.Ttu)))
+        }
+
+        override suspend fun pullBook(entry: BookEntry, options: SyncOptions): ProgressSyncReport {
+            pulledBooks += entry
+            syncGate?.await()
+            return syncReport ?: ProgressSyncReport(listOf(BackendOutcome.UpToDate(SyncBackend.Ttu)))
         }
     }
 }
+
+private val testSyncOptions = SyncOptions(syncStats = false, statsSyncMode = StatisticsSyncMode.Merge, syncAudioBook = false)
 
 private fun UiText?.testString(): String? =
     when (this) {
@@ -1385,7 +1426,10 @@ private fun UiText?.testString(): String? =
             R.string.bookshelf_scanning_folder -> "Scanning folder..."
             R.string.bookshelf_no_epub_files_found -> "No EPUB files found."
             R.string.bookshelf_syncing -> "Syncing..."
-            R.string.bookshelf_already_synced_format -> "${args[0]} is already synced"
+            R.string.bookshelf_syncing_progress_format -> "Syncing ${args[0]} / ${args[1]}..."
+            R.string.bookshelf_sync_summary_format -> "Updated ${args[0]} · Failed ${args[1]}"
+            R.string.sync_outcome_up_to_date_format -> "${args[0]}: already synced"
+            R.string.sync_outcome_applied_format -> "${args[0]}: synced from server · ${args[1]}%"
             R.string.bookshelf_exported_epub_format -> "Exported ${args[0]}."
             R.string.bookshelf_remote_books_load_failed -> "Failed to fetch books from Google Drive."
             R.string.bookshelf_remote_book_import_failed -> "Failed to import book from Google Drive."
@@ -1394,5 +1438,6 @@ private fun UiText?.testString(): String? =
             R.string.bookshelf_create_shelf_failed -> "Failed to create the shelf. Try again."
             else -> "resource:$id:${args.joinToString()}"
         }
+        is UiText.Multi -> parts.joinToString(separator) { it.testString().orEmpty() }
         is UiText.Plural -> "plural:$id:$quantity:${args.joinToString()}"
     }

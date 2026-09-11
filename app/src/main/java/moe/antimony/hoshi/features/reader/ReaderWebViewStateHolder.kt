@@ -34,8 +34,11 @@ internal class ReaderWebViewStateHolder(
     var showStatistics by mutableStateOf(false)
         private set
 
+    var showSync by mutableStateOf(false)
+        private set
+
     val hasStatisticsBlockingSheet: Boolean
-        get() = showAppearance || showGoTo || showSasayaki || showStatistics
+        get() = showAppearance || showGoTo || showSasayaki || showStatistics || showSync
 
     var showReaderMenu by mutableStateOf(false)
         private set
@@ -128,6 +131,15 @@ internal class ReaderWebViewStateHolder(
 
     fun dismissGoTo() {
         showGoTo = false
+    }
+
+    fun openSyncFromMenu() {
+        showReaderMenu = false
+        showSync = true
+    }
+
+    fun dismissSync() {
+        showSync = false
     }
 
     fun selectGoToTab(tab: ReaderGoToTab) {
@@ -294,6 +306,13 @@ internal class ReaderWebViewStateHolder(
         }
         webViewViewportSize = size
         return resizedExistingViewport
+    }
+
+    /** A sync moved the position before the reader rendered; make the pre-sync spot the jump-back target. */
+    fun seedBackHistory(origin: ReaderChapterPosition) {
+        if (backHistory.isNotEmpty() || origin == readerPosition.displayedPosition) return
+        backHistory = listOf(origin)
+        forwardHistory = emptyList()
     }
 
     private fun recordJumpOrigin() {

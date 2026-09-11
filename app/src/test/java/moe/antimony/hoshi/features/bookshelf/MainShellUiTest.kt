@@ -169,6 +169,16 @@ class MainShellUiTest {
                 fileTaskBlocked = false,
             ),
         )
+        assertTrue(
+            shouldEnableBookshelfPullRefresh(
+                syncSettings = SyncSettings(enabled = false),
+                authStatus = DriveAuthStatus.NotConnected,
+                kosyncEnabled = true,
+                hasLoadedBooks = true,
+                isSelecting = false,
+                fileTaskBlocked = false,
+            ),
+        )
         assertFalse(
             shouldEnableBookshelfPullRefresh(
                 syncSettings = SyncSettings(enabled = true),

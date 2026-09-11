@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -34,8 +35,14 @@ import kotlinx.coroutines.launch
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.features.settings.SettingsDetailScaffold
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
+import moe.antimony.hoshi.features.sync.SyncBackend
+import moe.antimony.hoshi.features.sync.SyncStatus
+import moe.antimony.hoshi.features.sync.SyncStatusListItem
+import moe.antimony.hoshi.features.sync.toSyncErrorText
 import moe.antimony.hoshi.ui.hoshiOutlinedTextFieldColors
+import moe.antimony.hoshi.ui.resolve
 
 @Composable
 fun KosyncSettingsView(
@@ -55,6 +62,9 @@ fun KosyncSettingsView(
     var isConnecting by remember { mutableStateOf(false) }
     val connectedLabel = stringResource(R.string.sync_status_connected)
     val failedFormat = stringResource(R.string.kosync_login_failed_format)
+    val resources = LocalContext.current.resources
+    val syncStatus by appContainer.syncStatusRepository.status(SyncBackend.Kosync)
+        .collectAsStateWithLifecycle(initialValue = SyncStatus())
 
     fun save(next: KosyncSettings) {
         scope.launch { repository.update { next } }
@@ -64,7 +74,7 @@ fun KosyncSettingsView(
         isConnecting = true
         scope.launch {
             connectionMessage = runCatching { manager.testConnection() }
-                .fold(onSuccess = { connectedLabel }, onFailure = { failedFormat.format(it.message ?: it::class.java.simpleName) })
+                .fold(onSuccess = { connectedLabel }, onFailure = { failedFormat.format(it.toSyncErrorText().resolve(resources)) })
             isConnecting = false
         }
     }
@@ -206,6 +216,7 @@ fun KosyncSettingsView(
                                 }
                             },
                         )
+                        SyncStatusListItem(syncStatus)
                     }
                 }
                 item {

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.Sync
 import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.TravelExplore
 import androidx.compose.material.icons.rounded.Tune
@@ -417,6 +418,7 @@ internal fun BoxScope.ReaderBottomChrome(
     onAppearance: () -> Unit,
     onStatistics: (() -> Unit)?,
     onSasayaki: (() -> Unit)?,
+    onSync: (() -> Unit)?,
     metrics: ReaderBottomChromeMetrics,
     modifier: Modifier = Modifier,
 ) {
@@ -446,6 +448,7 @@ internal fun BoxScope.ReaderBottomChrome(
             onAppearance = onAppearance,
             onStatistics = onStatistics,
             onSasayaki = onSasayaki,
+            onSync = onSync,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = metrics.horizontalPaddingDp.dp, bottom = metrics.menuBottomOffsetDp.dp),
@@ -657,6 +660,7 @@ private fun ReaderMenuCard(
     onAppearance: () -> Unit,
     onStatistics: (() -> Unit)?,
     onSasayaki: (() -> Unit)?,
+    onSync: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -687,6 +691,7 @@ private fun ReaderMenuCard(
             readerBottomMenuVisualOrder(
                 showStatistics = onStatistics != null,
                 showSasayaki = onSasayaki != null,
+                showSync = onSync != null,
             ).forEachIndexed { index, destination ->
                 if (index > 0) {
                     HorizontalDivider(
@@ -721,6 +726,20 @@ private fun ReaderMenuCard(
                         colors = colors,
                         metrics = metrics,
                         onClick = onGoTo,
+                    )
+
+                    ReaderMenuDestination.Sync -> ReaderMenuItem(
+                        text = stringResource(R.string.reader_sync),
+                        icon = {
+                            Icon(
+                                imageVector = readerBottomMenuIcon(ReaderMenuDestination.Sync),
+                                contentDescription = null,
+                                tint = Color(colors.menuContent),
+                            )
+                        },
+                        colors = colors,
+                        metrics = metrics,
+                        onClick = onSync ?: return@forEachIndexed,
                     )
 
                     ReaderMenuDestination.Statistics -> ReaderMenuItem(
@@ -760,6 +779,7 @@ internal fun readerBottomMenuIcon(destination: ReaderMenuDestination): ImageVect
     when (destination) {
         ReaderMenuDestination.Appearance -> Icons.Rounded.Palette
         ReaderMenuDestination.GoTo -> Icons.Rounded.TravelExplore
+        ReaderMenuDestination.Sync -> Icons.Rounded.Sync
         ReaderMenuDestination.Statistics -> Icons.AutoMirrored.Rounded.ShowChart
         ReaderMenuDestination.Sasayaki -> Icons.Rounded.GraphicEq
     }

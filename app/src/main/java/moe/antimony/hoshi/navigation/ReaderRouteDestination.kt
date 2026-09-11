@@ -10,6 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -22,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import moe.antimony.hoshi.R
@@ -29,17 +31,25 @@ import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.features.reader.ReaderLoadingPage
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.reader.ReaderWebView
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.epub.EpubBook
-import moe.antimony.hoshi.features.kosync.KosyncResult
+import moe.antimony.hoshi.epub.Bookmark
+import moe.antimony.hoshi.features.reader.ReaderChapterPosition
 import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
-import moe.antimony.hoshi.features.sync.SyncDirection
-import moe.antimony.hoshi.features.sync.SyncResult
+import moe.antimony.hoshi.features.sync.BackendOutcome
+import moe.antimony.hoshi.features.sync.ProgressSyncReport
+import moe.antimony.hoshi.features.sync.SyncBackend
+import moe.antimony.hoshi.features.sync.SyncOptions
+import moe.antimony.hoshi.features.sync.displayName
+import moe.antimony.hoshi.features.sync.toPercent
 import moe.antimony.hoshi.features.wallpaper.BookCoverWallpaperViewModel
+import moe.antimony.hoshi.ui.resolve
 
 @Composable
 internal fun ReaderRouteDestination(
@@ -55,7 +65,7 @@ internal fun ReaderRouteDestination(
 ) {
     val appContainer = LocalHoshiUiDependencies.current
     val bookCoverWallpaperViewModel: BookCoverWallpaperViewModel = hiltViewModel()
-    val bookCoverSnackbarHostState = remember { SnackbarHostState() }
+    val readerSnackbarHostState = remember { SnackbarHostState() }
     val bookCoverPublishFailedMessage = stringResource(R.string.book_cover_wallpaper_publish_failed)
     val iReaderNotSelectedMessage =
         stringResource(R.string.book_cover_wallpaper_ireader_not_selected_error)
@@ -67,8 +77,12 @@ internal fun ReaderRouteDestination(
         syncSettings = syncSettings,
         sasayakiSettings = sasayakiSettings,
     )
+    val context = LocalContext.current
     val bookmarkScope = rememberCoroutineScope()
     var reloadKey by remember(bookId) { mutableIntStateOf(0) }
+    var pendingSyncJump by remember(bookId) { mutableStateOf<ReaderSyncJump?>(null) }
+    var lastReaderSave by remember(bookId) { mutableStateOf<ReaderChapterPosition?>(null) }
+    val openSyncDeferred = remember(bookId) { mutableStateOf<Deferred<ProgressSyncReport>?>(null) }
     val autoSyncExportController = remember(bookId, appContainer) {
         ReaderAutoSyncExportController(appContainer.appScope)
     }
@@ -87,25 +101,27 @@ internal fun ReaderRouteDestination(
                 syncSettings = syncSettings ?: appContainer.syncSettingsRepository.settings.first(),
                 sasayakiSettings = sasayakiSettings ?: appContainer.sasayakiSettingsRepository.settings.first(),
             )
+            val options = SyncOptions(
+                syncStats = readerSettings.statisticsSyncEnabled,
+                statsSyncMode = readerSettings.statisticsSyncMode,
+                syncAudioBook = initialAutoSyncState.shouldSyncAudioBook,
+            )
+            // Drive import stays on the open path: it can replace the whole book folder, and its preflight fails fast.
             if (initialAutoSyncState.shouldSyncOnOpen) {
                 runCatching {
-                    appContainer.syncManager.syncBook(
-                        entry = entry,
-                        direction = null,
-                        syncStats = readerSettings.statisticsSyncEnabled,
-                        statsSyncMode = readerSettings.statisticsSyncMode,
-                        syncAudioBook = initialAutoSyncState.shouldSyncAudioBook,
-                        importOnly = true,
-                    )
+                    appContainer.progressSyncCoordinator.pull(entry, options = options, manual = false, backends = setOf(SyncBackend.Ttu))
                 }
             }
+            runCatching { appContainer.sasayakiPositionSync.alignAudioToBookmark(entry) }
             val initialKosync = kosyncSettings ?: appContainer.kosyncSettingsRepository.settings.first()
             if (initialKosync.enabled && initialKosync.autoSyncEnabled) {
-                runCatching { appContainer.kosyncManager.pull(entry) }
-            }
-            runCatching { appContainer.sasayakiPositionSync.alignAudioToBookmark(entry) }
-            if (initialKosync.enabled && initialKosync.autoSyncEnabled && initialKosync.pushEnabled) {
-                runCatching { appContainer.kosyncManager.push(entry) }
+                // Never hold the book open on the kosync server; the Ready branch picks the outcome up.
+                openSyncDeferred.value = appContainer.appScope.async {
+                    val kosync = setOf(SyncBackend.Kosync)
+                    val pulled = appContainer.progressSyncCoordinator.pull(entry, options = options, manual = false, backends = kosync)
+                    val pushed = appContainer.progressSyncCoordinator.push(entry, options = options, manual = false, backends = kosync)
+                    ProgressSyncReport(pulled.outcomes + pushed.outcomes)
+                }
             }
         }
         value = loaded.activateProfileAndPrepareRender(
@@ -141,39 +157,27 @@ internal fun ReaderRouteDestination(
                         iReaderNotSelectedMessage
                     else -> bookCoverPublishFailedMessage
                 }
-                bookCoverSnackbarHostState.showSnackbar(message)
+                readerSnackbarHostState.showSnackbar(message)
             }
         } else if (readyState == null) {
             bookCoverPublicationCoordinator.shouldPublish(ReaderBookCoverPublicationEvent.NotReady)
         }
     }
 
+    val routeSyncOptions = SyncOptions(
+        syncStats = readerSettings.statisticsSyncEnabled,
+        statsSyncMode = readerSettings.statisticsSyncMode,
+        syncAudioBook = autoSyncState.shouldSyncAudioBook,
+    )
+
     suspend fun exportBook(entry: BookEntry, book: EpubBook) {
-        if (autoSyncState.isReaderAutoSyncEnabled) {
-            runCatching {
-                val currentSyncSettings = syncSettings ?: appContainer.syncSettingsRepository.settings.first()
-                appContainer.syncManager.syncBook(
-                    entry = entry,
-                    direction = SyncDirection.ExportToTtu,
-                    syncStats = readerSettings.statisticsSyncEnabled,
-                    statsSyncMode = readerSettings.statisticsSyncMode,
-                    syncAudioBook = autoSyncState.shouldSyncAudioBook,
-                    syncBookData = currentSyncSettings.uploadBooks,
-                )
-            }.onSuccess { result ->
-                Log.d(ReaderAutoSyncLogTag, "Reader auto export finished: ${result::class.java.simpleName}")
-            }.onFailure { error ->
-                Log.w(ReaderAutoSyncLogTag, "Reader auto export failed.", error)
+        val report = appContainer.progressSyncCoordinator.push(entry, book, routeSyncOptions, manual = false)
+        report.outcomes.forEach { outcome ->
+            if (outcome is BackendOutcome.Failed) {
+                Log.w(ReaderAutoSyncLogTag, "Reader auto export failed for ${outcome.backend}.", outcome.cause)
+            } else {
+                Log.d(ReaderAutoSyncLogTag, "Reader auto export: ${outcome::class.java.simpleName} (${outcome.backend})")
             }
-        }
-        if (kosyncAutoSync) {
-            runCatching { appContainer.kosyncManager.push(entry, book) }
-                .onSuccess { result ->
-                    Log.d(ReaderAutoSyncLogTag, "Reader kosync push finished: ${result::class.java.simpleName}")
-                }
-                .onFailure { error ->
-                    Log.w(ReaderAutoSyncLogTag, "Reader kosync push failed.", error)
-                }
         }
     }
 
@@ -189,32 +193,61 @@ internal fun ReaderRouteDestination(
         autoSyncExportController.flushExport(anyAutoSyncEnabled)
     }
 
+    /** Turns a finished background sync into reader feedback: a snackbar, a jump with Undo, or a re-save when the reader moved on. */
+    suspend fun presentReport(
+        report: ProgressSyncReport,
+        readyState: ReaderRouteLoadState.Ready,
+        openPosition: ReaderChapterPosition,
+    ) {
+        val applied = report.applied
+        if (applied == null) {
+            report.failures.firstOrNull()?.let { failure ->
+                readerSnackbarHostState.showSnackbar(
+                    context.getString(
+                        R.string.reader_sync_failed_format,
+                        failure.backend.displayName,
+                        failure.error.resolve(context.resources),
+                    ),
+                )
+            }
+            return
+        }
+        val message = context.getString(
+            R.string.reader_synced_from_format,
+            applied.backend.displayName,
+            applied.percentage.toPercent(),
+        )
+        if (applied.backend == SyncBackend.Ttu) {
+            // A Drive import rewrites statistics and sidecars too, so only a reload picks everything up.
+            reloadKey += 1
+            readerSnackbarHostState.showSnackbar(message)
+            return
+        }
+        when (val plan = planReaderSync(applied, readyState.bookmark, lastReaderSave, openPosition)) {
+            ReaderSyncPlan.None -> Unit
+            is ReaderSyncPlan.Ignore -> stateHolder.saveBookmark(
+                state = readyState,
+                chapterIndex = plan.reSave.index,
+                progress = plan.reSave.progress,
+                onBookmarkSaved = onBookmarkSaved,
+            )
+            is ReaderSyncPlan.Apply -> {
+                pendingSyncJump = plan.jump
+                val result = readerSnackbarHostState.showSnackbar(
+                    message = message,
+                    actionLabel = context.getString(R.string.action_undo),
+                )
+                if (result == SnackbarResult.ActionPerformed) {
+                    plan.jump.origin?.let { pendingSyncJump = ReaderSyncJump(target = it, origin = null, seedOnly = false) }
+                }
+            }
+        }
+    }
+
     fun importOnForeground(entry: BookEntry) {
         if (!anyAutoSyncEnabled) return
-        bookmarkScope.launch {
-            val result = if (autoSyncState.isReaderAutoSyncEnabled) {
-                runCatching {
-                    appContainer.syncManager.syncBook(
-                        entry = entry,
-                        direction = null,
-                        syncStats = readerSettings.statisticsSyncEnabled,
-                        statsSyncMode = readerSettings.statisticsSyncMode,
-                        syncAudioBook = autoSyncState.shouldSyncAudioBook,
-                        importOnly = true,
-                    )
-                }.getOrNull()
-            } else {
-                null
-            }
-            val kosyncResult = if (kosyncAutoSync) {
-                runCatching { appContainer.kosyncManager.pull(entry) }.getOrNull()
-            } else {
-                null
-            }
-            if (result is SyncResult.Imported || kosyncResult is KosyncResult.Pulled) {
-                runCatching { appContainer.sasayakiPositionSync.alignAudioToBookmark(entry) }
-                reloadKey += 1
-            }
+        openSyncDeferred.value = bookmarkScope.async {
+            appContainer.progressSyncCoordinator.pull(entry, options = routeSyncOptions, manual = false)
         }
     }
 
@@ -241,6 +274,16 @@ internal fun ReaderRouteDestination(
                     routeReaderSettings = settings
                 }
             }
+            val openPosition = ReaderChapterPosition(
+                index = readyState.bookmark?.chapterIndex ?: 0,
+                progress = readyState.bookmark?.progress ?: 0.0,
+            )
+            LaunchedEffect(readyState.entry.metadata.id, openSyncDeferred.value) {
+                val deferred = openSyncDeferred.value ?: return@LaunchedEffect
+                val report = runCatching { deferred.await() }.getOrNull()
+                if (openSyncDeferred.value === deferred) openSyncDeferred.value = null
+                if (report != null) presentReport(report, readyState, openPosition)
+            }
             Box(modifier = modifier.fillMaxSize()) {
                 ReaderWebView(
                     bookId = bookId,
@@ -258,6 +301,7 @@ internal fun ReaderRouteDestination(
                     onReaderKeyEventHandlerChange = onReaderKeyEventHandlerChange,
                     onReaderGenericMotionHandlerChange = onReaderGenericMotionHandlerChange,
                     onSaveBookmark = { chapterIndex, progress, statistics ->
+                        lastReaderSave = ReaderChapterPosition(chapterIndex, progress)
                         autoSyncExportController.launchSave {
                             stateHolder.saveBookmark(
                                 state = readyState,
@@ -271,12 +315,23 @@ internal fun ReaderRouteDestination(
                     },
                     onFlushAutoSyncExport = ::flushExport,
                     onForegroundAutoSyncImport = { importOnForeground(readyState.entry) },
+                    pendingSyncJump = pendingSyncJump,
+                    onPendingSyncJumpConsumed = { pendingSyncJump = null },
+                    onPositionDisplaced = { displaced, source ->
+                        bookmarkScope.launch {
+                            appContainer.progressSyncCoordinator.recordDisplacement(
+                                readyState.entry,
+                                Bookmark(displaced.index, displaced.progress, readyState.book.characterCountAt(displaced.index, displaced.progress)),
+                                source,
+                            )
+                        }
+                    },
                     contentLanguageProfile = state.contentLanguageProfile,
                     onClose = onClose,
                     modifier = Modifier.fillMaxSize(),
                 )
                 SnackbarHost(
-                    hostState = bookCoverSnackbarHostState,
+                    hostState = readerSnackbarHostState,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }

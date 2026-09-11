@@ -71,6 +71,21 @@ class SyncManager private constructor(
         bookDataExporter = bookDataExporter,
     )
 
+    /** Where the Drive record stands against the local bookmark, without creating anything on Drive. */
+    suspend fun status(entry: BookEntry): SyncComparison {
+        val localBookmark = bookRepository.loadBookmark(entry.root)
+        val title = entry.metadata.title ?: return if (localBookmark == null) SyncComparison.NoRecord else SyncComparison.LocalNewer
+        val folderName = TtuSyncRules.sanitizeTtuFilename(title)
+        val folder = drive.listBooks(drive.findRootFolder()).firstOrNull { it.name == folderName }
+        val progressFile = folder?.let { drive.listSyncFiles(it.id).progress }
+        if (progressFile == null) return if (localBookmark == null) SyncComparison.NoRecord else SyncComparison.LocalNewer
+        return when (TtuSyncRules.determineDirection(localBookmark, progressFile)) {
+            SyncDirection.ImportFromTtu -> SyncComparison.ServerNewer
+            SyncDirection.ExportToTtu -> SyncComparison.LocalNewer
+            SyncDirection.Synced -> SyncComparison.Synced
+        }
+    }
+
     suspend fun syncBook(
         entry: BookEntry,
         direction: SyncDirection?,
