@@ -1859,6 +1859,16 @@ fun ReaderWebView(
     val edgeDragAction = remember { arrayOf(ReaderInputAction.None) }
     val hasSasayakiAudioForGestures = sasayakiPlayer?.hasAudio == true
     val edgeZoneWidthDp = gestureSettings.edgeZoneWidthDp.toFloat()
+    var edgeZoneFlash by remember { mutableStateOf<ReaderEdgeZoneFlashRequest?>(null) }
+    fun flashEdgeZone(edge: ReaderEdgeSwipeGestureTracker.Edge?) {
+        edgeZoneFlash = ReaderEdgeZoneFlashRequest(edge, (edgeZoneFlash?.token ?: 0) + 1)
+    }
+    // Show both strips when their width changes while reading; the first value is just the load.
+    val edgeZoneWidthSeen = remember { floatArrayOf(Float.NaN) }
+    LaunchedEffect(edgeZoneWidthDp) {
+        if (!edgeZoneWidthSeen[0].isNaN() && edgeZoneWidthSeen[0] != edgeZoneWidthDp) flashEdgeZone(null)
+        edgeZoneWidthSeen[0] = edgeZoneWidthDp
+    }
     val edgeGestures = remember(inputBindings, hasSasayakiAudioForGestures, sasayakiPlayer, edgeZoneWidthDp) {
         fun source(edge: ReaderEdgeSwipeGestureTracker.Edge, left: ReaderInputSource, right: ReaderInputSource): ReaderInputSource? =
             when (edge) {
@@ -1883,10 +1893,15 @@ fun ReaderWebView(
                 val action = bound(edge, ReaderInputSource.EdgeLeftDrag, ReaderInputSource.EdgeRightDrag)
                 return action != ReaderInputAction.None && (!needsAudio(action) || hasSasayakiAudioForGestures)
             }
-            override fun onHoldStart(edge: ReaderEdgeSwipeGestureTracker.Edge) = startSasayakiBoost()
+            override fun onHoldStart(edge: ReaderEdgeSwipeGestureTracker.Edge) {
+                flashEdgeZone(edge)
+                startSasayakiBoost()
+            }
             override fun onHoldEnd() = endSasayakiBoost()
-            override fun onDoubleTap(edge: ReaderEdgeSwipeGestureTracker.Edge) =
+            override fun onDoubleTap(edge: ReaderEdgeSwipeGestureTracker.Edge) {
+                flashEdgeZone(edge)
                 performReaderInputAction(bound(edge, ReaderInputSource.EdgeLeftDoubleTap, ReaderInputSource.EdgeRightDoubleTap))
+            }
             override fun onDrag(edge: ReaderEdgeSwipeGestureTracker.Edge, fraction: Float) {
                 val action = bound(edge, ReaderInputSource.EdgeLeftDrag, ReaderInputSource.EdgeRightDrag)
                 edgeDragAction[0] = action
@@ -2382,6 +2397,7 @@ fun ReaderWebView(
         val sasayakiHudBottomPadding = (sasayakiBottomPlaybackControls.rowHeightDp + bottomChromeMetrics.bottomSafeAreaDp + 16).dp
         ReaderSasayakiScrubHud(state = sasayakiScrubHud, bottomPadding = sasayakiHudBottomPadding)
         ReaderSasayakiBoostHud(rate = sasayakiBoostRate ?: sasayakiSpeedFlash, bottomPadding = sasayakiHudBottomPadding)
+        ReaderEdgeZoneFlash(request = edgeZoneFlash, zoneWidthDp = edgeZoneWidthDp)
         ReaderSyncNoticeCard(
             notice = syncNotice,
             bottomPadding = sasayakiHudBottomPadding,

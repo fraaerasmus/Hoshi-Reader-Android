@@ -1,6 +1,14 @@
 package moe.antimony.hoshi.features.reader.input
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -228,16 +236,42 @@ private fun EdgeZoneWidthRow(widthDp: Int, onWidthChange: (Int) -> Unit) {
         colors = transparent(),
         headlineContent = { Text(stringResource(R.string.gestures_edge_zone_width)) },
         supportingContent = {
-            Slider(
-                value = sliderValue,
-                onValueChange = { sliderValue = it },
-                onValueChangeFinished = { onWidthChange(sliderValue.roundToInt().coerceIn(min, max)) },
-                valueRange = min.toFloat()..max.toFloat(),
-                steps = (max - min) / 4 - 1,
-            )
+            Column {
+                Slider(
+                    value = sliderValue,
+                    onValueChange = { sliderValue = it },
+                    onValueChangeFinished = { onWidthChange(sliderValue.roundToInt().coerceIn(min, max)) },
+                    valueRange = min.toFloat()..max.toFloat(),
+                    steps = (max - min) / 4 - 1,
+                )
+                EdgeZonePreview(zoneWidthDp = sliderValue)
+            }
         },
         trailingContent = { Text(stringResource(R.string.gestures_edge_zone_width_value_format, sliderValue.roundToInt())) },
     )
+}
+
+/** A to-scale sketch of this screen with the two edge strips, so the slider's number means something. */
+@Composable
+private fun EdgeZonePreview(zoneWidthDp: Float) {
+    val configuration = LocalConfiguration.current
+    val screenWidthDp = configuration.screenWidthDp.coerceAtLeast(1)
+    val screenHeightDp = configuration.screenHeightDp.coerceAtLeast(1)
+    val previewHeight = 120.dp
+    val previewWidth = previewHeight * screenWidthDp / screenHeightDp
+    val outline = MaterialTheme.colorScheme.outline
+    val tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)
+    Canvas(
+        modifier = Modifier
+            .padding(top = 4.dp)
+            .width(previewWidth)
+            .height(previewHeight),
+    ) {
+        val strip = size.width * zoneWidthDp / screenWidthDp
+        drawRoundRect(outline, cornerRadius = CornerRadius(8.dp.toPx()), style = Stroke(width = 1.dp.toPx()))
+        drawRect(tint, size = Size(strip, size.height))
+        drawRect(tint, topLeft = Offset(size.width - strip, 0f), size = Size(strip, size.height))
+    }
 }
 
 @Composable

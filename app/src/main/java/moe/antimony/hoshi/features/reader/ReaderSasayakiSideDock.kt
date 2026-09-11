@@ -1,6 +1,8 @@
 package moe.antimony.hoshi.features.reader
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -15,11 +17,9 @@ import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -28,10 +28,7 @@ import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -48,15 +45,12 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement
 
-private const val DOCK_HANDLE_WIDTH_DP = 18
-private const val DOCK_HANDLE_HEIGHT_DP = 56
-private const val DOCK_IDLE_COLLAPSE_MS = 2_000L
-/** Long enough to see the play icon flip before the drawer goes. */
-private const val DOCK_AFTER_TOGGLE_COLLAPSE_MS = 600L
+private const val DOCK_TAB_WIDTH_DP = 18
+private const val DOCK_TAB_HEIGHT_DP = 56
+private const val DOCK_SLIDE_MS = 200
 
 /** Top offset of a dock item of [itemHeightDp] whose resting point is [fraction] along a [containerHeightDp] edge. */
 internal fun readerDockTopDp(fraction: Float, containerHeightDp: Int, itemHeightDp: Int): Int {
@@ -64,18 +58,24 @@ internal fun readerDockTopDp(fraction: Float, containerHeightDp: Int, itemHeight
     return (travel * fraction.coerceIn(0f, 1f)).toInt()
 }
 
-/** The inverse of [readerDockTopDp]: where a handle dragged to [topDp] should rest. */
+/** The inverse of [readerDockTopDp]: where a tab dragged to [topDp] should rest. */
 internal fun readerDockFraction(topDp: Float, containerHeightDp: Int, itemHeightDp: Int): Float {
     val travel = (containerHeightDp - itemHeightDp).coerceAtLeast(1)
     return (topDp / travel).coerceIn(0f, 1f)
 }
 
+/** Where the cluster sits so that it is centred on the tab yet stays on screen. */
+internal fun readerDockClusterTopDp(tabTopDp: Int, containerHeightDp: Int, clusterHeightDp: Int): Int {
+    val centred = tabTopDp + DOCK_TAB_HEIGHT_DP / 2 - clusterHeightDp / 2
+    return centred.coerceIn(0, (containerHeightDp - clusterHeightDp).coerceAtLeast(0))
+}
+
 /**
- * Fork feature: the playback row docked on a screen side for one-handed use, as a drawer. A translucent
- * tab rests where the user last dragged it; a tap slides the rewind / play-pause / forward cluster out
- * with the tab still attached. It closes on the tab, on a tap anywhere else (which the page still
- * receives), on a push back toward the edge, shortly after play/pause, or after a couple of idle seconds.
- * The cluster carries the bottom row's hold and drag-to-scrub gestures (drag is vertical here).
+ * Fork feature: the playback row docked on a screen side for one-handed use, as a drawer with no timers.
+ * A translucent tab rests where the user last dragged it and never moves on its own; tapping it slides the
+ * rewind / play-pause / forward cluster out from behind it, and the drawer closes on the tab, on a tap
+ * anywhere else (which the page still receives), or on a push back toward the edge. The cluster carries the
+ * bottom row's hold and drag-to-scrub gestures (drag is vertical here).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -103,20 +103,15 @@ internal fun ReaderSasayakiSideDock(
     val isLeft = placement == SasayakiControlsPlacement.Left
     val currentOffsetChange = rememberUpdatedState(onOffsetFractionChange)
     var expanded by remember { mutableStateOf(false) }
-    // Every interaction restarts the collapse timer; the delay is whatever the last interaction asked for.
-    var interaction by remember { mutableIntStateOf(0) }
-    var collapseDelayMs by remember { mutableLongStateOf(DOCK_IDLE_COLLAPSE_MS) }
     var drawerBounds by remember { mutableStateOf(Rect.Zero) }
-    fun touched(delayMs: Long = DOCK_IDLE_COLLAPSE_MS) {
-        collapseDelayMs = delayMs
-        interaction++
-    }
-    LaunchedEffect(expanded, interaction) {
-        if (expanded) {
-            delay(collapseDelayMs)
-            expanded = false
-        }
-    }
+    val clusterWidthDp = controls.buttonWidthDp
+    val clusterHeightDp = controls.rowHeightDp * 3
+    // The tab slides out with the cluster so the two read as one drawer.
+    val tabShiftDp by animateDpAsState(
+        targetValue = if (expanded) clusterWidthDp.dp else 0.dp,
+        animationSpec = tween(DOCK_SLIDE_MS),
+        label = "sasayakiDockTabShift",
+    )
     BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
@@ -130,43 +125,22 @@ internal fun ReaderSasayakiSideDock(
             },
     ) {
         val containerHeightDp = with(density) { constraints.maxHeight.toDp() }.value.toInt()
-        val clusterHeightDp = controls.rowHeightDp * 3
-        val itemHeightDp = if (expanded) clusterHeightDp else DOCK_HANDLE_HEIGHT_DP
-        val topDp = readerDockTopDp(offsetFraction, containerHeightDp, itemHeightDp)
-        var dragTopDp by remember(topDp, expanded) { mutableStateOf(topDp.toFloat()) }
-        val tab: @Composable () -> Unit = {
-            DockTab(
-                colors = colors,
-                modifier = if (expanded) {
-                    Modifier.pointerInput(Unit) { detectTapGestures { expanded = false } }
-                } else {
-                    Modifier
-                        .pointerInput(containerHeightDp) {
-                            detectVerticalDragGestures(
-                                onDragEnd = { currentOffsetChange.value(readerDockFraction(dragTopDp, containerHeightDp, DOCK_HANDLE_HEIGHT_DP)) },
-                            ) { change, dragAmount ->
-                                change.consume()
-                                dragTopDp = (dragTopDp + dragAmount / density.density)
-                                    .coerceIn(0f, (containerHeightDp - DOCK_HANDLE_HEIGHT_DP).coerceAtLeast(0).toFloat())
-                                currentOffsetChange.value(readerDockFraction(dragTopDp, containerHeightDp, DOCK_HANDLE_HEIGHT_DP))
-                            }
-                        }
-                        .pointerInput(Unit) { detectTapGestures { touched(); expanded = true } }
-                },
-            )
-        }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        val tabTopDp = readerDockTopDp(offsetFraction, containerHeightDp, DOCK_TAB_HEIGHT_DP)
+        val clusterTopDp = readerDockClusterTopDp(tabTopDp, containerHeightDp, clusterHeightDp)
+        var dragTopDp by remember(tabTopDp) { mutableStateOf(tabTopDp.toFloat()) }
+        Box(
             modifier = Modifier
                 .align(if (isLeft) Alignment.TopStart else Alignment.TopEnd)
-                .offset(y = topDp.dp)
+                .offset(y = clusterTopDp.dp)
+                .width((clusterWidthDp + DOCK_TAB_WIDTH_DP).dp)
+                .height(clusterHeightDp.dp)
                 .onGloballyPositioned { drawerBounds = it.boundsInParent() },
         ) {
-            if (!isLeft) tab()
             AnimatedVisibility(
                 visible = expanded,
-                enter = slideInHorizontally { if (isLeft) -it else it } + fadeIn(),
-                exit = slideOutHorizontally { if (isLeft) -it else it } + fadeOut(),
+                enter = slideInHorizontally(tween(DOCK_SLIDE_MS)) { if (isLeft) -it else it } + fadeIn(tween(DOCK_SLIDE_MS)),
+                exit = slideOutHorizontally(tween(DOCK_SLIDE_MS)) { if (isLeft) -it else it } + fadeOut(tween(DOCK_SLIDE_MS)),
+                modifier = Modifier.align(if (isLeft) Alignment.CenterStart else Alignment.CenterEnd),
             ) {
                 Column(
                     modifier = Modifier
@@ -186,27 +160,19 @@ internal fun ReaderSasayakiSideDock(
                         }
                         .then(
                             if (scrubEnabled) {
-                                Modifier.sasayakiScrub(
-                                    vertical = true,
-                                    onSteps = { touched(); onScrubSteps(it) },
-                                    onEnd = { touched(); onScrubEnd(it) },
-                                    onCancel = onScrubCancel,
-                                )
+                                Modifier.sasayakiScrub(onSteps = onScrubSteps, onEnd = onScrubEnd, onCancel = onScrubCancel, vertical = true)
                             } else {
                                 Modifier
                             },
                         )
-                        .sasayakiHoldRelease {
-                            touched()
-                            onHoldEnd()
-                        },
+                        .sasayakiHoldRelease(onHoldEnd),
                 ) {
                     ReaderSasayakiPlaybackButton(
                         controls = controls,
                         colors = colors,
                         icon = Icons.Rounded.FastRewind,
                         contentDescription = stringResource(R.string.sasayaki_rewind),
-                        onClick = { touched(); onSkipBackward() },
+                        onClick = onSkipBackward,
                         holdRepeat = true,
                     )
                     ReaderSasayakiPlaybackButton(
@@ -214,32 +180,46 @@ internal fun ReaderSasayakiSideDock(
                         colors = colors,
                         icon = if (sasayakiPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
                         contentDescription = if (sasayakiPlaying) stringResource(R.string.sasayaki_pause) else stringResource(R.string.sasayaki_play),
-                        onClick = { touched(DOCK_AFTER_TOGGLE_COLLAPSE_MS); onTogglePlayback() },
-                        onLongClick = if (holdEnabled) ({ touched(); onHoldStart() }) else null,
+                        onClick = onTogglePlayback,
+                        onLongClick = onHoldStart.takeIf { holdEnabled },
                     )
                     ReaderSasayakiPlaybackButton(
                         controls = controls,
                         colors = colors,
                         icon = Icons.Rounded.FastForward,
                         contentDescription = stringResource(R.string.sasayaki_fast_forward),
-                        onClick = { touched(); onSkipForward() },
+                        onClick = onSkipForward,
                         holdRepeat = true,
                     )
                 }
             }
-            if (isLeft) tab()
+            // The tab: anchored to its own persisted spot, shifted sideways only while the drawer is open.
+            Box(
+                modifier = Modifier
+                    .align(if (isLeft) Alignment.TopStart else Alignment.TopEnd)
+                    .offset(x = if (isLeft) tabShiftDp else -tabShiftDp, y = (tabTopDp - clusterTopDp).dp)
+                    .width(DOCK_TAB_WIDTH_DP.dp)
+                    .height(DOCK_TAB_HEIGHT_DP.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .background(Color(colors.infoText).copy(alpha = 0.35f))
+                    .then(
+                        if (expanded) {
+                            Modifier
+                        } else {
+                            Modifier.pointerInput(containerHeightDp) {
+                                detectVerticalDragGestures(
+                                    onDragEnd = { currentOffsetChange.value(readerDockFraction(dragTopDp, containerHeightDp, DOCK_TAB_HEIGHT_DP)) },
+                                ) { change, dragAmount ->
+                                    change.consume()
+                                    dragTopDp = (dragTopDp + dragAmount / density.density)
+                                        .coerceIn(0f, (containerHeightDp - DOCK_TAB_HEIGHT_DP).coerceAtLeast(0).toFloat())
+                                    currentOffsetChange.value(readerDockFraction(dragTopDp, containerHeightDp, DOCK_TAB_HEIGHT_DP))
+                                }
+                            }
+                        },
+                    )
+                    .pointerInput(Unit) { detectTapGestures { expanded = !expanded } },
+            )
         }
     }
-}
-
-@Composable
-private fun DockTab(colors: ReaderChromeColors, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .padding(vertical = 2.dp)
-            .width(DOCK_HANDLE_WIDTH_DP.dp)
-            .height(DOCK_HANDLE_HEIGHT_DP.dp)
-            .clip(RoundedCornerShape(9.dp))
-            .background(Color(colors.infoText).copy(alpha = 0.35f)),
-    )
 }
