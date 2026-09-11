@@ -706,6 +706,8 @@
     <string name="gestures_placement_right" comment="Playback controls placement option, intentionally matching other Right labels.">Right</string>
     <string name="gestures_dock_reset">Reset dock position</string>
     <string name="gestures_dock_help">Drag the handle along the edge to move it; tap it to show the controls.</string>
+    <string name="gestures_dock_compact">Compact dock</string>
+    <string name="gestures_dock_compact_help">The tab itself is the control: tap to play or pause, hold to speed up, pull it inward to scrub. No drawer opens.</string>
     <string name="gestures_section_edges">Screen edges</string>
     <string name="gestures_edge_zone_width">Edge zone width</string>
     <string name="gestures_edge_zone_width_value_format">%1$d dp</string>

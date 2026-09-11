@@ -2239,6 +2239,7 @@ fun ReaderWebView(
                 holdEnabled = sasayakiSettings.holdPlaybackControlsToBoost,
                 onHoldStart = ::startSasayakiBoost,
                 onHoldEnd = ::endSasayakiBoost,
+                compact = gestureSettings.dockCompact,
             )
         }
         if (chromeVisibility.showBottomChrome) ReaderBottomChrome(

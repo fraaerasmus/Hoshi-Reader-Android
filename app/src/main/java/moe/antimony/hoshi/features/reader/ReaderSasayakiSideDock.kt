@@ -9,6 +9,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,6 +67,9 @@ internal fun readerDockFraction(topDp: Float, containerHeightDp: Int, itemHeight
     return (topDp / travel).coerceIn(0f, 1f)
 }
 
+/** Compact mode pulls the tab toward the page to scrub: inward is forward on either side. */
+internal fun readerDockScrubSteps(dragSteps: Int, isLeft: Boolean): Int = if (isLeft) dragSteps else -dragSteps
+
 /** Where the cluster sits so that it is centred on the tab yet stays on screen. */
 internal fun readerDockClusterTopDp(tabTopDp: Int, containerHeightDp: Int, clusterHeightDp: Int): Int {
     val centred = tabTopDp + DOCK_TAB_HEIGHT_DP / 2 - clusterHeightDp / 2
@@ -76,6 +82,8 @@ internal fun readerDockClusterTopDp(tabTopDp: Int, containerHeightDp: Int, clust
  * rewind / play-pause / forward cluster out from behind it, and the drawer closes on the tab, on a tap
  * anywhere else (which the page still receives), or on a push back toward the edge. The cluster carries the
  * bottom row's hold and drag-to-scrub gestures (drag is vertical here).
+ *
+ * [compact] drops the drawer: the tab is the control — tap play/pause, hold to boost, pull inward to scrub.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -96,6 +104,7 @@ internal fun ReaderSasayakiSideDock(
     holdEnabled: Boolean,
     onHoldStart: () -> Unit,
     onHoldEnd: () -> Unit,
+    compact: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     if (!controls.visible || placement == SasayakiControlsPlacement.Bottom) return
@@ -104,8 +113,8 @@ internal fun ReaderSasayakiSideDock(
     val currentOffsetChange = rememberUpdatedState(onOffsetFractionChange)
     var expanded by remember { mutableStateOf(false) }
     var drawerBounds by remember { mutableStateOf(Rect.Zero) }
-    val clusterWidthDp = controls.buttonWidthDp
-    val clusterHeightDp = controls.rowHeightDp * 3
+    val clusterWidthDp = if (compact) 0 else controls.buttonWidthDp
+    val clusterHeightDp = if (compact) DOCK_TAB_HEIGHT_DP else controls.rowHeightDp * 3
     // The tab slides out with the cluster so the two read as one drawer.
     val tabShiftDp by animateDpAsState(
         targetValue = if (expanded) clusterWidthDp.dp else 0.dp,
@@ -136,7 +145,7 @@ internal fun ReaderSasayakiSideDock(
                 .height(clusterHeightDp.dp)
                 .onGloballyPositioned { drawerBounds = it.boundsInParent() },
         ) {
-            AnimatedVisibility(
+            if (!compact) AnimatedVisibility(
                 visible = expanded,
                 enter = slideInHorizontally(tween(DOCK_SLIDE_MS)) { if (isLeft) -it else it } + fadeIn(tween(DOCK_SLIDE_MS)),
                 exit = slideOutHorizontally(tween(DOCK_SLIDE_MS)) { if (isLeft) -it else it } + fadeOut(tween(DOCK_SLIDE_MS)),
@@ -203,6 +212,20 @@ internal fun ReaderSasayakiSideDock(
                     .clip(RoundedCornerShape(9.dp))
                     .background(Color(colors.infoText).copy(alpha = 0.35f))
                     .then(
+                        if (compact) {
+                            Modifier
+                                .sasayakiScrub(
+                                    onSteps = { onScrubSteps(readerDockScrubSteps(it, isLeft)) },
+                                    onEnd = { onScrubEnd(readerDockScrubSteps(it, isLeft)) },
+                                    onCancel = onScrubCancel,
+                                )
+                                .sasayakiHoldRelease(onHoldEnd)
+                                .combinedClickable(onClick = onTogglePlayback, onLongClick = onHoldStart.takeIf { holdEnabled })
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .then(
                         if (expanded) {
                             Modifier
                         } else {
@@ -218,8 +241,18 @@ internal fun ReaderSasayakiSideDock(
                             }
                         },
                     )
-                    .pointerInput(Unit) { detectTapGestures { expanded = !expanded } },
-            )
+                    .then(if (compact) Modifier else Modifier.pointerInput(Unit) { detectTapGestures { expanded = !expanded } }),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (compact) {
+                    Icon(
+                        imageVector = if (sasayakiPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = if (sasayakiPlaying) stringResource(R.string.sasayaki_pause) else stringResource(R.string.sasayaki_play),
+                        tint = Color(colors.infoText).copy(alpha = 0.7f),
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
+            }
         }
     }
 }

@@ -97,6 +97,18 @@ fun ReaderGesturesView(
                                 scope.launch { gesturesRepository.update { it.copy(dockOffsetFraction = ReaderGestureSettings.DefaultDockOffsetFraction) } }
                             },
                         )
+                        HorizontalDivider()
+                        ListItem(
+                            colors = transparent(),
+                            headlineContent = { Text(stringResource(R.string.gestures_dock_compact)) },
+                            supportingContent = { Text(stringResource(R.string.gestures_dock_compact_help)) },
+                            trailingContent = {
+                                Switch(
+                                    checked = gestures.dockCompact,
+                                    onCheckedChange = { checked -> scope.launch { gesturesRepository.update { it.copy(dockCompact = checked) } } },
+                                )
+                            },
+                        )
                     }
                     HorizontalDivider()
                     SwitchRow(stringResource(R.string.sasayaki_double_tap_playback_controls_to_toggle), sasayaki.doubleTapPlaybackControlsToToggle) { checked ->

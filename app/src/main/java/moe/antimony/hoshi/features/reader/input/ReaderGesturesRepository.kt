@@ -25,6 +25,8 @@ data class ReaderGestureSettings(
     val mouseSelectionShowsHighlightColors: Boolean = true,
     /** Width of the touch strips on both screen edges that hold, double-tap and drag bindings listen in. */
     val edgeZoneWidthDp: Int = DefaultEdgeZoneWidthDp,
+    /** Side dock only: the tab itself is the control (tap, hold, pull to scrub) and no drawer opens. */
+    val dockCompact: Boolean = false,
 ) {
     companion object {
         const val DefaultDockOffsetFraction = 0.6f
@@ -56,6 +58,7 @@ class ReaderGesturesRepository(
             preferences[KEY_MOUSE_SIDE_CLICK] = next.mouseSideClickTurnsPages
             preferences[KEY_MOUSE_SELECTION_COLORS] = next.mouseSelectionShowsHighlightColors
             preferences[KEY_EDGE_ZONE_WIDTH] = next.edgeZoneWidthDp.coerceIn(ReaderGestureSettings.MinEdgeZoneWidthDp, ReaderGestureSettings.MaxEdgeZoneWidthDp)
+            preferences[KEY_DOCK_COMPACT] = next.dockCompact
         }
     }
 
@@ -70,6 +73,7 @@ class ReaderGesturesRepository(
             mouseSelectionShowsHighlightColors = this[KEY_MOUSE_SELECTION_COLORS] ?: true,
             edgeZoneWidthDp = (this[KEY_EDGE_ZONE_WIDTH] ?: ReaderGestureSettings.DefaultEdgeZoneWidthDp)
                 .coerceIn(ReaderGestureSettings.MinEdgeZoneWidthDp, ReaderGestureSettings.MaxEdgeZoneWidthDp),
+            dockCompact = this[KEY_DOCK_COMPACT] ?: false,
         )
 
     suspend fun exportEntries(): JsonObject = PreferencesBackup.export(dataStore)
@@ -86,5 +90,6 @@ class ReaderGesturesRepository(
         private val KEY_MOUSE_SIDE_CLICK = booleanPreferencesKey("mouseSideClickTurnsPages")
         private val KEY_MOUSE_SELECTION_COLORS = booleanPreferencesKey("mouseSelectionShowsHighlightColors")
         private val KEY_EDGE_ZONE_WIDTH = intPreferencesKey("edgeZoneWidthDp")
+        private val KEY_DOCK_COMPACT = booleanPreferencesKey("sasayakiDockCompact")
     }
 }
