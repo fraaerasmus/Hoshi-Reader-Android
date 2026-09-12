@@ -51,6 +51,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
@@ -113,17 +115,14 @@ internal fun readerDockDropTarget(
     tabLengthPx: Float,
     snapBandPx: Float,
 ): ReaderDockDrop? {
-    val toLeft = x
-    val toRight = widthPx - x
-    val toBottom = heightPx - y
-    val nearest = minOf(toLeft, toRight, toBottom)
-    if (nearest > snapBandPx) return null
     fun along(position: Float, edgeLength: Float) =
         ((position - tabLengthPx / 2f) / (edgeLength - tabLengthPx).coerceAtLeast(1f)).coerceIn(0f, 1f)
-    return when (nearest) {
-        toBottom -> ReaderDockDrop(SasayakiControlsPlacement.BottomDock, along(x, widthPx))
-        toLeft -> ReaderDockDrop(SasayakiControlsPlacement.Left, along(y, heightPx))
-        else -> ReaderDockDrop(SasayakiControlsPlacement.Right, along(y, heightPx))
+    // Sides win in the corners: they are the usual docks, and the bottom band would otherwise swallow them.
+    return when {
+        x <= snapBandPx -> ReaderDockDrop(SasayakiControlsPlacement.Left, along(y, heightPx))
+        widthPx - x <= snapBandPx -> ReaderDockDrop(SasayakiControlsPlacement.Right, along(y, heightPx))
+        heightPx - y <= snapBandPx -> ReaderDockDrop(SasayakiControlsPlacement.BottomDock, along(x, widthPx))
+        else -> null
     }
 }
 
@@ -171,9 +170,14 @@ internal fun ReaderSasayakiSideDock(
     LaunchedEffect(closeRequests) {
         if (closeRequests > 0) expanded = false
     }
-    // While the tab is being carried: its offset from the resting spot and the edge it would land on.
+    // While the tab is being carried: its offset from the resting spot and the edge it would land on. The
+    // finger is tracked as an absolute position through layout coordinates, so the tab moving under it
+    // cannot skew the drop point.
     var dragOffset by remember { mutableStateOf<Offset?>(null) }
     var dropTarget by remember { mutableStateOf<ReaderDockDrop?>(null) }
+    var rootCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var tabCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var dragStart by remember { mutableStateOf<Offset?>(null) }
     LaunchedEffect(dropTarget?.placement) {
         if (dropTarget != null) haptic.performHapticFeedback(HapticFeedbackType.SegmentTick)
     }
@@ -186,28 +190,24 @@ internal fun ReaderSasayakiSideDock(
         label = "sasayakiDockTabShift",
     )
     // No pointer input on this full-size box: a Compose node that listens would sit above the WebView and steal its touches.
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize().onGloballyPositioned { rootCoordinates = it }) {
         val widthPx = constraints.maxWidth.toFloat()
         val heightPx = constraints.maxHeight.toFloat()
         val edgeLengthDp = with(density) { (if (edge.horizontal) constraints.maxWidth else constraints.maxHeight).toDp() }.value.toInt()
         val tabAlongDp = readerDockTopDp(offsetFraction, edgeLengthDp, DOCK_TAB_LENGTH_DP)
         val clusterAlongDp = readerDockClusterTopDp(tabAlongDp, edgeLengthDp, clusterLengthDp)
-        val tabThicknessPx = with(density) { DOCK_TAB_THICKNESS_DP.dp.toPx() }
         val tabLengthPx = with(density) { DOCK_TAB_LENGTH_DP.dp.toPx() }
-        val tabAlongPx = with(density) { tabAlongDp.dp.toPx() }
-        // The tab's resting centre in root pixels, so a drag offset maps to a drop position.
-        val tabCentre = when (edge) {
-            DockEdge.Left -> Offset(tabThicknessPx / 2f, tabAlongPx + tabLengthPx / 2f)
-            DockEdge.Right -> Offset(widthPx - tabThicknessPx / 2f, tabAlongPx + tabLengthPx / 2f)
-            DockEdge.Bottom -> Offset(tabAlongPx + tabLengthPx / 2f, heightPx - tabThicknessPx / 2f)
-        }
-        fun carry(delta: Offset) {
+        /** [fingerInTab] is the pointer position local to the tab; the tab is docked where the finger lets go. */
+        fun carry(fingerInTab: Offset) {
             expanded = false
-            val next = (dragOffset ?: Offset.Zero) + delta
-            dragOffset = next
+            val root = rootCoordinates ?: return
+            val tab = tabCoordinates ?: return
+            val finger = root.localPositionOf(tab, fingerInTab)
+            val start = dragStart ?: finger.also { dragStart = it }
+            dragOffset = finger - start
             dropTarget = readerDockDropTarget(
-                x = tabCentre.x + next.x,
-                y = tabCentre.y + next.y,
+                x = finger.x,
+                y = finger.y,
                 widthPx = widthPx,
                 heightPx = heightPx,
                 tabLengthPx = tabLengthPx,
@@ -218,6 +218,7 @@ internal fun ReaderSasayakiSideDock(
             dropTarget?.let { currentOnDockChange.value(it.placement, it.fraction) }
             dragOffset = null
             dropTarget = null
+            dragStart = null
         }
 
         dropTarget?.let { target -> DockEdgeHighlight(target.placement.dockEdge() ?: edge) }
@@ -335,6 +336,7 @@ internal fun ReaderSasayakiSideDock(
                         y = if (edge.horizontal) -tabShiftDp else (tabAlongDp - clusterAlongDp).dp,
                     )
                     .then(if (carried != null) Modifier.offset { IntOffset(carried.x.roundToInt(), carried.y.roundToInt()) } else Modifier)
+                    .onGloballyPositioned { tabCoordinates = it }
                     .width((if (edge.horizontal) DOCK_TAB_LENGTH_DP else DOCK_TAB_THICKNESS_DP).dp)
                     .height((if (edge.horizontal) DOCK_TAB_THICKNESS_DP else DOCK_TAB_LENGTH_DP).dp)
                     .clip(RoundedCornerShape(9.dp))
@@ -354,9 +356,9 @@ internal fun ReaderSasayakiSideDock(
                             expanded -> Modifier.pointerInput(Unit) { detectTapGestures { expanded = false } }
                             else -> Modifier
                                 .pointerInput(edge) {
-                                    detectDragGestures(onDragEnd = ::drop, onDragCancel = ::drop) { change, dragAmount ->
+                                    detectDragGestures(onDragEnd = ::drop, onDragCancel = ::drop) { change, _ ->
                                         change.consume()
-                                        carry(dragAmount)
+                                        carry(change.position)
                                     }
                                 }
                                 .pointerInput(Unit) { detectTapGestures { expanded = true } }
@@ -404,6 +406,7 @@ private fun Modifier.compactDockTabGestures(
     onScrubSteps: (Int) -> Unit,
     onScrubEnd: (Int) -> Unit,
     onScrubCancel: () -> Unit,
+    /** Called with the pointer position local to the tab while it is carried. */
     onMove: (Offset) -> Unit,
     onMoveEnd: () -> Unit,
 ): Modifier {
@@ -433,9 +436,8 @@ private fun Modifier.compactDockTabGestures(
                 slop == null -> {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     drag(down.id) { change ->
-                        val delta = change.positionChange()
                         change.consume()
-                        currentOnMove.value(delta)
+                        currentOnMove.value(change.position)
                     }
                     currentOnMoveEnd.value()
                 }

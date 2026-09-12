@@ -80,7 +80,8 @@ class ReaderEdgeTapHoldTrackerTest {
         fun drop(x: Float, y: Float) = readerDockDropTarget(x, y, widthPx = 1000f, heightPx = 2000f, tabLengthPx = 100f, snapBandPx = 72f)
         assertEquals(ReaderDockDrop(moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement.Left, 0.5f), drop(20f, 1000f))
         assertEquals(ReaderDockDrop(moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement.Right, 0f), drop(990f, 10f))
-        assertEquals(ReaderDockDrop(moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement.BottomDock, 1f), drop(990f, 1990f))
+        // Corners go to the side, never the bottom.
+        assertEquals(ReaderDockDrop(moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement.Right, 1f), drop(990f, 1990f))
         assertEquals(moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement.BottomDock, drop(500f, 1950f)?.placement)
         assertEquals(null, drop(500f, 1000f))
     }

@@ -51,6 +51,7 @@ below is a single living summary of everything the fork adds, grouped Added / Fi
 
 ## Fixed
 
+- Docking the tab lands where the finger lets go: the carried position is read through layout coordinates instead of summed deltas, and the side edges win the corners so a tab dragged from the bottom can reach the right edge.
 - Edge gestures and page touches work again while a side dock is shown: the drawer's tap-outside listener was a Compose layer above the WebView and took every touch; the reader now tells the dock about page touches instead.
 - Double-tapping a screen edge no longer highlights the nearest text: the WebView is now told the touch was cancelled, so its own long-press cannot select a word under the finger.
 - Keep reader sync feedback visible until dismissed or undone, and accept newer KOReader progress on foreground after earlier local reading while still preserving reading done during the sync request.
