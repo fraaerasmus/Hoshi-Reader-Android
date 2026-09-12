@@ -16,6 +16,7 @@ internal abstract class SwipePageTouchListener(
     private var pendingTap: Runnable? = null
 
     override fun onTouch(view: View, event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN) onPageTouchDown()
         if (shouldIgnoreReaderGesture(event)) {
             tracker.suppressCurrentGesture()
             edgeTracker.onCancel()
@@ -171,6 +172,8 @@ internal abstract class SwipePageTouchListener(
     /** A mouse drag finished at ([x], [y]); Chromium shows no selection toolbar for it. */
     open fun onMouseSelectionEnd(x: Float, y: Float) = Unit
     open fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean = false
+    /** Every finger-down on the page, before any gesture is decided; overlays use it to get out of the way. */
+    open fun onPageTouchDown() = Unit
 
     open fun edgeZoneWidthDp(): Float = READER_DEFAULT_EDGE_ZONE_DP
     open fun isEdgeHoldEnabled(edge: ReaderEdgeSwipeGestureTracker.Edge): Boolean = false

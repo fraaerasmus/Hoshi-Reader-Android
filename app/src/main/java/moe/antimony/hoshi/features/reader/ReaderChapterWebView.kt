@@ -91,6 +91,7 @@ internal fun ChapterWebView(
     onClearLookupPopup: () -> Unit,
     onReaderTapOutside: () -> Unit,
     onReaderInteraction: () -> Unit,
+    onPageTouchDown: () -> Unit = {},
     onImageTapped: (String) -> Unit,
     onHighlightCreated: (HighlightColor, String, ReaderHighlightCreationResult) -> Unit,
     readerPopupBridgeHolder: ReaderLookupPopupBridgeCallbackHolder,
@@ -112,6 +113,7 @@ internal fun ChapterWebView(
     val currentOnClearLookupPopup = rememberUpdatedState(onClearLookupPopup)
     val currentOnReaderTapOutside = rememberUpdatedState(onReaderTapOutside)
     val currentOnReaderInteraction = rememberUpdatedState(onReaderInteraction)
+    val currentOnPageTouchDown = rememberUpdatedState(onPageTouchDown)
     val currentOnImageTapped = rememberUpdatedState(onImageTapped)
     val currentOnHighlightCreated = rememberUpdatedState(onHighlightCreated)
     val currentReaderPopupResourceHandler = rememberUpdatedState(readerPopupResourceHandler)
@@ -433,6 +435,8 @@ internal fun ChapterWebView(
                         object : SwipePageTouchListener(
                             swipeDistance = readerSettings.pageSwipeThresholdPx.toFloat(),
                         ) {
+                            override fun onPageTouchDown() = currentOnPageTouchDown.value()
+
                             override fun shouldIgnoreReaderGesture(event: MotionEvent): Boolean =
                                 shouldIgnoreReaderGestureEvent(event)
 

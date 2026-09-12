@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,12 +40,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.boundsInParent
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -79,8 +76,8 @@ internal fun readerDockClusterTopDp(tabTopDp: Int, containerHeightDp: Int, clust
 /**
  * Fork feature: the playback row docked on a screen side for one-handed use, as a drawer with no timers.
  * A translucent tab rests where the user last dragged it and never moves on its own; tapping it slides the
- * rewind / play-pause / forward cluster out from behind it, and the drawer closes on the tab, on a tap
- * anywhere else (which the page still receives), or on a push back toward the edge. The cluster carries the
+ * rewind / play-pause / forward cluster out from behind it, and the drawer closes on the tab, on any touch
+ * on the page (reported by the reader through [closeRequests]), or on a push back toward the edge. The cluster carries the
  * bottom row's hold and drag-to-scrub gestures (drag is vertical here).
  *
  * [compact] drops the drawer: the tab is the control — tap play/pause, hold to boost, pull inward to scrub.
@@ -105,6 +102,8 @@ internal fun ReaderSasayakiSideDock(
     onHoldStart: () -> Unit,
     onHoldEnd: () -> Unit,
     compact: Boolean = false,
+    /** Bumped by the reader on every page touch: the drawer closes, the page still gets the touch. */
+    closeRequests: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     if (!controls.visible || placement == SasayakiControlsPlacement.Bottom) return
@@ -112,7 +111,9 @@ internal fun ReaderSasayakiSideDock(
     val isLeft = placement == SasayakiControlsPlacement.Left
     val currentOffsetChange = rememberUpdatedState(onOffsetFractionChange)
     var expanded by remember { mutableStateOf(false) }
-    var drawerBounds by remember { mutableStateOf(Rect.Zero) }
+    LaunchedEffect(closeRequests) {
+        if (closeRequests > 0) expanded = false
+    }
     val clusterWidthDp = if (compact) 0 else controls.buttonWidthDp
     val clusterHeightDp = if (compact) DOCK_TAB_HEIGHT_DP else controls.rowHeightDp * 3
     // The tab slides out with the cluster so the two read as one drawer.
@@ -121,18 +122,8 @@ internal fun ReaderSasayakiSideDock(
         animationSpec = tween(DOCK_SLIDE_MS),
         label = "sasayakiDockTabShift",
     )
-    BoxWithConstraints(
-        modifier = modifier
-            .fillMaxSize()
-            // Observe only: a tap anywhere outside the drawer closes it and still reaches the page underneath.
-            .pointerInput(expanded) {
-                if (!expanded) return@pointerInput
-                awaitEachGesture {
-                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    if (!drawerBounds.contains(down.position)) expanded = false
-                }
-            },
-    ) {
+    // No pointer input on this full-size box: a Compose node that listens would sit above the WebView and steal its touches.
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val containerHeightDp = with(density) { constraints.maxHeight.toDp() }.value.toInt()
         val tabTopDp = readerDockTopDp(offsetFraction, containerHeightDp, DOCK_TAB_HEIGHT_DP)
         val clusterTopDp = readerDockClusterTopDp(tabTopDp, containerHeightDp, clusterHeightDp)
@@ -142,8 +133,7 @@ internal fun ReaderSasayakiSideDock(
                 .align(if (isLeft) Alignment.TopStart else Alignment.TopEnd)
                 .offset(y = clusterTopDp.dp)
                 .width((clusterWidthDp + DOCK_TAB_WIDTH_DP).dp)
-                .height(clusterHeightDp.dp)
-                .onGloballyPositioned { drawerBounds = it.boundsInParent() },
+                .height(clusterHeightDp.dp),
         ) {
             if (!compact) AnimatedVisibility(
                 visible = expanded,

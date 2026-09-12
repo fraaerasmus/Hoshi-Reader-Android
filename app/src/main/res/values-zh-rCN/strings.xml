@@ -703,9 +703,9 @@
     <string name="gestures_placement_left" comment="Playback controls placement option, intentionally matching other Left labels.">左侧</string>
     <string name="gestures_placement_right" comment="Playback controls placement option, intentionally matching other Right labels.">右侧</string>
     <string name="gestures_dock_reset">重置停靠位置</string>
-    <string name="gestures_dock_help">沿边缘拖动手柄可移动；点按手柄显示控件。</string>
+    <string name="gestures_dock_help">沿边缘拖动可移动；点按打开。</string>
     <string name="gestures_dock_compact">紧凑停靠</string>
-    <string name="gestures_dock_compact_help">手柄本身即控件：点按播放/暂停，长按加速，向内拖动可跳转进度。不再展开控件。</string>
+    <string name="gestures_dock_compact_help">点按播放，长按加速，向内拖动跳转。</string>
     <string name="gestures_section_edges">屏幕边缘</string>
     <string name="gestures_edge_zone_width">边缘区域宽度</string>
     <string name="gestures_edge_zone_width_value_format">%1$d dp</string>
@@ -719,11 +719,13 @@
     <string name="gestures_volume_hold">长按音量键</string>
     <string name="gestures_section_mouse">鼠标</string>
     <string name="gestures_mouse_selection_colors">选择后显示标注颜色</string>
-    <string name="gestures_mouse_selection_colors_help">用鼠标选择文字后在光标处显示标注颜色。系统自带的鼠标菜单（复制、翻译等）仍可通过右键打开。</string>
+    <string name="gestures_mouse_selection_colors_help">选择后在光标处显示标注颜色。</string>
     <string name="gestures_mouse_side_click">点击两侧翻页</string>
-    <string name="gestures_mouse_side_click_help">点击页面外侧五分之一区域翻页，而不是查询该处的词。滚轮始终可以翻页。</string>
+    <string name="gestures_mouse_side_click_help">点击页面两侧翻页；滚轮始终可翻页。</string>
     <string name="gestures_section_keyboard">键盘</string>
-    <string name="gestures_keyboard_help">空格或 K：播放 / 暂停 · J 或 L：跳转 · &lt; 或 &gt;：速度 −/+ 0.1× · Page Up / Page Down：翻页</string>
+    <string name="gestures_keyboard_skip">快退 / 快进</string>
+    <string name="gestures_keyboard_speed">速度 −/+ 0.1×</string>
+    <string name="gestures_keyboard_pages">翻页</string>
     <string name="input_action_none" comment="Gesture binding option meaning the gesture does nothing.">无</string>
     <string name="input_action_toggle_playback">播放 / 暂停</string>
     <string name="input_action_skip_forward">快进</string>

@@ -705,9 +705,9 @@
     <string name="gestures_placement_left" comment="Playback controls placement option, intentionally matching other Left labels.">Left</string>
     <string name="gestures_placement_right" comment="Playback controls placement option, intentionally matching other Right labels.">Right</string>
     <string name="gestures_dock_reset">Reset dock position</string>
-    <string name="gestures_dock_help">Drag the handle along the edge to move it; tap it to show the controls.</string>
+    <string name="gestures_dock_help">Drag along the edge to move; tap to open.</string>
     <string name="gestures_dock_compact">Compact dock</string>
-    <string name="gestures_dock_compact_help">The tab itself is the control: tap to play or pause, hold to speed up, pull it inward to scrub. No drawer opens.</string>
+    <string name="gestures_dock_compact_help">Tap to play, hold to speed up, pull inward to scrub.</string>
     <string name="gestures_section_edges">Screen edges</string>
     <string name="gestures_edge_zone_width">Edge zone width</string>
     <string name="gestures_edge_zone_width_value_format">%1$d dp</string>
@@ -721,11 +721,17 @@
     <string name="gestures_volume_hold">Hold a volume key</string>
     <string name="gestures_section_mouse">Mouse</string>
     <string name="gestures_mouse_selection_colors">Highlight colours after selecting</string>
-    <string name="gestures_mouse_selection_colors_help">Selecting text with a mouse opens the highlight colours at the cursor. The system\'s own mouse menu (copy, translate, …) stays a right-click away.</string>
+    <string name="gestures_mouse_selection_colors_help">Shows the highlight colours at the cursor after a selection.</string>
     <string name="gestures_mouse_side_click">Click the sides to turn pages</string>
-    <string name="gestures_mouse_side_click_help">Clicks in the outer fifth of the page turn it instead of looking up the word there. The scroll wheel always turns pages.</string>
+    <string name="gestures_mouse_side_click_help">Clicks near the sides turn the page; the wheel always does.</string>
     <string name="gestures_section_keyboard">Keyboard</string>
-    <string name="gestures_keyboard_help">Space or K: play / pause · J or L: skip · &lt; or &gt;: speed −/+ 0.1× · Page Up / Page Down: turn pages</string>
+    <string name="gestures_keyboard_skip">Skip back / forward</string>
+    <string name="gestures_keyboard_speed">Speed −/+ 0.1×</string>
+    <string name="gestures_keyboard_pages">Turn pages</string>
+    <string name="gestures_keyboard_keys_play" translatable="false">Space · K</string>
+    <string name="gestures_keyboard_keys_skip" translatable="false">J · L</string>
+    <string name="gestures_keyboard_keys_speed" translatable="false">&lt; · &gt;</string>
+    <string name="gestures_keyboard_keys_pages" translatable="false">Page Up · Page Down</string>
     <string name="input_action_none" comment="Gesture binding option meaning the gesture does nothing.">Nothing</string>
     <string name="input_action_toggle_playback">Play / pause</string>
     <string name="input_action_skip_forward">Skip forward</string>
