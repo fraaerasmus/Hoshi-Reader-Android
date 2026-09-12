@@ -2210,8 +2210,8 @@ fun ReaderWebView(
             ReaderSasayakiSideDock(
                 placement = gestureSettings.controlsPlacement,
                 offsetFraction = gestureSettings.dockOffsetFraction,
-                onOffsetFractionChange = { fraction ->
-                    scope.launch { appContainer.readerGesturesRepository.update { it.copy(dockOffsetFraction = fraction) } }
+                onDockChange = { placement, fraction ->
+                    scope.launch { appContainer.readerGesturesRepository.update { it.copy(controlsPlacement = placement, dockOffsetFraction = fraction) } }
                 },
                 controls = sasayakiBottomPlaybackControls,
                 colors = readerChromeColors(effectiveSettings, systemDarkTheme),
@@ -2384,7 +2384,9 @@ fun ReaderWebView(
         }
         ReaderEdgeAdjustHud(controller = edgeAdjust)
         // Both HUDs sit just above the playback row, where the gesture happens.
-        val sasayakiHudBottomPadding = (sasayakiBottomPlaybackControls.rowHeightDp + bottomChromeMetrics.bottomSafeAreaDp + 16).dp
+        // A bottom-docked drawer opens upward into the HUD's usual spot, so the HUD moves up by its height.
+        val bottomDockDp = if (gestureSettings.controlsPlacement == SasayakiControlsPlacement.BottomDock) sasayakiBottomPlaybackControls.rowHeightDp + 18 else 0
+        val sasayakiHudBottomPadding = (sasayakiBottomPlaybackControls.rowHeightDp + bottomChromeMetrics.bottomSafeAreaDp + 16 + bottomDockDp).dp
         ReaderSasayakiScrubHud(state = sasayakiScrubHud, bottomPadding = sasayakiHudBottomPadding)
         ReaderSasayakiBoostHud(rate = sasayakiBoostRate ?: sasayakiSpeedFlash, bottomPadding = sasayakiHudBottomPadding)
         ReaderSyncNoticeCard(

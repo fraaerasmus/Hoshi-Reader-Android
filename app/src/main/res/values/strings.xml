@@ -701,11 +701,12 @@
     <string name="advanced_gestures_subtitle">Where the playback controls sit, and what screen edges and volume keys do.</string>
     <string name="gestures_section_controls">Playback controls</string>
     <string name="gestures_controls_placement">Placement</string>
-    <string name="gestures_placement_bottom" comment="Playback controls placement option.">Bottom</string>
+    <string name="gestures_placement_bottom" comment="Playback controls placement option.">Bottom row</string>
+    <string name="gestures_placement_bottom_dock" comment="Playback controls placement option.">Bottom dock</string>
     <string name="gestures_placement_left" comment="Playback controls placement option, intentionally matching other Left labels.">Left</string>
     <string name="gestures_placement_right" comment="Playback controls placement option, intentionally matching other Right labels.">Right</string>
     <string name="gestures_dock_reset">Reset dock position</string>
-    <string name="gestures_dock_help">Drag along the edge to move; tap to open; hold any button to speed up.</string>
+    <string name="gestures_dock_help">Drag it anywhere to move it or dock it on another edge; tap to open; hold any button to speed up.</string>
     <string name="gestures_dock_compact">Compact dock</string>
     <string name="gestures_dock_compact_help">Tap to play, slide to scrub, hold to move.</string>
     <string name="gestures_section_edges">Screen edges</string>

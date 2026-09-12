@@ -33,7 +33,8 @@ enum class ReaderInputAction(val kind: ReaderInputKind?) {
     Volume(ReaderInputKind.Drag),
 }
 
-enum class SasayakiControlsPlacement { Bottom, Left, Right }
+/** [Bottom] is the classic bottom row; the other three dock a tab on that edge. */
+enum class SasayakiControlsPlacement { Bottom, Left, Right, BottomDock }
 
 data class ReaderInputBindings(val map: Map<ReaderInputSource, ReaderInputAction> = emptyMap()) {
     fun action(source: ReaderInputSource): ReaderInputAction = map[source] ?: Defaults.getValue(source)

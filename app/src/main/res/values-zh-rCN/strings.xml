@@ -699,11 +699,12 @@
     <string name="advanced_gestures_subtitle">播放控件的位置，以及屏幕边缘和音量键的功能。</string>
     <string name="gestures_section_controls">播放控件</string>
     <string name="gestures_controls_placement">位置</string>
-    <string name="gestures_placement_bottom" comment="Playback controls placement option.">底部</string>
+    <string name="gestures_placement_bottom" comment="Playback controls placement option.">底部栏</string>
+    <string name="gestures_placement_bottom_dock" comment="Playback controls placement option.">底部停靠</string>
     <string name="gestures_placement_left" comment="Playback controls placement option, intentionally matching other Left labels.">左侧</string>
     <string name="gestures_placement_right" comment="Playback controls placement option, intentionally matching other Right labels.">右侧</string>
     <string name="gestures_dock_reset">重置停靠位置</string>
-    <string name="gestures_dock_help">沿边缘拖动可移动；点按打开；长按任意按钮加速。</string>
+    <string name="gestures_dock_help">拖到任意位置可移动或停靠到其他边缘；点按打开；长按任意按钮加速。</string>
     <string name="gestures_dock_compact">紧凑停靠</string>
     <string name="gestures_dock_compact_help">点按播放，上下滑动跳转，长按后拖动可移动。</string>
     <string name="gestures_section_edges">屏幕边缘</string>

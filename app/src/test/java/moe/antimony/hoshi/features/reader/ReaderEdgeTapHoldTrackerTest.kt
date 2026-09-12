@@ -71,7 +71,17 @@ class ReaderEdgeTapHoldTrackerTest {
         assertEquals(0, readerDockTopDp(0.5f, 40, 56))
         assertEquals(0.5f, readerDockFraction(372f, 800, 56), 0.01f)
         assertEquals(1f, readerDockFraction(9_999f, 800, 56), 0f)
-        assertEquals(372, readerDockClusterTopDp(tabTopDp = 400, containerHeightDp = 800, clusterHeightDp = 112))
-        assertEquals(688, readerDockClusterTopDp(tabTopDp = 790, containerHeightDp = 800, clusterHeightDp = 112))
+        assertEquals(372, readerDockClusterTopDp(tabTopDp = 400, edgeLengthDp = 800, clusterLengthDp = 112))
+        assertEquals(688, readerDockClusterTopDp(tabTopDp = 790, edgeLengthDp = 800, clusterLengthDp = 112))
+    }
+
+    @Test
+    fun dockDropSnapsToTheNearestEdgeWithinTheBand() {
+        fun drop(x: Float, y: Float) = readerDockDropTarget(x, y, widthPx = 1000f, heightPx = 2000f, tabLengthPx = 100f, snapBandPx = 72f)
+        assertEquals(ReaderDockDrop(moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement.Left, 0.5f), drop(20f, 1000f))
+        assertEquals(ReaderDockDrop(moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement.Right, 0f), drop(990f, 10f))
+        assertEquals(ReaderDockDrop(moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement.BottomDock, 1f), drop(990f, 1990f))
+        assertEquals(moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement.BottomDock, drop(500f, 1950f)?.placement)
+        assertEquals(null, drop(500f, 1000f))
     }
 }

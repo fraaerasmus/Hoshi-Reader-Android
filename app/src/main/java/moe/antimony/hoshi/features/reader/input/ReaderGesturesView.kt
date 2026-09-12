@@ -374,4 +374,5 @@ internal fun SasayakiControlsPlacement.labelRes(): Int = when (this) {
     SasayakiControlsPlacement.Bottom -> R.string.gestures_placement_bottom
     SasayakiControlsPlacement.Left -> R.string.gestures_placement_left
     SasayakiControlsPlacement.Right -> R.string.gestures_placement_right
+    SasayakiControlsPlacement.BottomDock -> R.string.gestures_placement_bottom_dock
 }

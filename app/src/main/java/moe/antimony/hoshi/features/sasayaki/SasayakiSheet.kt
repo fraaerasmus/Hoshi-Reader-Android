@@ -79,6 +79,7 @@ import moe.antimony.hoshi.features.reader.ReaderColorSettingRow
 import android.text.format.DateUtils
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import moe.antimony.hoshi.LocalHoshiUiDependencies
+import moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement
 import moe.antimony.hoshi.features.reader.readerSheetDensityMetrics
 import moe.antimony.hoshi.features.reader.readerSheetStyle
 import moe.antimony.hoshi.importing.ImportFileType
@@ -761,6 +762,17 @@ private fun SasayakiSettingsTab(
                 label = stringResource(R.string.sasayaki_reverse_vertical_skip_buttons),
                 checked = settings.reverseVerticalReaderSkipButtons,
                 onCheckedChange = { onSettingsChange(settings.copy(reverseVerticalReaderSkipButtons = it)) },
+            )
+        }
+        // The dock's compact switch lives with the gesture settings but is worth reaching from here.
+        val gesturesRepository = LocalHoshiUiDependencies.current.readerGesturesRepository
+        val gestures by gesturesRepository.settings.collectAsStateWithLifecycle(initialValue = null)
+        val gesturesScope = rememberCoroutineScope()
+        gestures?.takeIf { it.controlsPlacement != SasayakiControlsPlacement.Bottom }?.let { current ->
+            SasayakiSettingsSwitchRow(
+                label = stringResource(R.string.gestures_dock_compact),
+                checked = current.dockCompact,
+                onCheckedChange = { checked -> gesturesScope.launch { gesturesRepository.update { it.copy(dockCompact = checked) } } },
             )
         }
         SasayakiSettingsActionRow(

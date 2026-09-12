@@ -11,6 +11,7 @@ below is a single living summary of everything the fork adds, grouped Added / Fi
 
 ## Added
 
+- Drag the dock tab anywhere to move it or to dock it on another edge — left, right, or a new bottom dock whose drawer opens upward; the edge it will land on lights up, and letting go in the middle springs it back. The classic bottom row stays as its own placement, and the compact-dock switch is also reachable from the reader's Sasayaki sheet.
 - Compact dock (Gestures & Shortcuts > Playback controls, off by default): the side tab itself becomes the control — tap to play or pause, slide up or down to scrub, hold (a haptic answers) and drag to move it — and no drawer opens; the tab shows the play/pause state. In the open drawer, holding any of the three buttons speeds playback up.
 - Selecting text with a mouse now opens Hoshi's highlight colours at the cursor (Gestures & Shortcuts > Mouse). Chromium answers a mouse selection with a dropdown menu of its own that cannot carry Hoshi's Highlight entry the way the touch selection toolbar does, so the colours come up directly; copy, translate and the rest stay a right-click away.
 - The side-docked playback controls are now a drawer with no timers: the tab stays put and slides out with the cluster, and the drawer closes on the tab, on a tap anywhere else (the page still gets that tap), or on a push back toward the edge. Gestures & Shortcuts gains an edge zone width slider that draws the real strips over the screen while you move it.
