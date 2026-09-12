@@ -112,7 +112,8 @@ internal fun ReaderRouteDestination(
                     appContainer.progressSyncCoordinator.pull(entry, options = options, manual = false, backends = setOf(SyncBackend.Ttu))
                 }
             }
-            runCatching { appContainer.sasayakiPositionSync.alignAudioToBookmark(entry) }
+            // The audiobook keeps its own position: opening a book never moves it. A sync that applies a
+            // remote position realigns it (in the coordinator), and the sync sheet moves it on request.
             val initialKosync = kosyncSettings ?: appContainer.kosyncSettingsRepository.settings.first()
             if (initialKosync.enabled && initialKosync.autoSyncEnabled) {
                 // Never hold the book open on the kosync server; the Ready branch picks the outcome up.
