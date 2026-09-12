@@ -9,11 +9,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
-import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.awaitVerticalTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.drag
@@ -53,7 +52,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement
-import kotlin.math.abs
 
 private const val DOCK_TAB_WIDTH_DP = 18
 private const val DOCK_TAB_HEIGHT_DP = 56
@@ -84,8 +82,8 @@ internal fun readerDockClusterTopDp(tabTopDp: Int, containerHeightDp: Int, clust
  * on the page (reported by the reader through [closeRequests]), or on a push back toward the edge. The cluster carries the
  * bottom row's hold and drag-to-scrub gestures (drag is vertical here).
  *
- * [compact] drops the drawer: the tab is the control — tap play/pause, hold to boost, and pull it inward then
- * slide up or down to scrub (a plain vertical drag still moves it).
+ * [compact] drops the drawer: the tab is the control — tap play/pause, slide up or down to scrub, hold
+ * (with a haptic) and then drag to move it. Holding any button of the open drawer speeds playback up.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -183,7 +181,8 @@ internal fun ReaderSasayakiSideDock(
                         icon = Icons.Rounded.FastRewind,
                         contentDescription = stringResource(R.string.sasayaki_rewind),
                         onClick = onSkipBackward,
-                        holdRepeat = true,
+                        onLongClick = onHoldStart.takeIf { holdEnabled },
+                        onRelease = onHoldEnd,
                     )
                     ReaderSasayakiPlaybackButton(
                         controls = controls,
@@ -199,7 +198,8 @@ internal fun ReaderSasayakiSideDock(
                         icon = Icons.Rounded.FastForward,
                         contentDescription = stringResource(R.string.sasayaki_fast_forward),
                         onClick = onSkipForward,
-                        holdRepeat = true,
+                        onLongClick = onHoldStart.takeIf { holdEnabled },
+                        onRelease = onHoldEnd,
                     )
                 }
             }
@@ -214,10 +214,15 @@ internal fun ReaderSasayakiSideDock(
                     .background(Color(colors.infoText).copy(alpha = 0.35f))
                     .then(
                         when {
-                            compact -> Modifier
-                                .compactDockTabGestures(isLeft, scrubEnabled, onScrubSteps, onScrubEnd, onScrubCancel, ::moveTab, ::commitTabPosition)
-                                .sasayakiHoldRelease(onHoldEnd)
-                                .combinedClickable(onClick = onTogglePlayback, onLongClick = onHoldStart.takeIf { holdEnabled })
+                            compact -> Modifier.compactDockTabGestures(
+                                scrubEnabled = scrubEnabled,
+                                onTap = onTogglePlayback,
+                                onScrubSteps = onScrubSteps,
+                                onScrubEnd = onScrubEnd,
+                                onScrubCancel = onScrubCancel,
+                                onMove = ::moveTab,
+                                onMoveEnd = ::commitTabPosition,
+                            )
                             expanded -> Modifier.pointerInput(Unit) { detectTapGestures { expanded = false } }
                             else -> Modifier
                                 .pointerInput(containerHeightDp) {
@@ -245,14 +250,14 @@ internal fun ReaderSasayakiSideDock(
 }
 
 /**
- * The compact tab's drag: the first slop crossing decides. Vertical → move the tab. Horizontal, pulled
- * toward the page → the pull is a clutch and the rest of the gesture scrubs by vertical travel (up =
- * forward), since a tab on the edge has room in only one horizontal direction.
+ * The compact tab: tap toggles playback, a vertical drag scrubs (up = forward), and a hold — answered with a
+ * haptic — turns the rest of the gesture into moving the tab along the edge. One handler, so the three
+ * never race each other.
  */
 @Composable
 private fun Modifier.compactDockTabGestures(
-    isLeft: Boolean,
     scrubEnabled: Boolean,
+    onTap: () -> Unit,
     onScrubSteps: (Int) -> Unit,
     onScrubEnd: (Int) -> Unit,
     onScrubCancel: () -> Unit,
@@ -261,26 +266,41 @@ private fun Modifier.compactDockTabGestures(
 ): Modifier {
     val stepPx = with(LocalDensity.current) { SASAYAKI_SCRUB_STEP_DP.dp.toPx() }
     val haptic = LocalHapticFeedback.current
+    val currentOnTap = rememberUpdatedState(onTap)
     val currentOnScrubSteps = rememberUpdatedState(onScrubSteps)
     val currentOnScrubEnd = rememberUpdatedState(onScrubEnd)
     val currentOnScrubCancel = rememberUpdatedState(onScrubCancel)
     val currentOnMove = rememberUpdatedState(onMove)
     val currentOnMoveEnd = rememberUpdatedState(onMoveEnd)
-    return pointerInput(isLeft, scrubEnabled, stepPx) {
+    return pointerInput(scrubEnabled, stepPx) {
         val tracker = ReaderSasayakiScrubGestureTracker(stepPx)
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             var overSlop = Offset.Zero
-            val start = awaitTouchSlopOrCancellation(down.id) { change, offset ->
-                overSlop = offset
-                change.consume()
-            } ?: return@awaitEachGesture
-            val pulledInward = if (isLeft) overSlop.x > 0f else overSlop.x < 0f
+            var released = false
+            // null = the hold timed out before the finger moved; Unit = it lifted (a tap) or was taken over.
+            val slop = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                awaitVerticalTouchSlopOrCancellation(down.id) { change, over ->
+                    overSlop = Offset(0f, over)
+                    change.consume()
+                } ?: run { released = true }
+            }
             when {
-                abs(overSlop.x) > abs(overSlop.y) && pulledInward && scrubEnabled -> {
+                slop == null -> {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    drag(down.id) { change ->
+                        val dy = change.positionChange().y
+                        change.consume()
+                        currentOnMove.value(dy)
+                    }
+                    currentOnMoveEnd.value()
+                }
+                released -> if (currentEvent.changes.none { it.pressed }) currentOnTap.value()
+                scrubEnabled -> {
                     tracker.reset()
-                    currentOnScrubSteps.value(0)
-                    val completed = drag(start.id) { change ->
+                    tracker.onDrag(-overSlop.y)
+                    currentOnScrubSteps.value(tracker.steps)
+                    val completed = drag(down.id) { change ->
                         val dy = change.positionChange().y
                         change.consume()
                         if (tracker.onDrag(-dy)) {
@@ -289,15 +309,6 @@ private fun Modifier.compactDockTabGestures(
                         }
                     }
                     if (completed) currentOnScrubEnd.value(tracker.steps) else currentOnScrubCancel.value()
-                }
-                abs(overSlop.y) >= abs(overSlop.x) -> {
-                    currentOnMove.value(overSlop.y)
-                    drag(start.id) { change ->
-                        val dy = change.positionChange().y
-                        change.consume()
-                        currentOnMove.value(dy)
-                    }
-                    currentOnMoveEnd.value()
                 }
             }
         }

@@ -705,9 +705,9 @@
     <string name="gestures_placement_left" comment="Playback controls placement option, intentionally matching other Left labels.">Left</string>
     <string name="gestures_placement_right" comment="Playback controls placement option, intentionally matching other Right labels.">Right</string>
     <string name="gestures_dock_reset">Reset dock position</string>
-    <string name="gestures_dock_help">Drag along the edge to move; tap to open.</string>
+    <string name="gestures_dock_help">Drag along the edge to move; tap to open; hold any button to speed up.</string>
     <string name="gestures_dock_compact">Compact dock</string>
-    <string name="gestures_dock_compact_help">Tap to play, hold to speed up, pull in and slide to scrub.</string>
+    <string name="gestures_dock_compact_help">Tap to play, slide to scrub, hold to move.</string>
     <string name="gestures_section_edges">Screen edges</string>
     <string name="gestures_edge_zone_width">Edge zone width</string>
     <string name="gestures_edge_zone_width_value_format">%1$d dp</string>
