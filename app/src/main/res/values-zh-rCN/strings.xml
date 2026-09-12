@@ -705,7 +705,7 @@
     <string name="gestures_dock_reset">重置停靠位置</string>
     <string name="gestures_dock_help">沿边缘拖动可移动；点按打开。</string>
     <string name="gestures_dock_compact">紧凑停靠</string>
-    <string name="gestures_dock_compact_help">点按播放，长按加速，向内拖动跳转。</string>
+    <string name="gestures_dock_compact_help">点按播放，长按加速，向内拉出后上下滑动跳转。</string>
     <string name="gestures_section_edges">屏幕边缘</string>
     <string name="gestures_edge_zone_width">边缘区域宽度</string>
     <string name="gestures_edge_zone_width_value_format">%1$d dp</string>

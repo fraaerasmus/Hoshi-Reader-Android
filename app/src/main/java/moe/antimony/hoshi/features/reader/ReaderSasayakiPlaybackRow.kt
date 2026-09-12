@@ -45,7 +45,7 @@ import moe.antimony.hoshi.R
 
 private const val SASAYAKI_SKIP_HOLD_INITIAL_DELAY_MS = 350L
 private const val SASAYAKI_SKIP_HOLD_REPEAT_INTERVAL_MS = 150L
-private const val SASAYAKI_SCRUB_STEP_DP = 40
+internal const val SASAYAKI_SCRUB_STEP_DP = 40
 
 /**
  * Fork feature: the reader's bottom Sasayaki playback row. Kept in its own file so an upstream

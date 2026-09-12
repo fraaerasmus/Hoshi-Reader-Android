@@ -13,8 +13,10 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.awaitTouchSlopOrCancellation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -40,13 +42,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.features.reader.input.SasayakiControlsPlacement
+import kotlin.math.abs
 
 private const val DOCK_TAB_WIDTH_DP = 18
 private const val DOCK_TAB_HEIGHT_DP = 56
@@ -64,9 +71,6 @@ internal fun readerDockFraction(topDp: Float, containerHeightDp: Int, itemHeight
     return (topDp / travel).coerceIn(0f, 1f)
 }
 
-/** Compact mode pulls the tab toward the page to scrub: inward is forward on either side. */
-internal fun readerDockScrubSteps(dragSteps: Int, isLeft: Boolean): Int = if (isLeft) dragSteps else -dragSteps
-
 /** Where the cluster sits so that it is centred on the tab yet stays on screen. */
 internal fun readerDockClusterTopDp(tabTopDp: Int, containerHeightDp: Int, clusterHeightDp: Int): Int {
     val centred = tabTopDp + DOCK_TAB_HEIGHT_DP / 2 - clusterHeightDp / 2
@@ -80,7 +84,8 @@ internal fun readerDockClusterTopDp(tabTopDp: Int, containerHeightDp: Int, clust
  * on the page (reported by the reader through [closeRequests]), or on a push back toward the edge. The cluster carries the
  * bottom row's hold and drag-to-scrub gestures (drag is vertical here).
  *
- * [compact] drops the drawer: the tab is the control — tap play/pause, hold to boost, pull inward to scrub.
+ * [compact] drops the drawer: the tab is the control — tap play/pause, hold to boost, and pull it inward then
+ * slide up or down to scrub (a plain vertical drag still moves it).
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -128,6 +133,12 @@ internal fun ReaderSasayakiSideDock(
         val tabTopDp = readerDockTopDp(offsetFraction, containerHeightDp, DOCK_TAB_HEIGHT_DP)
         val clusterTopDp = readerDockClusterTopDp(tabTopDp, containerHeightDp, clusterHeightDp)
         var dragTopDp by remember(tabTopDp) { mutableStateOf(tabTopDp.toFloat()) }
+        fun moveTab(dragAmountPx: Float) {
+            dragTopDp = (dragTopDp + dragAmountPx / density.density)
+                .coerceIn(0f, (containerHeightDp - DOCK_TAB_HEIGHT_DP).coerceAtLeast(0).toFloat())
+            currentOffsetChange.value(readerDockFraction(dragTopDp, containerHeightDp, DOCK_TAB_HEIGHT_DP))
+        }
+        fun commitTabPosition() = currentOffsetChange.value(readerDockFraction(dragTopDp, containerHeightDp, DOCK_TAB_HEIGHT_DP))
         Box(
             modifier = Modifier
                 .align(if (isLeft) Alignment.TopStart else Alignment.TopEnd)
@@ -202,36 +213,22 @@ internal fun ReaderSasayakiSideDock(
                     .clip(RoundedCornerShape(9.dp))
                     .background(Color(colors.infoText).copy(alpha = 0.35f))
                     .then(
-                        if (compact) {
-                            Modifier
-                                .sasayakiScrub(
-                                    onSteps = { onScrubSteps(readerDockScrubSteps(it, isLeft)) },
-                                    onEnd = { onScrubEnd(readerDockScrubSteps(it, isLeft)) },
-                                    onCancel = onScrubCancel,
-                                )
+                        when {
+                            compact -> Modifier
+                                .compactDockTabGestures(isLeft, scrubEnabled, onScrubSteps, onScrubEnd, onScrubCancel, ::moveTab, ::commitTabPosition)
                                 .sasayakiHoldRelease(onHoldEnd)
                                 .combinedClickable(onClick = onTogglePlayback, onLongClick = onHoldStart.takeIf { holdEnabled })
-                        } else {
-                            Modifier
-                        },
-                    )
-                    .then(
-                        if (expanded) {
-                            Modifier
-                        } else {
-                            Modifier.pointerInput(containerHeightDp) {
-                                detectVerticalDragGestures(
-                                    onDragEnd = { currentOffsetChange.value(readerDockFraction(dragTopDp, containerHeightDp, DOCK_TAB_HEIGHT_DP)) },
-                                ) { change, dragAmount ->
-                                    change.consume()
-                                    dragTopDp = (dragTopDp + dragAmount / density.density)
-                                        .coerceIn(0f, (containerHeightDp - DOCK_TAB_HEIGHT_DP).coerceAtLeast(0).toFloat())
-                                    currentOffsetChange.value(readerDockFraction(dragTopDp, containerHeightDp, DOCK_TAB_HEIGHT_DP))
+                            expanded -> Modifier.pointerInput(Unit) { detectTapGestures { expanded = false } }
+                            else -> Modifier
+                                .pointerInput(containerHeightDp) {
+                                    detectVerticalDragGestures(onDragEnd = ::commitTabPosition) { change, dragAmount ->
+                                        change.consume()
+                                        moveTab(dragAmount)
+                                    }
                                 }
-                            }
+                                .pointerInput(Unit) { detectTapGestures { expanded = true } }
                         },
-                    )
-                    .then(if (compact) Modifier else Modifier.pointerInput(Unit) { detectTapGestures { expanded = !expanded } }),
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 if (compact) {
@@ -241,6 +238,66 @@ internal fun ReaderSasayakiSideDock(
                         tint = Color(colors.infoText).copy(alpha = 0.7f),
                         modifier = Modifier.size(12.dp),
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The compact tab's drag: the first slop crossing decides. Vertical → move the tab. Horizontal, pulled
+ * toward the page → the pull is a clutch and the rest of the gesture scrubs by vertical travel (up =
+ * forward), since a tab on the edge has room in only one horizontal direction.
+ */
+@Composable
+private fun Modifier.compactDockTabGestures(
+    isLeft: Boolean,
+    scrubEnabled: Boolean,
+    onScrubSteps: (Int) -> Unit,
+    onScrubEnd: (Int) -> Unit,
+    onScrubCancel: () -> Unit,
+    onMove: (Float) -> Unit,
+    onMoveEnd: () -> Unit,
+): Modifier {
+    val stepPx = with(LocalDensity.current) { SASAYAKI_SCRUB_STEP_DP.dp.toPx() }
+    val haptic = LocalHapticFeedback.current
+    val currentOnScrubSteps = rememberUpdatedState(onScrubSteps)
+    val currentOnScrubEnd = rememberUpdatedState(onScrubEnd)
+    val currentOnScrubCancel = rememberUpdatedState(onScrubCancel)
+    val currentOnMove = rememberUpdatedState(onMove)
+    val currentOnMoveEnd = rememberUpdatedState(onMoveEnd)
+    return pointerInput(isLeft, scrubEnabled, stepPx) {
+        val tracker = ReaderSasayakiScrubGestureTracker(stepPx)
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var overSlop = Offset.Zero
+            val start = awaitTouchSlopOrCancellation(down.id) { change, offset ->
+                overSlop = offset
+                change.consume()
+            } ?: return@awaitEachGesture
+            val pulledInward = if (isLeft) overSlop.x > 0f else overSlop.x < 0f
+            when {
+                abs(overSlop.x) > abs(overSlop.y) && pulledInward && scrubEnabled -> {
+                    tracker.reset()
+                    currentOnScrubSteps.value(0)
+                    val completed = drag(start.id) { change ->
+                        val dy = change.positionChange().y
+                        change.consume()
+                        if (tracker.onDrag(-dy)) {
+                            haptic.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
+                            currentOnScrubSteps.value(tracker.steps)
+                        }
+                    }
+                    if (completed) currentOnScrubEnd.value(tracker.steps) else currentOnScrubCancel.value()
+                }
+                abs(overSlop.y) >= abs(overSlop.x) -> {
+                    currentOnMove.value(overSlop.y)
+                    drag(start.id) { change ->
+                        val dy = change.positionChange().y
+                        change.consume()
+                        currentOnMove.value(dy)
+                    }
+                    currentOnMoveEnd.value()
                 }
             }
         }

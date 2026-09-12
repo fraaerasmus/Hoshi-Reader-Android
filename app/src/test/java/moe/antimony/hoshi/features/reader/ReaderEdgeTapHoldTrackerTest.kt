@@ -71,8 +71,6 @@ class ReaderEdgeTapHoldTrackerTest {
         assertEquals(0, readerDockTopDp(0.5f, 40, 56))
         assertEquals(0.5f, readerDockFraction(372f, 800, 56), 0.01f)
         assertEquals(1f, readerDockFraction(9_999f, 800, 56), 0f)
-        assertEquals(3, readerDockScrubSteps(3, isLeft = true))
-        assertEquals(3, readerDockScrubSteps(-3, isLeft = false))
         assertEquals(372, readerDockClusterTopDp(tabTopDp = 400, containerHeightDp = 800, clusterHeightDp = 112))
         assertEquals(688, readerDockClusterTopDp(tabTopDp = 790, containerHeightDp = 800, clusterHeightDp = 112))
     }
