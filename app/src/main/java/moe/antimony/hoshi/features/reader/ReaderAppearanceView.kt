@@ -411,7 +411,7 @@ private fun ReaderAppearanceContent(
                                 R.string.reader_appearance_two_page_landscape_description,
                             ),
                             checked = settings.twoPageLandscape,
-                            onCheckedChange = { onSettingsChange(settings.copy(twoPageLandscape = it)) },
+                            onCheckedChange = { onSettingsChange { current -> current.copy(twoPageLandscape = it) } },
                         )
                     }
                     if (settings.viewMode == ReaderViewMode.Continuous) {
@@ -681,7 +681,7 @@ private fun ReaderAppearanceContent(
                     SwitchRow(
                         label = stringResource(R.string.reader_appearance_show_chapter),
                         checked = settings.showChapter,
-                        onCheckedChange = { onSettingsChange(settings.copy(showChapter = it)) },
+                        onCheckedChange = { onSettingsChange { current -> current.copy(showChapter = it) } },
                     )
                     if (readerAppearanceShowsAlwaysShowProgress(settings)) {
                         AppearanceDivider(palette)
@@ -751,15 +751,15 @@ private fun ReaderAppearanceContent(
                             ReaderInfoPosition.Right -> infoRightLabel
                         },
                         onSelected = { label ->
-                            onSettingsChange(
-                                settings.copy(
+                            onSettingsChange { current ->
+                                current.copy(
                                     infoPosition = when (label) {
                                         infoLeftLabel -> ReaderInfoPosition.Left
                                         infoRightLabel -> ReaderInfoPosition.Right
                                         else -> ReaderInfoPosition.Center
                                     },
-                                ),
-                            )
+                                )
+                            }
                         },
                         palette = palette,
                     )
@@ -771,7 +771,7 @@ private fun ReaderAppearanceContent(
                         options = listOf(sasayakiLeftLabel, sasayakiCenterLabel),
                         selected = if (settings.sasayakiControlsCentered) sasayakiCenterLabel else sasayakiLeftLabel,
                         onSelected = { label ->
-                            onSettingsChange(settings.copy(sasayakiControlsCentered = label == sasayakiCenterLabel))
+                            onSettingsChange { current -> current.copy(sasayakiControlsCentered = label == sasayakiCenterLabel) }
                         },
                         palette = palette,
                     )
@@ -783,11 +783,11 @@ private fun ReaderAppearanceContent(
                         valueRange = 100f..200f,
                         steps = 3,
                         onValueChange = { value ->
-                            onSettingsChange(
-                                settings.copy(
+                            onSettingsChange { current ->
+                                current.copy(
                                     sasayakiControlsScalePercent = (round(value / 25) * 25).toInt().coerceIn(100, 200),
-                                ),
-                            )
+                                )
+                            }
                         },
                     )
                     AppearanceDivider(palette)
