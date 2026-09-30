@@ -549,6 +549,7 @@ test('duplicate refresh updates every format and creates or removes show-notes b
     assert.equal(descendants(container).filter((button) => button.dataset.kind === 'notes' && !button.hidden).length, 2);
     assert.deepEqual(notesButtons.map((button) => button.style.display), ['', 'none', '']);
     assert.match(mineButtons[2].style.properties.get('--button-icon-url'), /diamond_fill\.svg/);
+    assert.match(notesButtons[0].style.properties.get('--button-icon-url'), /menu_book\.svg/);
 
     setup.setDuplicateStates({ word: false, sentence: false, listening: false });
     await context.refreshAnkiDuplicateStates(0, container);

@@ -1726,7 +1726,7 @@ function createButtonSlot(kind, entryIndex, enabled = true, formatId = null, for
         'data-format-icon': formatIcon
     });
     slot.type = 'button';
-    slot.setAttribute('aria-label', kind === 'audio' ? 'Play audio' : kind === 'notes' ? 'Show Anki notes' : 'Add to Anki');
+    slot.setAttribute('aria-label', kind === 'audio' ? 'Play audio' : kind === 'notes' ? 'Open in Anki' : 'Add to Anki');
     slot.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -1774,7 +1774,7 @@ function applyButtonSlotVisualState(slot) {
     const formatIcon = (slot.dataset.formatIcon || 'square').replace('-small', '');
     const iconName = kind === 'audio'
         ? (state === 'error' ? 'volume_off' : 'volume_up')
-        : kind === 'notes' ? 'search'
+        : kind === 'notes' ? 'menu_book'
         : formatIcon === 'circle' ? (state === 'duplicate' ? 'check_circle' : 'add_circle')
         : formatIcon === 'diamond' ? (state === 'duplicate' ? 'diamond_fill' : 'diamond')
         : (state === 'duplicate' ? 'check_box' : 'add_box');
