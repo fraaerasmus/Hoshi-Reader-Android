@@ -42,6 +42,22 @@ enum class DictionaryCollapseMode(val rawValue: String, @get:StringRes val label
     }
 }
 
+enum class NestedLookupStyle(
+    val rawValue: String,
+    @get:StringRes val labelRes: Int,
+    @get:StringRes val descriptionRes: Int,
+) {
+    Tabs("tabs", R.string.dictionary_nested_lookup_tabs, R.string.dictionary_nested_lookup_tabs_description),
+    Stacked("stacked", R.string.dictionary_nested_lookup_stacked, R.string.dictionary_nested_lookup_stacked_description),
+    Popup("popup", R.string.dictionary_nested_lookup_popup, R.string.dictionary_nested_lookup_popup_description),
+    ;
+
+    companion object {
+        fun fromRawValue(value: String?): NestedLookupStyle? =
+            entries.firstOrNull { it.rawValue == value }
+    }
+}
+
 enum class DictionaryUpdateInterval(
     val rawValue: String,
     val intervalMillis: Long,
@@ -69,6 +85,7 @@ data class DictionarySettings(
     val mineNestedWithReadingContext: Boolean = true,
     val maxResults: Int = 16,
     val scanLength: Int = 16,
+    val nestedLookupStyle: NestedLookupStyle = NestedLookupStyle.Tabs,
     val collapseMode: DictionaryCollapseMode = DictionaryCollapseMode.ExpandAll,
     val expandFirstDictionary: Boolean = false,
     val collapsedDictionaries: Set<String> = emptySet(),
@@ -117,6 +134,8 @@ class DictionarySettingsStore(context: Context) : DictionarySettingsLegacySource
         mineNestedWithReadingContext = preferences.getBoolean(KEY_MINE_NESTED_READING_CONTEXT, true),
         maxResults = preferences.getInt(KEY_MAX_RESULTS, 16),
         scanLength = preferences.getInt(KEY_SCAN_LENGTH, 16),
+        nestedLookupStyle = NestedLookupStyle.fromRawValue(preferences.getString(KEY_NESTED_LOOKUP_STYLE, null))
+            ?: NestedLookupStyle.Tabs,
         collapseMode = DictionaryCollapseMode.fromRawValue(preferences.getString(KEY_COLLAPSE_MODE, null))
             ?: if (preferences.getBoolean(KEY_COLLAPSE_DICTIONARIES, false)) {
                 DictionaryCollapseMode.CollapseAll
@@ -157,6 +176,7 @@ class DictionarySettingsStore(context: Context) : DictionarySettingsLegacySource
             .putBoolean(KEY_MINE_NESTED_READING_CONTEXT, normalized.mineNestedWithReadingContext)
             .putInt(KEY_MAX_RESULTS, normalized.maxResults)
             .putInt(KEY_SCAN_LENGTH, normalized.scanLength)
+            .putString(KEY_NESTED_LOOKUP_STYLE, normalized.nestedLookupStyle.rawValue)
             .putString(KEY_COLLAPSE_MODE, normalized.collapseMode.rawValue)
             .putBoolean(KEY_EXPAND_FIRST_DICTIONARY, normalized.expandFirstDictionary)
             .putStringSet(KEY_COLLAPSED_DICTIONARIES, normalized.collapsedDictionaries)
@@ -182,6 +202,7 @@ class DictionarySettingsStore(context: Context) : DictionarySettingsLegacySource
         const val KEY_MAX_RESULTS = "maxResults"
         const val KEY_SCAN_LENGTH = "scanLength"
         const val KEY_COLLAPSE_DICTIONARIES = "collapseDictionaries"
+        const val KEY_NESTED_LOOKUP_STYLE = "nestedLookupStyle"
         const val KEY_COLLAPSE_MODE = "collapseMode"
         const val KEY_EXPAND_FIRST_DICTIONARY = "expandFirstDictionary"
         const val KEY_COLLAPSED_DICTIONARIES = "collapsedDictionaries"
@@ -320,6 +341,8 @@ class DictionarySettingsRepository(
             mineNestedWithReadingContext = this[KEY_MINE_NESTED_READING_CONTEXT] ?: true,
             maxResults = this[KEY_MAX_RESULTS] ?: 16,
             scanLength = this[KEY_SCAN_LENGTH] ?: 16,
+            nestedLookupStyle = NestedLookupStyle.fromRawValue(this[KEY_NESTED_LOOKUP_STYLE])
+                ?: NestedLookupStyle.Tabs,
             collapseMode = DictionaryCollapseMode.fromRawValue(this[KEY_COLLAPSE_MODE])
                 ?: if (legacyCollapseDictionaries == true) {
                     DictionaryCollapseMode.CollapseAll
@@ -355,6 +378,7 @@ class DictionarySettingsRepository(
         this[KEY_MINE_NESTED_READING_CONTEXT] = normalized.mineNestedWithReadingContext
         this[KEY_MAX_RESULTS] = normalized.maxResults
         this[KEY_SCAN_LENGTH] = normalized.scanLength
+        this[KEY_NESTED_LOOKUP_STYLE] = normalized.nestedLookupStyle.rawValue
         this[KEY_COLLAPSE_MODE] = normalized.collapseMode.rawValue
         this[KEY_EXPAND_FIRST_DICTIONARY] = normalized.expandFirstDictionary
         this[KEY_COLLAPSED_DICTIONARIES] = normalized.collapsedDictionaries
@@ -440,6 +464,7 @@ class DictionarySettingsRepository(
         private val KEY_MAX_RESULTS = intPreferencesKey("maxResults")
         private val KEY_SCAN_LENGTH = intPreferencesKey("scanLength")
         private val KEY_COLLAPSE_DICTIONARIES = booleanPreferencesKey("collapseDictionaries")
+        private val KEY_NESTED_LOOKUP_STYLE = stringPreferencesKey("nestedLookupStyle")
         private val KEY_COLLAPSE_MODE = stringPreferencesKey("collapseMode")
         private val KEY_EXPAND_FIRST_DICTIONARY = booleanPreferencesKey("expandFirstDictionary")
         private val KEY_COLLAPSED_DICTIONARIES = stringSetPreferencesKey("collapsedDictionaries")
@@ -467,6 +492,7 @@ private data class ProfileDictionarySettings(
     val mineNestedWithReadingContext: Boolean = true,
     val maxResults: Int = 16,
     val scanLength: Int = 16,
+    val nestedLookupStyle: NestedLookupStyle = NestedLookupStyle.Tabs,
     val collapseMode: DictionaryCollapseMode = DictionaryCollapseMode.ExpandAll,
     val expandFirstDictionary: Boolean = false,
     val collapsedDictionaries: Set<String> = emptySet(),
@@ -493,6 +519,7 @@ private fun DictionarySettings.toProfileDictionarySettings(): ProfileDictionaryS
             mineNestedWithReadingContext = settings.mineNestedWithReadingContext,
             maxResults = settings.maxResults,
             scanLength = settings.scanLength,
+            nestedLookupStyle = settings.nestedLookupStyle,
             collapseMode = settings.collapseMode,
             expandFirstDictionary = settings.expandFirstDictionary,
             collapsedDictionaries = settings.collapsedDictionaries,
@@ -514,6 +541,7 @@ private fun DictionarySettings.withProfileDictionarySettings(profileSettings: Pr
         mineNestedWithReadingContext = profileSettings.mineNestedWithReadingContext,
         maxResults = profileSettings.maxResults,
         scanLength = profileSettings.scanLength,
+        nestedLookupStyle = profileSettings.nestedLookupStyle,
         collapseMode = profileSettings.collapseMode,
         expandFirstDictionary = profileSettings.expandFirstDictionary,
         collapsedDictionaries = profileSettings.collapsedDictionaries,

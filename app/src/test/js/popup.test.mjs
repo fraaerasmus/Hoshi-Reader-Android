@@ -138,6 +138,7 @@ function popupContext({
     duplicateStates = {},
     kanjiResult = null,
     getEntry = null,
+    lookupRedirect = null,
 } = {}) {
     const documentElement = new FakeElement();
     documentElement.childProbeWidth = htmlProbeWidth;
@@ -187,6 +188,8 @@ function popupContext({
     const showNotesMessages = [];
     const kanjiRedirectMessages = [];
     const kanjiRedirectCommittedMessages = [];
+    const lookupRedirectMessages = [];
+    const historyTabsMessages = [];
     let currentDuplicateStates = duplicateStates;
     const window = {
         scrollX: 0,
@@ -252,6 +255,17 @@ function popupContext({
                         return getEntry?.(index) ?? null;
                     },
                 },
+                lookupRedirect: {
+                    postMessage(query) {
+                        lookupRedirectMessages.push(query);
+                        return lookupRedirect?.(query) ?? 0;
+                    },
+                },
+                historyTabs: {
+                    postMessage(tabs) {
+                        historyTabsMessages.push(JSON.parse(JSON.stringify(tabs)));
+                    },
+                },
             },
         },
         window,
@@ -279,6 +293,8 @@ function popupContext({
         showNotesMessages,
         kanjiRedirectMessages,
         kanjiRedirectCommittedMessages,
+        lookupRedirectMessages,
+        historyTabsMessages,
         entriesContainer,
         setDuplicateStates(value) { currentDuplicateStates = value; },
     };
@@ -1079,4 +1095,84 @@ test('only the latest Kanji response may replace popup state or commit native hi
 
     assert.equal(setup.entriesContainer.children.length, 0);
     assert.equal(setup.kanjiRedirectCommittedMessages.length, 1);
+});
+
+function inPlaceLookupContext(style) {
+    const results = {
+        '星空': [{ expression: '星空', reading: 'ほしぞら', glossaries: [] }],
+        '空': [{ expression: '空', reading: 'そら', glossaries: [] }],
+    };
+    let hostEntries = [{ expression: '星', reading: 'ほし', glossaries: [] }];
+    const setup = popupContext({
+        getEntry: (index) => hostEntries[index],
+        lookupRedirect(query) {
+            const found = results[query];
+            if (found) hostEntries = found;
+            return found?.length ?? 0;
+        },
+    });
+    setup.context.window.nestedLookupStyle = style;
+    setup.context.window.replacePopupResults(1, [hostEntries[0]]);
+    return setup;
+}
+
+function renderedExpressions(setup) {
+    return Array.from(setup.context.window.lookupEntries, (entry) => entry.expression);
+}
+
+test('popup view leaves nested lookups to the host', () => {
+    const setup = inPlaceLookupContext('popup');
+
+    assert.equal(setup.context.window.hoshiLookupInPlace({ text: '星空' }), false);
+    assert.deepEqual(setup.lookupRedirectMessages, []);
+    assert.deepEqual(setup.historyTabsMessages, []);
+});
+
+test('stacked view looks a nested word up in place and keeps it in history', async () => {
+    const setup = inPlaceLookupContext('stacked');
+    await flushAsyncWork();
+
+    assert.equal(setup.context.window.hoshiLookupInPlace({ text: '星空' }), true);
+    await flushAsyncWork(16);
+
+    assert.deepEqual(setup.lookupRedirectMessages, ['星空']);
+    assert.deepEqual(renderedExpressions(setup), ['星空']);
+    assert.deepEqual(setup.historyTabsMessages, []);
+
+    setup.context.window.navigateBack();
+    assert.deepEqual(renderedExpressions(setup), ['星']);
+});
+
+test('a nested lookup without results adds no history', async () => {
+    const setup = inPlaceLookupContext('tabs');
+    await flushAsyncWork();
+
+    setup.context.window.hoshiLookupInPlace({ text: '無' });
+    await flushAsyncWork(16);
+
+    assert.deepEqual(renderedExpressions(setup), ['星']);
+    assert.deepEqual(setup.historyTabsMessages.at(-1), { labels: ['星'], activeIndex: 0 });
+});
+
+test('tabs view labels every lookup and jumps straight to any of them', async () => {
+    const setup = inPlaceLookupContext('tabs');
+    await flushAsyncWork();
+    setup.context.window.hoshiLookupInPlace({ text: '星空' });
+    await flushAsyncWork(16);
+    setup.context.window.hoshiLookupInPlace({ text: '空' });
+    await flushAsyncWork(16);
+
+    assert.deepEqual(setup.historyTabsMessages.at(-1), { labels: ['星', '星空', '空'], activeIndex: 2 });
+
+    setup.context.window.navigateTo(0);
+    assert.deepEqual(renderedExpressions(setup), ['星']);
+    assert.deepEqual(setup.historyTabsMessages.at(-1), { labels: ['星', '星空', '空'], activeIndex: 0 });
+
+    setup.context.window.navigateTo(2);
+    assert.deepEqual(renderedExpressions(setup), ['空']);
+    assert.deepEqual(setup.historyTabsMessages.at(-1), { labels: ['星', '星空', '空'], activeIndex: 2 });
+
+    setup.context.window.navigateTo(1);
+    assert.deepEqual(renderedExpressions(setup), ['星空']);
+    assert.deepEqual(setup.historyTabsMessages.at(-1), { labels: ['星', '星空', '空'], activeIndex: 1 });
 });

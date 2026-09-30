@@ -304,6 +304,14 @@
     <string name="dictionary_collapse_mode_collapse_all">全部折叠</string>
     <string name="dictionary_collapse_mode_custom" comment="Dictionary collapse mode option, distinct from reader appearance custom theme.">自定义</string>
     <string name="dictionary_mode" comment="Dictionary setting label, intentionally matching reader appearance mode.">模式</string>
+    <string name="dictionary_nested_lookup">弹窗内查词</string>
+    <string name="dictionary_nested_lookup_view">视图</string>
+    <string name="dictionary_nested_lookup_tabs">标签页</string>
+    <string name="dictionary_nested_lookup_stacked">堆叠</string>
+    <string name="dictionary_nested_lookup_popup" comment="Nested lookup view option, intentionally matching the reader appearance Popup section.">弹窗</string>
+    <string name="dictionary_nested_lookup_tabs_description">在弹窗内点按的词会替换弹窗内容，顶部的标签页可在各次查词之间跳转。</string>
+    <string name="dictionary_nested_lookup_stacked_description">在弹窗内点按的词会替换弹窗内容，返回按钮可回到上一次查词。</string>
+    <string name="dictionary_nested_lookup_popup_description">在弹窗内点按的词会在上方打开新的弹窗。</string>
     <string name="dictionary_expand_first">展开第一个辞典</string>
     <string name="dictionary_settings_behaviour" comment="Settings group label, intentionally shared with Sync settings.">行为</string>
     <string name="dictionary_compact_glossaries" comment="Dictionary setting label, intentionally matching Anki compact glossaries.">紧凑释义</string>
@@ -412,7 +420,7 @@
     <string name="reader_appearance_layout">布局</string>
     <string name="reader_appearance_display">显示</string>
     <string name="reader_appearance_progress">进度</string>
-    <string name="reader_appearance_popup">弹窗</string>
+    <string name="reader_appearance_popup" comment="Reader appearance section label, intentionally matching the nested lookup Popup view.">弹窗</string>
     <string name="reader_appearance_theme_system" comment="Reader theme option, distinct from the font-library System section label.">跟随系统</string>
     <string name="reader_appearance_theme_light">浅色</string>
     <string name="reader_appearance_theme_dark">深色</string>

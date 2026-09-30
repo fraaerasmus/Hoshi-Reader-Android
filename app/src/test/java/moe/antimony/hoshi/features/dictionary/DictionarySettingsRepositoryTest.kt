@@ -39,6 +39,7 @@ class DictionarySettingsRepositoryTest {
                 scanNonJapaneseText = false,
                 maxResults = 100,
                 scanLength = 0,
+                nestedLookupStyle = NestedLookupStyle.Popup,
                 collapseMode = DictionaryCollapseMode.CollapseAll,
                 expandFirstDictionary = true,
                 collapsedDictionaries = setOf("JMdict"),
@@ -62,6 +63,7 @@ class DictionarySettingsRepositoryTest {
             assertFalse(migrated.scanNonJapaneseText)
             assertEquals(50, migrated.maxResults)
             assertEquals(1, migrated.scanLength)
+            assertEquals(NestedLookupStyle.Popup, migrated.nestedLookupStyle)
             assertEquals(DictionaryCollapseMode.CollapseAll, migrated.collapseMode)
             assertTrue(migrated.expandFirstDictionary)
             assertEquals(setOf("JMdict"), migrated.collapsedDictionaries)
@@ -92,6 +94,7 @@ class DictionarySettingsRepositoryTest {
                     mineNestedWithReadingContext = false,
                     maxResults = 0,
                     scanLength = 100,
+                    nestedLookupStyle = NestedLookupStyle.Stacked,
                     collapseMode = DictionaryCollapseMode.Custom,
                     expandFirstDictionary = true,
                     collapsedDictionaries = setOf("JMdict"),
@@ -115,6 +118,7 @@ class DictionarySettingsRepositoryTest {
             assertFalse(saved.mineNestedWithReadingContext)
             assertEquals(1, saved.maxResults)
             assertEquals(64, saved.scanLength)
+            assertEquals(NestedLookupStyle.Stacked, saved.nestedLookupStyle)
             assertEquals(DictionaryCollapseMode.Custom, saved.collapseMode)
             assertTrue(saved.expandFirstDictionary)
             assertEquals(setOf("JMdict"), saved.collapsedDictionaries)

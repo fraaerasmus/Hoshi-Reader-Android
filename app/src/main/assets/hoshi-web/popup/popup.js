@@ -2077,6 +2077,24 @@ function createGlossarySection(dictName, contents, isFirst, entryIdx) {
 const backStack = [];
 const forwardStack = [];
 let pendingHistoryRestore = null;
+let currentLabel = '';
+
+function postHistoryTabs() {
+    if (window.nestedLookupStyle !== 'tabs') { return; }
+    webkit.messageHandlers.historyTabs?.postMessage({
+        labels: [
+            ...backStack.map((level) => level.label),
+            currentLabel,
+            ...forwardStack.map((level) => level.label).reverse(),
+        ],
+        activeIndex: backStack.length,
+    });
+}
+
+function setCurrentLabel(label) {
+    currentLabel = label || '';
+    postHistoryTabs();
+}
 
 function replaceHostEntrySet() {
     hostEntrySetVersion++;
@@ -2091,6 +2109,7 @@ window.resetPopupResults = function() {
     backStack.length = 0;
     forwardStack.length = 0;
     pendingHistoryRestore = null;
+    setCurrentLabel('');
     window.lookupEntries = undefined;
     window.entryCount = 0;
     audioUrls = {};
@@ -2131,6 +2150,7 @@ function redirect(count) {
     resetDictionaryMediaObserver();
     backStack.push(snapshot());
     forwardStack.length = 0;
+    setCurrentLabel('');
     replaceHostEntrySet();
     window.lookupEntries = undefined;
     window.entryCount = count;
@@ -2194,6 +2214,7 @@ function redirectKanji(data) {
     renderGeneration++;
     backStack.push(snapshot());
     forwardStack.length = 0;
+    setCurrentLabel(data.character);
     window.lookupEntries = undefined;
     window.entryCount = 0;
     audioUrls = {};
@@ -2212,6 +2233,7 @@ window.replacePopupResults = function(count, initialEntries) {
     replaceHostEntrySet();
     backStack.length = 0;
     forwardStack.length = 0;
+    setCurrentLabel('');
     window.lookupEntries = Array.isArray(initialEntries) && initialEntries.length ? initialEntries : undefined;
     window.entryCount = count;
     audioUrls = {};
@@ -2237,6 +2259,7 @@ function snapshot() {
         lookupEntries: window.lookupEntries?.slice(),
         entryCount: window.entryCount,
         entrySetVersion: activeEntrySetVersion,
+        label: currentLabel,
     };
 }
 
@@ -2255,6 +2278,7 @@ function restore(snapshot) {
     const container = document.getElementById('entries-container');
     const nodes = [...snapshot.nodes];
     activeEntrySetVersion = snapshot.entrySetVersion;
+    currentLabel = snapshot.label || '';
     const shouldResumeRender = snapshot.entrySetVersion === hostEntrySetVersion
         && snapshot.entryCount > renderedEntryCount(nodes);
     const shouldDeferOffscreenNodes = !shouldResumeRender && snapshot.scrollTop === 0 && nodes.length > 6;
@@ -2280,16 +2304,41 @@ function restore(snapshot) {
     }
 }
 
-function navigate(origin, destination) {
-    if (!origin.length) {
+function navigate(origin, destination, steps = 1) {
+    if (steps < 1 || steps > origin.length) {
         return;
     }
     destination.push(snapshot());
+    for (let step = 1; step < steps; step++) {
+        destination.push(origin.pop());
+    }
     restore(origin.pop());
+    postHistoryTabs();
 }
 
 window.navigateBack = () => navigate(backStack, forwardStack);
 window.navigateForward = () => navigate(forwardStack, backStack);
+window.navigateTo = (index) => {
+    const steps = index - backStack.length;
+    if (steps < 0) {
+        navigate(backStack, forwardStack, -steps);
+    } else {
+        navigate(forwardStack, backStack, steps);
+    }
+};
+
+window.hoshiLookupInPlace = function(selection) {
+    if (window.nestedLookupStyle !== 'tabs' && window.nestedLookupStyle !== 'stacked') {
+        return false;
+    }
+    Promise.resolve(webkit.messageHandlers.lookupRedirect.postMessage(selection.text)).then((count) => {
+        window.hoshiSelection?.clearSelection?.();
+        if (count > 0) {
+            redirect(count);
+        }
+    });
+    return true;
+};
 
 function applyHoshiPopupThemeOverrides(root = document) {
     const colorScheme = document.documentElement.dataset.hoshiColorScheme;
@@ -2439,6 +2488,9 @@ window.renderPopup = function() {
 
             window.lookupEntries ??= [];
             window.lookupEntries[idx] = entry;
+            if (idx === 0) {
+                setCurrentLabel(entry.expression);
+            }
 
             if (idx > 0) {
                 container.appendChild(document.createElement('hr'));

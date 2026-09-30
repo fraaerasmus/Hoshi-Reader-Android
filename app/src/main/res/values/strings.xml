@@ -306,6 +306,14 @@
     <string name="dictionary_collapse_mode_collapse_all">Collapse All</string>
     <string name="dictionary_collapse_mode_custom" comment="Dictionary collapse mode option, distinct from reader appearance custom theme.">Custom</string>
     <string name="dictionary_mode" comment="Dictionary setting label, intentionally matching reader appearance mode.">Mode</string>
+    <string name="dictionary_nested_lookup">Lookups Inside the Popup</string>
+    <string name="dictionary_nested_lookup_view">View</string>
+    <string name="dictionary_nested_lookup_tabs">Tabs</string>
+    <string name="dictionary_nested_lookup_stacked">Stacked</string>
+    <string name="dictionary_nested_lookup_popup" comment="Nested lookup view option, intentionally matching the reader appearance Popup section.">Popup</string>
+    <string name="dictionary_nested_lookup_tabs_description">A word tapped inside the popup replaces its content. Tabs along the top jump between lookups.</string>
+    <string name="dictionary_nested_lookup_stacked_description">A word tapped inside the popup replaces its content. Back returns to the previous lookup.</string>
+    <string name="dictionary_nested_lookup_popup_description">A word tapped inside the popup opens in a new popup on top.</string>
     <string name="dictionary_expand_first">Expand First Dictionary</string>
     <string name="dictionary_settings_behaviour" comment="Settings group label, intentionally shared with Sync settings.">Behaviour</string>
     <string name="dictionary_compact_glossaries" comment="Dictionary setting label, intentionally matching Anki compact glossaries.">Compact Glossaries</string>
@@ -414,7 +422,7 @@
     <string name="reader_appearance_layout">Layout</string>
     <string name="reader_appearance_display">Display</string>
     <string name="reader_appearance_progress">Progress</string>
-    <string name="reader_appearance_popup">Popup</string>
+    <string name="reader_appearance_popup" comment="Reader appearance section label, intentionally matching the nested lookup Popup view.">Popup</string>
     <string name="reader_appearance_theme_system" comment="Reader theme option, intentionally matching the font-library System section label.">System</string>
     <string name="reader_appearance_theme_light">Light</string>
     <string name="reader_appearance_theme_dark">Dark</string>

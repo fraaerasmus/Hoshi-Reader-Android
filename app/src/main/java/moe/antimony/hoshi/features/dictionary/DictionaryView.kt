@@ -1239,6 +1239,33 @@ private fun DictionarySettingsView(
                         )
                     }
                 }
+                SectionLabel(stringResource(R.string.dictionary_nested_lookup))
+                SettingsGroup {
+                    ListItem(
+                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                        headlineContent = { Text(stringResource(R.string.dictionary_nested_lookup_view)) },
+                        supportingContent = {
+                            Column {
+                                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                                    NestedLookupStyle.entries.forEachIndexed { index, style ->
+                                        SegmentedButton(
+                                            selected = settings.nestedLookupStyle == style,
+                                            onClick = { onSettingsChange { current -> current.copy(nestedLookupStyle = style) } },
+                                            shape = SegmentedButtonDefaults.itemShape(
+                                                index = index,
+                                                count = NestedLookupStyle.entries.size,
+                                            ),
+                                            icon = {},
+                                        ) {
+                                            Text(stringResource(style.labelRes))
+                                        }
+                                    }
+                                }
+                                Text(stringResource(settings.nestedLookupStyle.descriptionRes))
+                            }
+                        },
+                    )
+                }
                 SectionLabel(stringResource(R.string.dictionary_settings_behaviour))
                 SettingsGroup {
                     ToggleRow(stringResource(R.string.dictionary_compact_glossaries), settings.compactGlossaries) {

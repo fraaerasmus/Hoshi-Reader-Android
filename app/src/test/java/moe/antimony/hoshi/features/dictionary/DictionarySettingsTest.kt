@@ -19,6 +19,7 @@ class DictionarySettingsTest {
         assertTrue(settings.scanNonJapaneseText)
         assertEquals(16, settings.maxResults)
         assertEquals(16, settings.scanLength)
+        assertEquals(NestedLookupStyle.Tabs, settings.nestedLookupStyle)
         assertEquals(DictionaryCollapseMode.ExpandAll, settings.collapseMode)
         assertFalse(settings.expandFirstDictionary)
         assertEquals(emptySet<String>(), settings.collapsedDictionaries)

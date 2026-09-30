@@ -205,6 +205,17 @@ class LookupPopupHtmlTest {
     }
 
     @Test
+    fun iframePopupShellCarriesTheNestedLookupStyleAndItsBridge() {
+        val html = LookupPopupHtml.renderIframeDocument(
+            settings = DictionarySettings(nestedLookupStyle = NestedLookupStyle.Stacked),
+        )
+
+        assertTrue(html.contains("""window.nestedLookupStyle = "stacked";"""))
+        assertTrue(html.contains("if (window.hoshiLookupInPlace?.(selection)) return;"))
+        assertTrue(html.contains("window.navigateTo?.(message.index)"))
+    }
+
+    @Test
     fun iframePopupShellForwardsTermNavigationMessages() {
         val html = LookupPopupHtml.renderIframeDocument()
 

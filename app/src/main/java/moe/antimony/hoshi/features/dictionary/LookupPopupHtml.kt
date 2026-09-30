@@ -180,7 +180,11 @@ internal object LookupPopupHtml {
                     window.webkit = {
                         messageHandlers: {
                             openLink: { postMessage: function(url) { window.HoshiAndroidPopup.postMessage('openLink', url); } },
-                            textSelected: { postMessage: function(selection) { window.HoshiAndroidPopup.postMessage('textSelected', selection); } },
+                            textSelected: { postMessage: function(selection) {
+                                if (window.hoshiLookupInPlace?.(selection)) return;
+                                window.HoshiAndroidPopup.postMessage('textSelected', selection);
+                            } },
+                            historyTabs: { postMessage: function(tabs) { window.HoshiAndroidPopup.postMessage('historyTabs', tabs); } },
                             tapOutside: { postMessage: function() { window.HoshiAndroidPopup.postMessage('tapOutside'); } },
                             swipeDismiss: { postMessage: function() { window.HoshiAndroidPopup.postMessage('swipeDismiss'); } },
                             playWordAudio: { postMessage: function(content) { window.HoshiAndroidPopup.postMessage('playWordAudio', content); } },
@@ -199,6 +203,7 @@ internal object LookupPopupHtml {
                     window.scanNonJapaneseText = ${normalizedSettings.scanNonJapaneseText};
                     window.scanMultiWordPhrases = ${normalizedSettings.scanMultiWordPhrases};
                     window.scanLength = ${normalizedSettings.scanLength};
+                    window.nestedLookupStyle = "${normalizedSettings.nestedLookupStyle.rawValue}";
                     window.collapseMode = "${normalizedSettings.collapseMode.rawValue}";
                     window.expandFirstDictionary = ${normalizedSettings.expandFirstDictionary};
                     window.collapsedDictionaries = $collapsedDictionaries;
@@ -344,6 +349,10 @@ internal object LookupPopupHtml {
                             }
                             if (message.type === 'navigateForward') {
                                 window.navigateForward?.();
+                                return;
+                            }
+                            if (message.type === 'navigateTo') {
+                                window.navigateTo?.(message.index);
                                 return;
                             }
                             if (message.type === 'navigateTerm') {

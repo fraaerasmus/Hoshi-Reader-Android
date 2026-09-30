@@ -853,3 +853,61 @@ test('horizontal e-ink sasayaki line follows the ruby-aware height for the whole
     assert.equal(sasayakiHighlights[0].style.width, '32px');
     assert.equal(sasayakiHighlights[0].style.height, '1.5px');
 });
+
+function tabsScene(tabs) {
+    const scene = popupHost();
+    const iframeMessages = [];
+    const nativeMessages = [];
+    scene.window.HoshiReaderPopup = {
+        postMessage(message) {
+            nativeMessages.push(JSON.parse(message));
+        },
+    };
+    scene.host.renderStack({
+        popups: [{ ...rootPopupPayload(), actionBarVisible: true, backCount: 1 }],
+    });
+    const shell = scene.document.getElementById('hoshi-reader-popup-layer').children[0];
+    shell.querySelector('.hoshi-reader-popup-iframe').contentWindow.postMessage =
+        (message) => iframeMessages.push(JSON.parse(JSON.stringify(message)));
+    scene.dispatchMessage({ source: 'hoshi-popup-iframe', name: 'historyTabs', popupId: 'root', body: tabs });
+    return {
+        iframeMessages,
+        nativeMessages,
+        actionBar: () => shell.querySelector('.hoshi-reader-popup-action-bar'),
+    };
+}
+
+test('history tabs replace the back and forward arrows and stay out of native', () => {
+    const scene = tabsScene({ labels: ['星', '', '空'], activeIndex: 1 });
+    const [strip, close] = scene.actionBar().children;
+
+    assert.equal(scene.actionBar().children.length, 2);
+    assert.equal(strip.className, 'hoshi-reader-popup-tabs');
+    assert.deepEqual(strip.children.map((tab) => tab.textContent), ['星', '…', '空']);
+    assert.deepEqual(strip.children.map((tab) => tab.dataset.active), ['false', 'true', 'false']);
+    assert.equal(close.attributes.get('aria-label'), 'Close');
+    assert.deepEqual(scene.nativeMessages, []);
+});
+
+test('a single lookup keeps the back and forward arrows', () => {
+    const scene = tabsScene({ labels: ['星'], activeIndex: 0 });
+
+    assert.equal(scene.actionBar().children[0].attributes.get('aria-label'), 'Back');
+    assert.equal(scene.actionBar().querySelector('.hoshi-reader-popup-tabs'), null);
+});
+
+test('tapping a tab moves the iframe and native history by the same number of steps', () => {
+    const scene = tabsScene({ labels: ['星', '星空', '空'], activeIndex: 2 });
+    const click = { preventDefault() {}, stopPropagation() {} };
+    const [first, , active] = scene.actionBar().children[0].children;
+
+    active.eventListeners.get('click')[0](click);
+    assert.deepEqual(scene.iframeMessages, []);
+
+    first.eventListeners.get('click')[0](click);
+    assert.deepEqual(scene.iframeMessages, [{ type: 'navigateTo', index: 0 }]);
+    assert.deepEqual(scene.nativeMessages, [
+        { name: 'navigateBack', popupId: 'root' },
+        { name: 'navigateBack', popupId: 'root' },
+    ]);
+});

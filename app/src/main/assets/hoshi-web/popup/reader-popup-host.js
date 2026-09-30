@@ -92,18 +92,47 @@
         return bar;
     }
 
-    function renderControls(shell, payload, iframe) {
+    function tabStrip(popupId, tabs) {
+        const strip = document.createElement('div');
+        strip.className = 'hoshi-reader-popup-tabs';
+        tabs.labels.forEach((label, index) => {
+            const tab = document.createElement('button');
+            tab.type = 'button';
+            tab.className = 'hoshi-reader-popup-tab';
+            tab.dataset.active = String(index === tabs.activeIndex);
+            tab.textContent = label || '…';
+            tab.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                navigateTo(popupId, index);
+            });
+            strip.appendChild(tab);
+        });
+        return strip;
+    }
+
+    function revealActiveTab(strip) {
+        const active = Array.from(strip.children).find(tab => tab.dataset.active === 'true');
+        if (!active) return;
+        strip.scrollLeft = active.offsetLeft - (strip.clientWidth - active.offsetWidth) / 2;
+    }
+
+    function renderControls(shell, payload, iframe, tabs = null) {
         shell.querySelectorAll('.hoshi-reader-popup-bar').forEach(node => node.remove());
         if (payload.actionBarVisible) {
+            const strip = tabs?.labels?.length > 1 ? tabStrip(payload.id, tabs) : null;
             shell.insertBefore(
                 buildBar('hoshi-reader-popup-bar hoshi-reader-popup-action-bar', [
-                    button('arrow_back', payload.backCount > 0, () => navigateBack(payload.id), 'Back'),
-                    button('arrow_forward', payload.forwardCount > 0, () => navigateForward(payload.id), 'Forward'),
-                    spacer(),
+                    ...(strip ? [strip] : [
+                        button('arrow_back', payload.backCount > 0, () => navigateBack(payload.id), 'Back'),
+                        button('arrow_forward', payload.forwardCount > 0, () => navigateForward(payload.id), 'Forward'),
+                        spacer(),
+                    ]),
                     button('close', true, () => postNative({ name: 'swipeDismiss', popupId: payload.id }), 'Close')
                 ]),
                 iframe,
             );
+            if (strip) revealActiveTab(strip);
         }
         if (payload.sasayakiVisible) {
             shell.insertBefore(
@@ -242,6 +271,7 @@
         record.root = isRoot;
         record.payload = payload;
         if (needsRender) {
+            record.tabs = null;
             setContentReady(record, false);
             setRevealReady(record, false);
             resetIframe(record);
@@ -261,7 +291,10 @@
         }
         record.clearSelectionSignal = payload.clearSelectionSignal;
         applyShellStyle(record.shell, payload);
-        renderControls(record.shell, payload, record.iframe);
+        if (record.iframe.src !== payload.iframeUrl) {
+            record.tabs = null;
+        }
+        renderControls(record.shell, payload, record.iframe, record.tabs);
         record.iframe.style.top = `${frameContentTop(payload)}px`;
         record.iframe.style.height = `calc(100% - ${frameContentTop(payload)}px)`;
         syncRootReveal();
@@ -280,6 +313,7 @@
         setContentReady(record, false);
         resetIframe(record);
         record.payload = null;
+        record.tabs = null;
         record.clearSelectionSignal = undefined;
         record.root = false;
         record.shell.dataset.popupId = '';
@@ -653,6 +687,17 @@
         postNative({ name: 'navigateForward', popupId });
     }
 
+    function navigateTo(popupId, index) {
+        const record = frames.get(popupId);
+        const steps = index - (record?.tabs?.activeIndex ?? index);
+        if (!record || !steps) return;
+        record.iframe.contentWindow?.postMessage({ type: 'navigateTo', index }, ORIGIN);
+        const name = steps < 0 ? 'navigateBack' : 'navigateForward';
+        for (let step = 0; step < Math.abs(steps); step++) {
+            postNative({ name, popupId });
+        }
+    }
+
     function navigateTopTerm(direction) {
         if (direction !== 'previous' && direction !== 'next') return;
         const popupId = topPopupId();
@@ -681,6 +726,13 @@
         const record = frames.get(popupId);
         if (data.name === 'contentReady' && record) {
             setContentReady(record, true);
+        }
+        if (data.name === 'historyTabs') {
+            if (record?.payload) {
+                record.tabs = data.body;
+                renderControls(record.shell, record.payload, record.iframe, record.tabs);
+            }
+            return;
         }
         const body = data.name === 'textSelected' ? adjustSelectionBody(popupId, data.body) : data.body;
         postNative({
@@ -790,6 +842,48 @@
         }
         #${LAYER_ID} .hoshi-reader-popup-flex-spacer {
             flex: 1 1 auto;
+        }
+        #${LAYER_ID} .hoshi-reader-popup-tabs {
+            flex: 1 1 auto;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        #${LAYER_ID} .hoshi-reader-popup-tabs::-webkit-scrollbar {
+            display: none;
+        }
+        #${LAYER_ID} .hoshi-reader-popup-tab {
+            appearance: none;
+            flex: 0 0 auto;
+            box-sizing: border-box;
+            max-width: 9em;
+            height: 28px;
+            padding: 0 12px;
+            border: 1px solid rgba(120, 120, 128, 0.36);
+            border-radius: 14px;
+            background: transparent;
+            color: inherit;
+            font: 13px/1 system-ui, sans-serif;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #${LAYER_ID} .hoshi-reader-popup-tab[data-active="true"] {
+            border-color: transparent;
+            background: rgba(120, 120, 128, 0.24);
+            font-weight: 600;
+        }
+        #${LAYER_ID} .hoshi-reader-popup-shell[data-e-ink-mode="true"] .hoshi-reader-popup-tab {
+            border-radius: 0;
+            border-color: currentColor;
+            background: transparent;
+        }
+        #${LAYER_ID} .hoshi-reader-popup-shell[data-e-ink-mode="true"] .hoshi-reader-popup-tab[data-active="true"] {
+            border-width: 2px;
         }
         #${LAYER_ID} .hoshi-reader-popup-shell[data-dark-mode="true"] .hoshi-reader-popup-bar {
             color: rgba(255, 255, 255, 0.92);
