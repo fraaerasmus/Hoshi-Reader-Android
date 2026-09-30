@@ -235,7 +235,6 @@ const popupTermNavigator = window.createPopupTermNavigator({
 window.installPopupTermNavigationInput(popupTermNavigator);
 
 window.navigatePopupTerm = direction => popupTermNavigator.navigate(direction);
-window.currentPopupEntryIndex = () => popupTermNavigator.currentIndex();
 // Keys act on the current entry through the buttons it already has, so nothing new is wired.
 window.minePopupTerm = function() {
     const index = popupTermNavigator.currentIndex();

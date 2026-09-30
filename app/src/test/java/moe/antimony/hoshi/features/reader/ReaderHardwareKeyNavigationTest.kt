@@ -23,21 +23,11 @@ class ReaderHardwareKeyNavigationTest {
     )
 
     @Test
-    fun pageDownAndPageUpAlwaysMapToReaderNavigation() {
-        assertEquals(
-            ReaderNavigationDirection.Forward,
-            readerNavigationDirectionForKeyEvent(keyCode = KeyEvent.KEYCODE_PAGE_DOWN, action = KeyEvent.ACTION_DOWN, repeatCount = 0),
-        )
-        assertEquals(
-            ReaderNavigationDirection.Backward,
-            readerNavigationDirectionForKeyEvent(keyCode = KeyEvent.KEYCODE_PAGE_UP, action = KeyEvent.ACTION_DOWN, repeatCount = 0),
-        )
-    }
-
-    @Test
-    fun pageKeysIgnoreKeyUpAndRepeatedKeyDownEvents() {
-        assertNull(readerNavigationDirectionForKeyEvent(keyCode = KeyEvent.KEYCODE_PAGE_DOWN, action = KeyEvent.ACTION_UP, repeatCount = 0))
-        assertNull(readerNavigationDirectionForKeyEvent(keyCode = KeyEvent.KEYCODE_PAGE_DOWN, action = KeyEvent.ACTION_DOWN, repeatCount = 1))
+    fun pageDownAndPageUpTurnPagesOncePerPress() {
+        assertEquals(forward, boundKeyEvent(KeyEvent.KEYCODE_PAGE_DOWN).action)
+        assertEquals(backward, boundKeyEvent(KeyEvent.KEYCODE_PAGE_UP).action)
+        assertNull(boundKeyEvent(KeyEvent.KEYCODE_PAGE_DOWN, action = KeyEvent.ACTION_UP).action)
+        assertNull(boundKeyEvent(KeyEvent.KEYCODE_PAGE_DOWN, repeatCount = 1).action)
     }
 
     @Test

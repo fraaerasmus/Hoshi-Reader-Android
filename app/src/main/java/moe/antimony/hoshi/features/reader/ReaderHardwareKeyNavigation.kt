@@ -60,40 +60,6 @@ internal class ReaderKeyPresses {
     }
 }
 
-internal fun readerNavigationDirectionForKeyEvent(
-    keyCode: Int,
-    action: Int,
-    repeatCount: Int,
-): ReaderNavigationDirection? =
-    (readerHardwareKeyEventForKeyEvent(
-        keyCode = keyCode,
-        action = action,
-        repeatCount = repeatCount,
-        sasayakiEnabled = false,
-        hasSasayakiAudio = false,
-    ).action as? ReaderHardwareKeyAction.ReaderNavigation)?.direction
-
-internal fun readerHardwareKeyActionForKeyEvent(
-    keyCode: Int,
-    action: Int,
-    repeatCount: Int,
-    sasayakiEnabled: Boolean,
-    hasSasayakiAudio: Boolean,
-    textEditorFocused: Boolean = false,
-    hasLookupPopup: Boolean = false,
-    sasayakiHoldToBoost: Boolean = false,
-): ReaderHardwareKeyAction? =
-    readerHardwareKeyEventForKeyEvent(
-        keyCode = keyCode,
-        action = action,
-        repeatCount = repeatCount,
-        sasayakiEnabled = sasayakiEnabled,
-        hasSasayakiAudio = hasSasayakiAudio,
-        textEditorFocused = textEditorFocused,
-        hasLookupPopup = hasLookupPopup,
-        sasayakiHoldToBoost = sasayakiHoldToBoost,
-    ).action
-
 internal fun readerHardwareKeyEventForKeyEvent(
     keyCode: Int,
     action: Int,

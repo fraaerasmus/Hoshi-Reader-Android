@@ -5,7 +5,6 @@ import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.util.Log
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -114,18 +113,9 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val handled = readerKeyEventHandler?.invoke(event) == true
-        // One line per key so a dead shortcut can be traced with `adb logcat -s HoshiKeys`.
-        if (event.repeatCount == 0) {
-            val focus = currentFocus
-            Log.d(
-                "HoshiKeys",
-                "${KeyEvent.keyCodeToString(event.keyCode)} action=${event.action} meta=${event.metaState} " +
-                    "reader=${if (readerKeyEventHandler == null) "off" else if (handled) "took" else "passed"} " +
-                    "focus=${focus?.javaClass?.simpleName} textEditor=${focus?.onCheckIsTextEditor()}",
-            )
+        if (readerKeyEventHandler?.invoke(event) == true) {
+            return true
         }
-        if (handled) return true
         return super.dispatchKeyEvent(event)
     }
 
