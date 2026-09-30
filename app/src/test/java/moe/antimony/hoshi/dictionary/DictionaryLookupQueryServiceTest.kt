@@ -27,7 +27,8 @@ class DictionaryLookupQueryServiceTest {
             service.lookup("はし", options = options)
             assertEquals(options, bridge.lastOptions)
         }
-        assertEquals(1, bridge.createdLanguageIds.size)
+        // One session serves every lookup; the fork binds the language once, after the query is built.
+        assertEquals(1, bridge.appliedLanguageIds.size)
     }
 
     @Test

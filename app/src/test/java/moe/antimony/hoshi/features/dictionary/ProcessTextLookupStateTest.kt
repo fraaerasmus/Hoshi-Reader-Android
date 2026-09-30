@@ -133,6 +133,8 @@ class ProcessTextLookupStateTest {
             frequencies = emptyArray(),
             pitches = emptyArray(),
         ),
-        traceCandidates = emptyArray(),
+        deinflected = "",
+        process = emptyArray(),
+        preprocessorSteps = 0,
     )
 }
