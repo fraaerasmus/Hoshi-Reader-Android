@@ -355,8 +355,8 @@
     <string name="reader_behavior_volume_keys_seek_sasayaki">音量键跳转有声书</string>
     <string name="reader_behavior_reverse_volume_key_direction">反转音量键方向</string>
     <string name="reader_behavior_edge_swipe_controls">边缘滑动调节亮度和音量</string>
-    <string name="reader_edge_hud_brightness">亮度</string>
-    <string name="reader_edge_hud_volume">音量</string>
+    <string name="reader_edge_hud_brightness" comment="Edge swipe indicator label, intentionally matching other Brightness labels.">亮度</string>
+    <string name="reader_edge_hud_volume" comment="Edge swipe indicator label, intentionally matching other Volume labels.">音量</string>
     <string name="reader_behavior_keep_screen_on">保持屏幕常亮</string>
     <string name="reader_behavior_lock_current_orientation">锁定当前屏幕方向</string>
     <string name="reader_behavior_open_last_read_book_on_launch">启动时打开最近阅读</string>
@@ -506,7 +506,7 @@
     <string name="reader_appearance_info_position">信息位置</string>
     <string name="reader_appearance_info_position_left" comment="Reader information position option, intentionally matching the playback controls position option.">左侧</string>
     <string name="reader_appearance_info_position_center" comment="Reader information position option, intentionally matching the playback controls position option.">居中</string>
-    <string name="reader_appearance_info_position_right">右侧</string>
+    <string name="reader_appearance_info_position_right" comment="Reader info position option, intentionally matching other Right labels.">右侧</string>
     <string name="reader_appearance_always_show_progress">始终显示进度</string>
     <string name="reader_appearance_show_back_button">显示返回按钮</string>
     <string name="reader_appearance_progress_position">进度位置</string>
@@ -582,7 +582,7 @@
     <string name="kosync_title">KOReader 同步</string>
     <string name="kosync_description">与 KOReader 进度同步（kosync）服务器同步阅读位置，可与 ッツ 同步同时使用。</string>
     <string name="kosync_section_account">账户</string>
-    <string name="kosync_server">服务器</string>
+    <string name="kosync_server" comment="KOReader Sync server field, distinct from the backup server section.">服务器</string>
     <string name="kosync_username">用户名</string>
     <string name="kosync_password">密码</string>
     <string name="kosync_login">登录</string>
@@ -927,7 +927,7 @@
     <string name="sasayaki_skip_action">跳转操作</string>
     <string name="sasayaki_reverse_vertical_skip_buttons">纵排时反转</string>
     <string name="sasayaki_reverse_vertical_skip_buttons_help">纵排阅读时，仅交换阅读器底部跳转按钮的实际操作。</string>
-    <string name="sasayaki_drag_playback_controls_to_scrub">拖动快进/后退</string>
+    <string name="sasayaki_drag_playback_controls_to_scrub" comment="Sasayaki setting title, intentionally matching the scrub hint.">拖动快进/后退</string>
     <string name="sasayaki_drag_playback_controls_to_scrub_help">在底部播放控件上左右拖动可一次跳转多步；松手后音频才会移动。</string>
     <plurals name="sasayaki_scrub_sentences">
         <item quantity="one">%1$s 句</item>
@@ -938,7 +938,7 @@
     <string name="sasayaki_hold_playback_controls_to_boost_help">长按播放按钮或底部播放控件的空白处（或按住键盘、手柄上的播放 / 暂停键）以双倍速度播放，松手后恢复。</string>
     <string name="sasayaki_double_tap_playback_controls_to_toggle">双击播放/暂停</string>
     <string name="sasayaki_double_tap_playback_controls_to_toggle_help">双击底部播放控件的空白处以暂停或继续播放。</string>
-    <string name="sasayaki_scrub_hint">拖动以跳转</string>
+    <string name="sasayaki_scrub_hint" comment="Scrub preview hint, intentionally matching the drag to scrub setting title.">拖动以跳转</string>
     <string name="sasayaki_playback">播放</string>
     <string name="sasayaki_light_theme">浅色主题</string>
     <string name="sasayaki_dark_theme">深色主题</string>
