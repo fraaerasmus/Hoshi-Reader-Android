@@ -1611,6 +1611,10 @@ fun ReaderWebView(
                 "window.hoshiWordCursor && window.hoshiWordCursor.${if (action.forward) "next" else "previous"}(${readerSelectionMaxLength(dictionarySettings)})",
                 null,
             )
+            is ReaderHardwareKeyAction.SentenceStep -> webView?.evaluateJavascript(
+                "window.hoshiWordCursor && window.hoshiWordCursor.${if (action.forward) "nextSentence" else "previousSentence"}(${readerSelectionMaxLength(dictionarySettings)})",
+                null,
+            )
             ReaderHardwareKeyAction.MineTopTerm -> webView?.evaluateJavascript(
                 "window.hoshiReaderPopupHost && window.hoshiReaderPopupHost.mineTopTerm()",
                 null,

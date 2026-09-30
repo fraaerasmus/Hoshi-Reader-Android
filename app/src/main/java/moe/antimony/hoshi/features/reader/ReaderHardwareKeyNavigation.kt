@@ -21,6 +21,7 @@ internal sealed interface ReaderHardwareKeyAction {
     /** One step of media volume, with the system's volume panel. */
     data class AdjustVolume(val up: Boolean) : ReaderHardwareKeyAction
     data class WordStep(val forward: Boolean) : ReaderHardwareKeyAction
+    data class SentenceStep(val forward: Boolean) : ReaderHardwareKeyAction
     data object MineTopTerm : ReaderHardwareKeyAction
     data object PlayTopTermAudio : ReaderHardwareKeyAction
     /** Scroll the top popup by most of a viewport. */
@@ -146,6 +147,8 @@ private fun ReaderKeyAction.hardwareAction(): ReaderHardwareKeyAction? = when (t
     ReaderKeyAction.PickWord -> ReaderHardwareKeyAction.PickWord
     ReaderKeyAction.WordPrevious -> ReaderHardwareKeyAction.WordStep(forward = false)
     ReaderKeyAction.WordNext -> ReaderHardwareKeyAction.WordStep(forward = true)
+    ReaderKeyAction.SentencePrevious -> ReaderHardwareKeyAction.SentenceStep(forward = false)
+    ReaderKeyAction.SentenceNext -> ReaderHardwareKeyAction.SentenceStep(forward = true)
     ReaderKeyAction.TogglePlayback -> ReaderHardwareKeyAction.SasayakiTogglePlayback
     ReaderKeyAction.SkipBackward -> ReaderHardwareKeyAction.SasayakiSeekBackward
     ReaderKeyAction.SkipForward -> ReaderHardwareKeyAction.SasayakiSeekForward

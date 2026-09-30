@@ -766,6 +766,8 @@
     <string name="input_action_volume_down">Volume down</string>
     <string name="input_action_word_previous">Previous word</string>
     <string name="input_action_word_next">Next word</string>
+    <string name="input_action_sentence_previous">Previous sentence</string>
+    <string name="input_action_sentence_next">Next sentence</string>
     <string name="input_action_boost">Speed up while held</string>
     <string name="input_action_scrub">Scrub audio</string>
     <string name="input_action_brightness" comment="Gesture binding option, intentionally matching other Brightness labels.">Brightness</string>

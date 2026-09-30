@@ -750,7 +750,7 @@ window.hoshiSelection = {
             return [];
         }
         // Native reports how much of the selection the dictionary matched; the word cursor steps by that.
-        if (window.hoshiWordCursor) window.hoshiWordCursor.lastMatchLength = charCount;
+        window.hoshiWordCursor?.noteSelection(this.selection, charCount);
 
         const ranges = [];
         let remaining = charCount;
@@ -926,16 +926,56 @@ window.hoshiWordCursor = {
     current: null,
     /** Code points the last lookup matched, filled in when native highlights the selection. */
     lastMatchLength: 0,
+    /** The last word looked up, by key or by tap, so the next pick can carry on from it. */
+    lastStart: null,
+    /** The audiobook sentence the last pick started from; a new one wins over carrying on. */
+    lastCueId: null,
 
-    /** Opens the popup on the first word of the current audiobook sentence, else of the first visible line. */
+    /**
+     * Opens the popup on a first word: of the audiobook sentence if it changed since the last pick,
+     * else after the last word looked up while that is still on screen, else of the audiobook
+     * sentence, else of the first visible line.
+     */
     start(maxLength) {
         const selection = window.hoshiSelection;
         // VN reads its text from its own stream; a DOM hit here would be the wrong text.
         if (!selection || selection.options.textProjection) return false;
-        const hit = this.activeCueStart() || this.firstVisibleStart();
-        if (!hit) return false;
+        const cueId = window.hoshiReader?.activeCueId || null;
+        const cueChanged = cueId !== null && cueId !== this.lastCueId;
+        this.lastCueId = cueId;
         this.history = [];
-        return this.open(this.skipForward(hit), maxLength);
+        const resumed = cueChanged ? null : this.afterLastStart();
+        const hit = resumed || this.activeCueStart() || this.firstVisibleStart();
+        return hit ? this.open(this.skipForward(hit), maxLength) : false;
+    },
+
+    /** Jumps the popup to the first word of the next or previous sentence. */
+    nextSentence(maxLength) {
+        if (!this.syncToSelection()) return false;
+        const hit = this.sentenceStartAfter(this.current);
+        if (!hit) return false;
+        this.history.push(this.current);
+        return this.open(hit, maxLength);
+    },
+
+    previousSentence(maxLength) {
+        if (!this.syncToSelection()) return false;
+        const hit = this.sentenceStartBefore(this.current);
+        if (!hit) return false;
+        this.history.push(this.current);
+        return this.open(hit, maxLength);
+    },
+
+    noteSelection(selection, matchLength) {
+        this.lastMatchLength = matchLength;
+        if (selection) this.lastStart = { node: selection.startNode, offset: selection.startOffset };
+    },
+
+    /** The word after the last one looked up, when that is still on screen. */
+    afterLastStart() {
+        const last = this.lastStart;
+        if (!last?.node?.isConnected || !this.isVisible(last)) return null;
+        return this.skipForward(this.stepped(last, Math.max(1, this.lastMatchLength)));
     },
 
     next(maxLength) {
@@ -963,6 +1003,7 @@ window.hoshiWordCursor = {
         const selection = window.hoshiSelection;
         const start = selection.selectionStartForHit(hit);
         this.current = start;
+        this.lastStart = start;
         this.lastMatchLength = 0;
         return selection.selectAtHit(start, maxLength) !== null;
     },
@@ -998,21 +1039,125 @@ window.hoshiWordCursor = {
 
     firstVisibleStart() {
         const selection = window.hoshiSelection;
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-        const visible = rect => rect.width > 0 && rect.height > 0 &&
-            rect.right > 0 && rect.bottom > 0 && rect.left < width && rect.top < height;
         const walker = selection.createWalker(document.body);
         const range = document.createRange();
         let node;
         while ((node = walker.nextNode())) {
             range.selectNodeContents(node);
-            if (!visible(range.getBoundingClientRect())) continue;
+            if (!this.rectVisible(range.getBoundingClientRect())) continue;
             const text = node.textContent;
             for (let offset = 0; offset < text.length; offset = selection.nextCodePointOffset(text, offset)) {
-                range.setStart(node, offset);
-                range.setEnd(node, selection.nextCodePointOffset(text, offset));
-                if (visible(range.getBoundingClientRect())) return { node, offset };
+                if (this.isVisible({ node, offset })) return { node, offset };
+            }
+        }
+        return null;
+    },
+
+    isVisible(hit) {
+        const range = document.createRange();
+        range.setStart(hit.node, hit.offset);
+        range.setEnd(hit.node, window.hoshiSelection.nextCodePointOffset(hit.node.textContent, hit.offset));
+        return this.rectVisible(range.getBoundingClientRect());
+    },
+
+    rectVisible(rect) {
+        return rect.width > 0 && rect.height > 0 &&
+            rect.right > 0 && rect.bottom > 0 && rect.left < window.innerWidth && rect.top < window.innerHeight;
+    },
+
+    /** The first word of the sentence after the one [hit] is in; a paragraph break ends a sentence too. */
+    sentenceStartAfter(hit) {
+        const selection = window.hoshiSelection;
+        const walker = selection.createWalker(document.body);
+        walker.currentNode = hit.node;
+        let node = hit.node;
+        let offset = hit.offset;
+        for (;;) {
+            const text = node.textContent;
+            while (offset < text.length) {
+                const char = selection.codePointAt(text, offset);
+                offset = selection.nextCodePointOffset(text, offset);
+                if (selection.sentenceDelimiters.includes(char)) {
+                    return this.skipForward(this.skipSentenceEnd({ node, offset }));
+                }
+            }
+            const next = walker.nextNode();
+            if (!next) return null;
+            const newParagraph = selection.findParagraph(next) !== selection.findParagraph(node);
+            node = next;
+            offset = 0;
+            if (newParagraph) return this.skipForward({ node, offset });
+        }
+    },
+
+    /** The first word of the sentence [hit] is in, or of the one before when [hit] already is that word. */
+    sentenceStartBefore(hit) {
+        const start = this.sentenceStart(hit);
+        if (start && !this.sameStart(start, hit)) return start;
+        const before = this.stepBack(hit);
+        return before ? this.sentenceStart(this.skipSentenceEndBack(before)) : null;
+    },
+
+    /** The first word of the sentence that holds [hit]. */
+    sentenceStart(hit) {
+        const selection = window.hoshiSelection;
+        const walker = selection.createWalker(document.body);
+        walker.currentNode = hit.node;
+        let node = hit.node;
+        let offset = hit.offset;
+        for (;;) {
+            const text = node.textContent;
+            while (offset > 0) {
+                const previous = selection.previousCodePointStartOffset(text, offset);
+                if (selection.sentenceDelimiters.includes(selection.codePointAt(text, previous))) {
+                    return this.skipForward(this.skipSentenceEnd({ node, offset }));
+                }
+                offset = previous;
+            }
+            const previousNode = walker.previousNode();
+            if (!previousNode || selection.findParagraph(previousNode) !== selection.findParagraph(node)) {
+                return this.skipForward({ node, offset: 0 });
+            }
+            node = previousNode;
+            offset = node.textContent.length;
+        }
+    },
+
+    /** Past the closing quotes and brackets that trail a sentence's final mark. */
+    skipSentenceEnd(hit) {
+        const selection = window.hoshiSelection;
+        let current = hit;
+        for (;;) {
+            const text = current.node.textContent;
+            if (current.offset >= text.length) return current;
+            if (!selection.trailingSentenceChars.includes(selection.codePointAt(text, current.offset))) return current;
+            current = { node: current.node, offset: selection.nextCodePointOffset(text, current.offset) };
+        }
+    },
+
+    /** Back over the marks, brackets and spaces between two sentences, onto the last word of the earlier one. */
+    skipSentenceEndBack(hit) {
+        let current = hit;
+        while (!this.startsWord(current.node.textContent, current.offset)) {
+            const before = this.stepBack(current);
+            if (!before) return current;
+            current = before;
+        }
+        return current;
+    },
+
+    /** The character before [hit], across text nodes; null at the very start. */
+    stepBack(hit) {
+        const selection = window.hoshiSelection;
+        if (hit.offset > 0) {
+            return { node: hit.node, offset: selection.previousCodePointStartOffset(hit.node.textContent, hit.offset) };
+        }
+        const walker = selection.createWalker(document.body);
+        walker.currentNode = hit.node;
+        let node;
+        while ((node = walker.previousNode())) {
+            if (node.textContent.length > 0) {
+                return { node, offset: selection.previousCodePointStartOffset(node.textContent, node.textContent.length) };
             }
         }
         return null;
@@ -1020,6 +1165,7 @@ window.hoshiWordCursor = {
 
     /** [hit] moved by [codePoints] characters, across text nodes; null past the end. */
     stepped(hit, codePoints) {
+        if (!hit) return null;
         const selection = window.hoshiSelection;
         const walker = selection.createWalker(document.body);
         walker.currentNode = hit.node;
@@ -1038,6 +1184,7 @@ window.hoshiWordCursor = {
 
     /** The first character from [hit] on that a lookup can start at, crossing nodes; null past the end. */
     skipForward(hit) {
+        if (!hit) return null;
         const selection = window.hoshiSelection;
         const walker = selection.createWalker(document.body);
         walker.currentNode = hit.node;

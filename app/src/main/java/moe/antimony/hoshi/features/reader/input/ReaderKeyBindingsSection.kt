@@ -312,6 +312,8 @@ internal fun ReaderKeyAction.labelRes(): Int = when (this) {
     ReaderKeyAction.PickWord -> R.string.input_action_pick_word
     ReaderKeyAction.WordPrevious -> R.string.input_action_word_previous
     ReaderKeyAction.WordNext -> R.string.input_action_word_next
+    ReaderKeyAction.SentencePrevious -> R.string.input_action_sentence_previous
+    ReaderKeyAction.SentenceNext -> R.string.input_action_sentence_next
     ReaderKeyAction.TogglePlayback -> R.string.input_action_toggle_playback
     ReaderKeyAction.SkipBackward -> R.string.input_action_skip_backward
     ReaderKeyAction.SkipForward -> R.string.input_action_skip_forward

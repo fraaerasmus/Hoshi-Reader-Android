@@ -796,7 +796,7 @@ function wordCursorSetup(text) {
     };
     const cursor = window.hoshiWordCursor;
     cursor.firstVisibleStart = () => ({ node: textNode, offset: 0 });
-    return { cursor, opened, selection, textNode };
+    return { cursor, opened, selection, textNode, window };
 }
 
 test('word cursor steps by the matched length, skips punctuation and retraces its steps', () => {
@@ -862,4 +862,59 @@ test('word cursor moves on to the next word when the match was shorter than the 
     cursor.previous(16);
 
     assert.deepEqual(opened, [0, 8, 0]);
+});
+
+test('word cursor jumps by sentence in both directions', () => {
+    const { cursor, opened } = wordCursorSetup('猫だ。犬が来た。「鳥」も来た。');
+
+    cursor.start(16);
+    cursor.nextSentence(16); // 犬
+    cursor.nextSentence(16); // 「鳥」: the bracket is skipped
+    assert.equal(cursor.nextSentence(16), false);
+    cursor.previousSentence(16); // back to 犬, over the closing 。 and the opening 「
+    cursor.lastMatchLength = 1;
+    cursor.next(16); // が
+    cursor.previousSentence(16); // mid-sentence: to this sentence's first word
+    cursor.previousSentence(16); // at its first word: to the sentence before
+
+    assert.deepEqual(opened, [0, 3, 9, 3, 4, 3, 0]);
+});
+
+test('word cursor carries on after the last word looked up while it is still on screen', () => {
+    const { cursor, opened, selection, textNode } = wordCursorSetup('猫だ。犬が来た。');
+    textNode.isConnected = true;
+    cursor.isVisible = () => true;
+
+    cursor.start(16);
+    cursor.lastMatchLength = 2; // 猫だ
+    cursor.next(16); // 犬
+    selection.selection = null; // the popup was closed
+    cursor.lastMatchLength = 1;
+    cursor.start(16); // が, not the page start again
+    cursor.isVisible = () => false; // the page was turned
+    cursor.start(16);
+
+    assert.deepEqual(opened, [0, 3, 4, 0]);
+});
+
+test('word cursor starts on a new audiobook sentence but carries on within the same one', () => {
+    const { cursor, opened, textNode, window } = wordCursorSetup('猫だ。犬が来た。「鳥」も来た。');
+    textNode.isConnected = true;
+    cursor.isVisible = () => true;
+    window.hoshiReader = {
+        activeCueId: 'cue-1',
+        sasayakiInlineTargetsForCue: () => [],
+        cueSourceRanges: new Map([
+            ['cue-1', { ranges: [{ node: textNode, start: 3 }] }],
+            ['cue-2', { ranges: [{ node: textNode, start: 8 }] }],
+        ]),
+    };
+
+    cursor.start(16); // 犬, the sentence the audio is on
+    cursor.lastMatchLength = 1;
+    cursor.start(16); // が: same sentence, so carry on
+    window.hoshiReader.activeCueId = 'cue-2';
+    cursor.start(16); // 鳥: a new sentence wins, and its 「 is skipped
+
+    assert.deepEqual(opened, [3, 4, 9]);
 });

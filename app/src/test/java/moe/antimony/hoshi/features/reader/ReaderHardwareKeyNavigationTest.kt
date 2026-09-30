@@ -272,6 +272,12 @@ class ReaderHardwareKeyNavigationTest {
             boundKeyEvent(KeyEvent.KEYCODE_DPAD_LEFT, hasLookupPopup = true).action,
         )
         assertEquals(ReaderHardwareKeyAction.SasayakiSeekForward, boundKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT, audioLoaded = true).action)
+        assertEquals(
+            ReaderHardwareKeyAction.SentenceStep(forward = true),
+            boundKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT, metaState = KeyEvent.META_SHIFT_ON, hasLookupPopup = true).action,
+        )
+        assertEquals(ReaderHardwareKeyAction.SentenceStep(forward = false), boundKeyEvent(KeyEvent.KEYCODE_BUTTON_L2, hasLookupPopup = true).action)
+        assertFalse(boundKeyEvent(KeyEvent.KEYCODE_BUTTON_L2).consumed)
     }
 
     @Test
