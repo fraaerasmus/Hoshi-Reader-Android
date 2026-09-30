@@ -1575,7 +1575,6 @@ fun ReaderWebView(
             keyCode = event.keyCode,
             action = event.action,
             repeatCount = event.repeatCount,
-            settings = effectiveSettings,
             sasayakiEnabled = sasayakiSettings.enabled,
             hasSasayakiAudio = sasayakiPlayer?.hasAudio == true,
             textEditorFocused = textEditorFocused,

@@ -78,8 +78,6 @@ fun AdvancedSettingsView(
     }
     if (destination == AdvancedDestination.Gestures) {
         ReaderGesturesView(
-            readerSettings = readerSettings,
-            onReaderSettingsChange = onReaderSettingsChange,
             onClose = { destination = null },
             modifier = modifier,
         )

@@ -36,6 +36,7 @@ import moe.antimony.hoshi.features.backup.RemoteBackupSettingsRepository
 import moe.antimony.hoshi.features.backup.remoteBackupSettingsRepository
 import moe.antimony.hoshi.features.kosync.KosyncSettingsRepository
 import moe.antimony.hoshi.features.reader.input.ReaderGesturesRepository
+import moe.antimony.hoshi.features.reader.input.ReaderKeyBindings
 import moe.antimony.hoshi.features.reader.input.readerGesturesRepository
 import moe.antimony.hoshi.features.kosync.kosyncSettingsRepository
 import moe.antimony.hoshi.features.opds.OpdsCatalogRepository
@@ -176,7 +177,18 @@ internal object HoshiAppModule {
         @ApplicationContext context: Context,
         readerSettingsRepository: ReaderSettingsRepository,
     ): ReaderGesturesRepository =
-        context.readerGesturesRepository { readerSettingsRepository.settings.first().edgeSwipeControls }
+        context.readerGesturesRepository(
+            legacyEdgeSwipeControls = { readerSettingsRepository.settings.first().edgeSwipeControls },
+            legacyKeyBindings = {
+                val settings = readerSettingsRepository.settings.first()
+                ReaderKeyBindings.fromLegacyVolumeKeys(
+                    turnPages = settings.volumeKeysTurnPages,
+                    navigatePopupTerms = settings.volumeKeysNavigatePopupTerms,
+                    seekSasayaki = settings.volumeKeysSeekSasayaki,
+                    reverseDirection = settings.reverseVolumeKeyDirection,
+                )
+            },
+        )
 
     @Provides
     @Singleton

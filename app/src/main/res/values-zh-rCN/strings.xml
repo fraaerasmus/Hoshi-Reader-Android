@@ -350,10 +350,6 @@
     <string name="bookshelf_profile">Profile</string>
     <string name="bookshelf_profile_automatic">自动</string>
     <string name="bookshelf_profile_automatic_uses_format">将使用 %1$s</string>
-    <string name="reader_behavior_volume_keys_turn_pages">音量键翻页</string>
-    <string name="reader_behavior_volume_keys_navigate_popup_terms">音量键跳转弹窗词条</string>
-    <string name="reader_behavior_volume_keys_seek_sasayaki">音量键跳转有声书</string>
-    <string name="reader_behavior_reverse_volume_key_direction">反转音量键方向</string>
     <string name="reader_behavior_edge_swipe_controls">边缘滑动调节亮度和音量</string>
     <string name="reader_edge_hud_brightness" comment="Edge swipe indicator label, intentionally matching other Brightness labels.">亮度</string>
     <string name="reader_edge_hud_volume" comment="Edge swipe indicator label, intentionally matching other Volume labels.">音量</string>
@@ -726,13 +722,14 @@
     <string name="gestures_edge_right_drag">沿右边缘拖动</string>
     <string name="gestures_section_volume">音量键</string>
     <string name="gestures_volume_hold">长按音量键</string>
+    <string name="gestures_volume_help">按下音量键的操作与其他按键一样，在“键盘与手柄”中设置。未设置操作的音量键会调节音量。</string>
     <string name="gestures_section_mouse">鼠标</string>
     <string name="gestures_mouse_selection_colors">选择后显示标注颜色</string>
     <string name="gestures_mouse_selection_colors_help">选择后在光标处显示标注颜色。</string>
     <string name="gestures_mouse_side_click">点击两侧翻页</string>
     <string name="gestures_mouse_side_click_help">点击页面两侧翻页；滚轮始终可翻页。</string>
     <string name="gestures_section_keyboard">键盘与手柄</string>
-    <string name="gestures_keys_help">查词弹窗打开时，按键执行弹窗操作；否则在已加载有声书时执行有声书操作；其余情况执行阅读操作。音量键在上方设置。</string>
+    <string name="gestures_keys_help">查词弹窗打开时，按键执行弹窗操作；否则在已加载有声书时执行有声书操作；其余情况执行阅读操作。</string>
     <string name="gestures_keys_layer_reading">阅读时</string>
     <string name="gestures_keys_layer_audiobook">已加载有声书时</string>
     <string name="gestures_keys_layer_popup">查词弹窗打开时</string>
@@ -740,7 +737,6 @@
     <string name="gestures_keys_add">添加按键</string>
     <string name="gestures_keys_press">请按下按键或手柄按钮</string>
     <string name="gestures_keys_press_help">按住 Ctrl、Alt 或 Shift 再按键可设置组合键。</string>
-    <string name="gestures_keys_volume_refused">音量键请在上方的“音量键”部分设置。</string>
     <string name="gestures_keys_taken_format">当前用于“%1$s”，保存后将被替换。</string>
     <string name="gestures_keys_reset">恢复默认按键</string>
     <string name="gestures_keys_reset_title">恢复默认按键？</string>

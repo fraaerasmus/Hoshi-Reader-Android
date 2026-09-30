@@ -352,10 +352,6 @@
     <string name="bookshelf_profile">Profile</string>
     <string name="bookshelf_profile_automatic">Automatic</string>
     <string name="bookshelf_profile_automatic_uses_format">Uses %1$s</string>
-    <string name="reader_behavior_volume_keys_turn_pages">Volume Keys Turn Pages</string>
-    <string name="reader_behavior_volume_keys_navigate_popup_terms">Volume Keys Navigate Popup Terms</string>
-    <string name="reader_behavior_volume_keys_seek_sasayaki">Volume Keys Seek Sasayaki</string>
-    <string name="reader_behavior_reverse_volume_key_direction">Reverse Volume Key Direction</string>
     <string name="reader_behavior_edge_swipe_controls">Edge Swipe Brightness &amp; Volume</string>
     <string name="reader_edge_hud_brightness" comment="Edge swipe indicator label, intentionally matching other Brightness labels.">Brightness</string>
     <string name="reader_edge_hud_volume" comment="Edge swipe indicator label, intentionally matching other Volume labels.">Volume</string>
@@ -728,13 +724,14 @@
     <string name="gestures_edge_right_drag">Drag along right edge</string>
     <string name="gestures_section_volume">Volume keys</string>
     <string name="gestures_volume_hold">Hold a volume key</string>
+    <string name="gestures_volume_help">What a tap on a volume key does is set under Keyboard &amp; gamepad, like any other key. A volume key with no action there changes the volume.</string>
     <string name="gestures_section_mouse">Mouse</string>
     <string name="gestures_mouse_selection_colors">Highlight colours after selecting</string>
     <string name="gestures_mouse_selection_colors_help">Shows the highlight colours at the cursor after a selection.</string>
     <string name="gestures_mouse_side_click">Click the sides to turn pages</string>
     <string name="gestures_mouse_side_click_help">Clicks near the sides turn the page; the wheel always does.</string>
     <string name="gestures_section_keyboard">Keyboard &amp; gamepad</string>
-    <string name="gestures_keys_help">A key does its popup action while a lookup popup is open, otherwise its audiobook action while an audiobook is loaded, otherwise its reading action. Volume keys are set above.</string>
+    <string name="gestures_keys_help">A key does its popup action while a lookup popup is open, otherwise its audiobook action while an audiobook is loaded, otherwise its reading action.</string>
     <string name="gestures_keys_layer_reading">While reading</string>
     <string name="gestures_keys_layer_audiobook">With an audiobook loaded</string>
     <string name="gestures_keys_layer_popup">While a lookup popup is open</string>
@@ -742,7 +739,6 @@
     <string name="gestures_keys_add">Add a key</string>
     <string name="gestures_keys_press">Press a key or button</string>
     <string name="gestures_keys_press_help">Hold Ctrl, Alt or Shift while pressing for a combination.</string>
-    <string name="gestures_keys_volume_refused">Volume keys have their own section above.</string>
     <string name="gestures_keys_taken_format">Now set to “%1$s”. Saving replaces that.</string>
     <string name="gestures_keys_reset">Reset keys to defaults</string>
     <string name="gestures_keys_reset_title">Reset keys to defaults?</string>

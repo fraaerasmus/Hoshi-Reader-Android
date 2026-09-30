@@ -55,9 +55,9 @@ private val VolumeKeys = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLU
 
 fun isReaderVolumeKey(keyCode: Int): Boolean = keyCode in VolumeKeys
 
-/** Null for what cannot be bound: a modifier on its own, Back, and the volume keys, which keep their switches. */
+/** Null for what cannot be bound: a modifier on its own and Back. */
 fun readerKeyOrNull(keyCode: Int, metaState: Int): ReaderKey? =
-    if (keyCode == KeyEvent.KEYCODE_UNKNOWN || keyCode == KeyEvent.KEYCODE_BACK || keyCode in ModifierKeys || keyCode in VolumeKeys) {
+    if (keyCode == KeyEvent.KEYCODE_UNKNOWN || keyCode == KeyEvent.KEYCODE_BACK || keyCode in ModifierKeys) {
         null
     } else {
         ReaderKey(keyCode, metaState and READER_KEY_MODIFIER_MASK)
@@ -121,6 +121,37 @@ data class ReaderKeyBindings(val map: Map<ReaderKeyAction, List<ReaderKey>> = em
             ReaderKeyAction.PopupPreviousTerm to keysOf(KeyEvent.KEYCODE_DPAD_UP),
             ReaderKeyAction.PopupNextTerm to keysOf(KeyEvent.KEYCODE_DPAD_DOWN),
         )
+
+        /**
+         * The volume-key switches that came before bindings, as the rows they stood for: Up went back and Down
+         * forward, or the other way round with the direction reversed. Nothing when every switch was off.
+         */
+        fun fromLegacyVolumeKeys(
+            turnPages: Boolean,
+            navigatePopupTerms: Boolean,
+            seekSasayaki: Boolean,
+            reverseDirection: Boolean,
+        ): ReaderKeyBindings {
+            val back = ReaderKey(if (reverseDirection) KeyEvent.KEYCODE_VOLUME_DOWN else KeyEvent.KEYCODE_VOLUME_UP)
+            val forward = ReaderKey(if (reverseDirection) KeyEvent.KEYCODE_VOLUME_UP else KeyEvent.KEYCODE_VOLUME_DOWN)
+            var bindings = ReaderKeyBindings()
+            if (turnPages) {
+                bindings = bindings
+                    .withKeys(ReaderKeyAction.PageBackward, Defaults.getValue(ReaderKeyAction.PageBackward) + back)
+                    .withKeys(ReaderKeyAction.PageForward, Defaults.getValue(ReaderKeyAction.PageForward) + forward)
+            }
+            if (navigatePopupTerms) {
+                bindings = bindings
+                    .withKeys(ReaderKeyAction.PopupPreviousTerm, Defaults.getValue(ReaderKeyAction.PopupPreviousTerm) + back)
+                    .withKeys(ReaderKeyAction.PopupNextTerm, Defaults.getValue(ReaderKeyAction.PopupNextTerm) + forward)
+            }
+            if (seekSasayaki) {
+                bindings = bindings
+                    .withKeys(ReaderKeyAction.SkipBackward, Defaults.getValue(ReaderKeyAction.SkipBackward) + back)
+                    .withKeys(ReaderKeyAction.SkipForward, Defaults.getValue(ReaderKeyAction.SkipForward) + forward)
+            }
+            return bindings
+        }
 
         /** Unknown actions and unbindable keys are dropped; a broken blob yields the defaults rather than a broken reader. */
         fun decode(text: String): ReaderKeyBindings =

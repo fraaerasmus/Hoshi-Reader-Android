@@ -11,504 +11,135 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReaderHardwareKeyNavigationTest {
+    private val forward = ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward)
+    private val backward = ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Backward)
+
+    /** The rows the four volume-key switches used to stand for, all on, default direction. */
+    private val legacyVolumeKeys = ReaderKeyBindings.fromLegacyVolumeKeys(
+        turnPages = true,
+        navigatePopupTerms = true,
+        seekSasayaki = true,
+        reverseDirection = false,
+    )
+
     @Test
     fun pageDownAndPageUpAlwaysMapToReaderNavigation() {
-        val settings = ReaderSettings(volumeKeysTurnPages = false, reverseVolumeKeyDirection = true)
-
         assertEquals(
             ReaderNavigationDirection.Forward,
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_PAGE_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-            ),
+            readerNavigationDirectionForKeyEvent(keyCode = KeyEvent.KEYCODE_PAGE_DOWN, action = KeyEvent.ACTION_DOWN, repeatCount = 0),
         )
         assertEquals(
             ReaderNavigationDirection.Backward,
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_PAGE_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-            ),
-        )
-    }
-
-    @Test
-    fun volumeKeysAreIgnoredUntilEnabled() {
-        val settings = ReaderSettings(volumeKeysTurnPages = false)
-
-        assertNull(
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-            ),
-        )
-        assertNull(
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-            ),
-        )
-    }
-
-    @Test
-    fun sasayakiSeekVolumeKeysAreIgnoredUntilEnabled() {
-        val settings = ReaderSettings(
-            volumeKeysTurnPages = false,
-            volumeKeysSeekSasayaki = false,
-        )
-
-        assertNull(
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
-        assertNull(
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
-    }
-
-    @Test
-    fun sasayakiSeekVolumeKeysRequireEnabledSasayakiAndLoadedAudio() {
-        val settings = ReaderSettings(volumeKeysSeekSasayaki = true)
-
-        assertNull(
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = false,
-                hasSasayakiAudio = true,
-            ),
-        )
-        assertNull(
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = false,
-            ),
-        )
-    }
-
-    @Test
-    fun sasayakiSeekVolumeKeysUseDefaultDirection() {
-        val settings = ReaderSettings(
-            volumeKeysSeekSasayaki = true,
-            reverseVolumeKeyDirection = false,
-        )
-
-        assertEquals(
-            ReaderHardwareKeyAction.SasayakiSeekBackward,
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
-        assertEquals(
-            ReaderHardwareKeyAction.SasayakiSeekForward,
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
-    }
-
-    @Test
-    fun sasayakiSeekVolumeKeysCanBeReversed() {
-        val settings = ReaderSettings(
-            volumeKeysSeekSasayaki = true,
-            reverseVolumeKeyDirection = true,
-        )
-
-        assertEquals(
-            ReaderHardwareKeyAction.SasayakiSeekForward,
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
-        assertEquals(
-            ReaderHardwareKeyAction.SasayakiSeekBackward,
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
-    }
-
-    @Test
-    fun sasayakiSeekVolumeKeysTakePriorityOverVolumePageTurnsWhenAudioIsLoaded() {
-        val settings = ReaderSettings(
-            volumeKeysTurnPages = true,
-            volumeKeysSeekSasayaki = true,
-        )
-
-        assertEquals(
-            ReaderHardwareKeyAction.SasayakiSeekBackward,
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
-    }
-
-    @Test
-    fun popupTermNavigationTakesPriorityOverSasayakiAndPageTurns() {
-        val settings = ReaderSettings(
-            volumeKeysTurnPages = true,
-            volumeKeysNavigatePopupTerms = true,
-            volumeKeysSeekSasayaki = true,
-        )
-
-        assertEquals(
-            ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Previous),
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-                hasLookupPopup = true,
-            ),
-        )
-        assertEquals(
-            ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Next),
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-                hasLookupPopup = true,
-            ),
-        )
-    }
-
-    @Test
-    fun popupTermNavigationUsesReverseVolumeDirection() {
-        val settings = ReaderSettings(
-            volumeKeysNavigatePopupTerms = true,
-            reverseVolumeKeyDirection = true,
-        )
-
-        assertEquals(
-            ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Next),
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = false,
-                hasSasayakiAudio = false,
-                hasLookupPopup = true,
-            ),
-        )
-        assertEquals(
-            ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Previous),
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = false,
-                hasSasayakiAudio = false,
-                hasLookupPopup = true,
-            ),
-        )
-    }
-
-    @Test
-    fun popupTermNavigationFallsBackWhenDisabledOrNoPopupExists() {
-        val settings = ReaderSettings(
-            volumeKeysTurnPages = true,
-            volumeKeysNavigatePopupTerms = true,
-        )
-
-        assertEquals(
-            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward),
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = false,
-                hasSasayakiAudio = false,
-                hasLookupPopup = false,
-            ),
-        )
-        assertEquals(
-            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward),
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings.copy(volumeKeysNavigatePopupTerms = false),
-                sasayakiEnabled = false,
-                hasSasayakiAudio = false,
-                hasLookupPopup = true,
-            ),
-        )
-    }
-
-    @Test
-    fun popupTermNavigationRepeatsAndConsumesKeyUpWithoutAction() {
-        val settings = ReaderSettings(volumeKeysNavigatePopupTerms = true)
-
-        assertEquals(
-            ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Next),
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 3,
-                settings = settings,
-                sasayakiEnabled = false,
-                hasSasayakiAudio = false,
-                hasLookupPopup = true,
-            ),
-        )
-        val keyUp = readerHardwareKeyEventForKeyEvent(
-            keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-            action = KeyEvent.ACTION_UP,
-            repeatCount = 0,
-            settings = settings,
-            sasayakiEnabled = false,
-            hasSasayakiAudio = false,
-            hasLookupPopup = true,
-        )
-        assertTrue(keyUp.consumed)
-        assertNull(keyUp.action)
-    }
-
-    @Test
-    fun sasayakiSeekFallsBackToVolumePageTurnsWhenAudioIsNotLoaded() {
-        val settings = ReaderSettings(
-            volumeKeysTurnPages = true,
-            volumeKeysSeekSasayaki = true,
-        )
-
-        assertEquals(
-            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Backward),
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = false,
-            ),
-        )
-    }
-
-    @Test
-    fun enabledVolumeKeysUseDefaultReaderDirection() {
-        val settings = ReaderSettings(volumeKeysTurnPages = true, reverseVolumeKeyDirection = false)
-
-        assertEquals(
-            ReaderNavigationDirection.Forward,
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-            ),
-        )
-        assertEquals(
-            ReaderNavigationDirection.Backward,
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-            ),
-        )
-    }
-
-    @Test
-    fun enabledVolumeKeysCanBeReversedWithoutChangingPageKeys() {
-        val settings = ReaderSettings(volumeKeysTurnPages = true, reverseVolumeKeyDirection = true)
-
-        assertEquals(
-            ReaderNavigationDirection.Backward,
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-            ),
-        )
-        assertEquals(
-            ReaderNavigationDirection.Forward,
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-            ),
-        )
-        assertEquals(
-            ReaderNavigationDirection.Forward,
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_PAGE_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-            ),
+            readerNavigationDirectionForKeyEvent(keyCode = KeyEvent.KEYCODE_PAGE_UP, action = KeyEvent.ACTION_DOWN, repeatCount = 0),
         )
     }
 
     @Test
     fun pageKeysIgnoreKeyUpAndRepeatedKeyDownEvents() {
-        val settings = ReaderSettings(volumeKeysTurnPages = true, volumeKeysSeekSasayaki = true)
-
-        assertNull(
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_PAGE_DOWN,
-                action = KeyEvent.ACTION_UP,
-                repeatCount = 0,
-                settings = settings,
-            ),
-        )
-        assertNull(
-            readerNavigationDirectionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_PAGE_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 1,
-                settings = settings,
-            ),
-        )
+        assertNull(readerNavigationDirectionForKeyEvent(keyCode = KeyEvent.KEYCODE_PAGE_DOWN, action = KeyEvent.ACTION_UP, repeatCount = 0))
+        assertNull(readerNavigationDirectionForKeyEvent(keyCode = KeyEvent.KEYCODE_PAGE_DOWN, action = KeyEvent.ACTION_DOWN, repeatCount = 1))
     }
 
     @Test
-    fun enabledVolumePageTurnKeysRepeatReaderNavigation() {
-        val settings = ReaderSettings(volumeKeysTurnPages = true)
-
-        assertEquals(
-            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward),
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 3,
-                settings = settings,
-                sasayakiEnabled = false,
-                hasSasayakiAudio = false,
-            ),
-        )
-        assertEquals(
-            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Backward),
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 2,
-                settings = settings,
-                sasayakiEnabled = false,
-                hasSasayakiAudio = false,
-            ),
-        )
-    }
-
-    @Test
-    fun enabledSasayakiVolumeSeekKeysRepeatSeekActions() {
-        val settings = ReaderSettings(volumeKeysSeekSasayaki = true)
-
-        assertEquals(
-            ReaderHardwareKeyAction.SasayakiSeekBackward,
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 4,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
-        assertEquals(
-            ReaderHardwareKeyAction.SasayakiSeekForward,
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 1,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
-    }
-
-    @Test
-    fun sasayakiSeekKeysRepeatWhileHeld() {
-        val settings = ReaderSettings(volumeKeysSeekSasayaki = true)
-        val expectations = mapOf(
-            KeyEvent.KEYCODE_DPAD_LEFT to ReaderHardwareKeyAction.SasayakiSeekBackward,
-            KeyEvent.KEYCODE_J to ReaderHardwareKeyAction.SasayakiSeekBackward,
-            KeyEvent.KEYCODE_DPAD_RIGHT to ReaderHardwareKeyAction.SasayakiSeekForward,
-            KeyEvent.KEYCODE_L to ReaderHardwareKeyAction.SasayakiSeekForward,
-            // Volume keys (default direction): up seeks backward, down seeks forward.
-            KeyEvent.KEYCODE_VOLUME_UP to ReaderHardwareKeyAction.SasayakiSeekBackward,
-            KeyEvent.KEYCODE_VOLUME_DOWN to ReaderHardwareKeyAction.SasayakiSeekForward,
-        )
-
-        expectations.forEach { (keyCode, expected) ->
-            assertEquals(
-                expected,
-                readerHardwareKeyActionForKeyEvent(
-                    keyCode = keyCode,
-                    action = KeyEvent.ACTION_DOWN,
-                    repeatCount = 1,
-                    settings = settings,
-                    sasayakiEnabled = true,
-                    hasSasayakiAudio = true,
-                ),
-            )
+    fun volumeKeysAreLeftToTheSystemUntilBound() {
+        listOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN).forEach { keyCode ->
+            assertFalse(boundKeyEvent(keyCode).consumed)
+            assertFalse(boundKeyEvent(keyCode, audioLoaded = true, hasLookupPopup = true).consumed)
         }
     }
 
     @Test
+    fun legacyVolumeSwitchesBecomeRowsInTheirLayers() {
+        val bindings = legacyVolumeKeys
+
+        assertEquals(backward, boundKeyEvent(KeyEvent.KEYCODE_VOLUME_UP, keyBindings = bindings).action)
+        assertEquals(forward, boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, keyBindings = bindings).action)
+        assertEquals(
+            ReaderHardwareKeyAction.SasayakiSeekBackward,
+            boundKeyEvent(KeyEvent.KEYCODE_VOLUME_UP, audioLoaded = true, keyBindings = bindings).action,
+        )
+        assertEquals(
+            ReaderHardwareKeyAction.SasayakiSeekForward,
+            boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, audioLoaded = true, keyBindings = bindings).action,
+        )
+        assertEquals(
+            ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Previous),
+            boundKeyEvent(KeyEvent.KEYCODE_VOLUME_UP, audioLoaded = true, hasLookupPopup = true, keyBindings = bindings).action,
+        )
+        assertEquals(
+            ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Next),
+            boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, audioLoaded = true, hasLookupPopup = true, keyBindings = bindings).action,
+        )
+    }
+
+    @Test
+    fun legacyReverseDirectionIsTheSwappedRows() {
+        val bindings = ReaderKeyBindings.fromLegacyVolumeKeys(
+            turnPages = true,
+            navigatePopupTerms = false,
+            seekSasayaki = true,
+            reverseDirection = true,
+        )
+
+        assertEquals(forward, boundKeyEvent(KeyEvent.KEYCODE_VOLUME_UP, keyBindings = bindings).action)
+        assertEquals(backward, boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, keyBindings = bindings).action)
+        assertEquals(
+            ReaderHardwareKeyAction.SasayakiSeekForward,
+            boundKeyEvent(KeyEvent.KEYCODE_VOLUME_UP, audioLoaded = true, keyBindings = bindings).action,
+        )
+        // Popup terms were off, so with a popup open the keys fall through to the seek rows.
+        assertEquals(
+            ReaderHardwareKeyAction.SasayakiSeekBackward,
+            boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, audioLoaded = true, hasLookupPopup = true, keyBindings = bindings).action,
+        )
+    }
+
+    @Test
+    fun boundVolumeKeysRepeatSeeksAndTermsButNotPages() {
+        val bindings = legacyVolumeKeys
+
+        assertNull(boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, repeatCount = 2, keyBindings = bindings).action)
+        assertTrue(boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, repeatCount = 2, keyBindings = bindings).consumed)
+        assertEquals(
+            ReaderHardwareKeyAction.SasayakiSeekForward,
+            boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, repeatCount = 2, audioLoaded = true, keyBindings = bindings).action,
+        )
+        assertEquals(
+            ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Next),
+            boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, repeatCount = 2, hasLookupPopup = true, keyBindings = bindings).action,
+        )
+        val up = boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, action = KeyEvent.ACTION_UP, keyBindings = bindings)
+        assertTrue(up.consumed)
+        assertNull(up.action)
+    }
+
+    @Test
+    fun volumeKeyHoldBoostsAfterTheTapActionFiredOnce() {
+        fun event(action: Int, repeatCount: Int) = boundKeyEvent(
+            KeyEvent.KEYCODE_VOLUME_DOWN,
+            action = action,
+            repeatCount = repeatCount,
+            audioLoaded = true,
+            volumeKeysHoldToBoost = true,
+            keyBindings = ReaderKeyBindings.fromLegacyVolumeKeys(turnPages = true, navigatePopupTerms = false, seekSasayaki = false, reverseDirection = false),
+        )
+
+        assertEquals(forward, event(KeyEvent.ACTION_DOWN, 0).action)
+        assertEquals(ReaderHardwareKeyAction.SasayakiHoldBoostStart, event(KeyEvent.ACTION_DOWN, 1).action)
+        assertNull(event(KeyEvent.ACTION_DOWN, 2).action)
+        assertTrue(event(KeyEvent.ACTION_DOWN, 2).consumed)
+        assertEquals(ReaderHardwareKeyAction.SasayakiVolumeKeyReleased, event(KeyEvent.ACTION_UP, 0).action)
+
+        // With no tap action bound the key is still held for boost, and nothing fires on the first press.
+        val boostOnly = boundKeyEvent(KeyEvent.KEYCODE_VOLUME_UP, audioLoaded = true, volumeKeysHoldToBoost = true)
+        assertTrue(boostOnly.consumed)
+        assertNull(boostOnly.action)
+        // Without audio the volume key falls back to the system.
+        assertFalse(boundKeyEvent(KeyEvent.KEYCODE_VOLUME_UP, volumeKeysHoldToBoost = true).consumed)
+    }
+
+    @Test
     fun sasayakiKeyboardKeysControlPlaybackWhenAudioLoaded() {
-        val settings = ReaderSettings()
         val expectations = mapOf(
             KeyEvent.KEYCODE_SPACE to ReaderHardwareKeyAction.SasayakiTogglePlayback,
             KeyEvent.KEYCODE_K to ReaderHardwareKeyAction.SasayakiTogglePlayback,
@@ -521,107 +152,43 @@ class ReaderHardwareKeyNavigationTest {
         )
 
         expectations.forEach { (keyCode, expected) ->
-            assertEquals(
-                expected,
-                readerHardwareKeyActionForKeyEvent(
-                    keyCode = keyCode,
-                    action = KeyEvent.ACTION_DOWN,
-                    repeatCount = 0,
-                    settings = settings,
-                    sasayakiEnabled = true,
-                    hasSasayakiAudio = true,
-                ),
-            )
+            assertEquals(expected, boundKeyEvent(keyCode, audioLoaded = true).action)
         }
     }
 
     @Test
     fun sasayakiKeyboardKeysAreIgnoredWithoutLoadedAudio() {
-        val settings = ReaderSettings()
-
         sasayakiKeyboardKeyCodes().forEach { keyCode ->
-            assertNull(
-                readerHardwareKeyActionForKeyEvent(
+            assertFalse(boundKeyEvent(keyCode).consumed)
+            assertFalse(
+                readerHardwareKeyEventForKeyEvent(
                     keyCode = keyCode,
                     action = KeyEvent.ACTION_DOWN,
                     repeatCount = 0,
-                    settings = settings,
-                    sasayakiEnabled = true,
-                    hasSasayakiAudio = false,
-                ),
-            )
-        }
-    }
-
-    @Test
-    fun sasayakiKeyboardKeysAreIgnoredWhileTextEditorFocused() {
-        val settings = ReaderSettings()
-
-        sasayakiKeyboardKeyCodes().forEach { keyCode ->
-            assertNull(
-                readerHardwareKeyActionForKeyEvent(
-                    keyCode = keyCode,
-                    action = KeyEvent.ACTION_DOWN,
-                    repeatCount = 0,
-                    settings = settings,
-                    sasayakiEnabled = true,
+                    sasayakiEnabled = false,
                     hasSasayakiAudio = true,
-                    textEditorFocused = true,
-                ),
+                ).consumed,
             )
         }
     }
 
     @Test
     fun sasayakiKeyboardKeysIgnoreKeyUpAndToggleRepeats() {
-        val settings = ReaderSettings()
-
         // Key-up never triggers an action, for toggle or seek keys.
-        assertNull(
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_SPACE,
-                action = KeyEvent.ACTION_UP,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
-        assertNull(
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_J,
-                action = KeyEvent.ACTION_UP,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
-        )
+        assertNull(boundKeyEvent(KeyEvent.KEYCODE_SPACE, action = KeyEvent.ACTION_UP, audioLoaded = true).action)
+        assertNull(boundKeyEvent(KeyEvent.KEYCODE_J, action = KeyEvent.ACTION_UP, audioLoaded = true).action)
         // Play/pause toggle does not auto-repeat while held (seek keys do).
-        assertNull(
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_SPACE,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 1,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-            ),
+        assertNull(boundKeyEvent(KeyEvent.KEYCODE_SPACE, repeatCount = 1, audioLoaded = true).action)
+        assertEquals(
+            ReaderHardwareKeyAction.SasayakiSeekBackward,
+            boundKeyEvent(KeyEvent.KEYCODE_J, repeatCount = 1, audioLoaded = true).action,
         )
     }
 
     @Test
     fun playKeysDecideTapVersusHoldOnReleaseWhenHoldToBoostIsOn() {
-        val settings = ReaderSettings()
-        fun action(action: Int, repeatCount: Int) = readerHardwareKeyEventForKeyEvent(
-            keyCode = KeyEvent.KEYCODE_SPACE,
-            action = action,
-            repeatCount = repeatCount,
-            settings = settings,
-            sasayakiEnabled = true,
-            hasSasayakiAudio = true,
-            sasayakiHoldToBoost = true,
-        )
+        fun action(action: Int, repeatCount: Int) =
+            boundKeyEvent(KeyEvent.KEYCODE_SPACE, action = action, repeatCount = repeatCount, audioLoaded = true, sasayakiHoldToBoost = true)
 
         val down = action(KeyEvent.ACTION_DOWN, 0)
         assertTrue(down.consumed)
@@ -632,138 +199,22 @@ class ReaderHardwareKeyNavigationTest {
         // Seek keys are unaffected by the hold setting.
         assertEquals(
             ReaderHardwareKeyAction.SasayakiSeekForward,
-            readerHardwareKeyActionForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_L,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = settings,
-                sasayakiEnabled = true,
-                hasSasayakiAudio = true,
-                sasayakiHoldToBoost = true,
-            ),
+            boundKeyEvent(KeyEvent.KEYCODE_L, audioLoaded = true, sasayakiHoldToBoost = true).action,
         )
-    }
-
-    @Test
-    fun volumeKeyHoldBoostsAfterTheTapActionFiredOnce() {
-        val settings = ReaderSettings(volumeKeysTurnPages = true)
-        fun event(action: Int, repeatCount: Int) = readerHardwareKeyEventForKeyEvent(
-            keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-            action = action,
-            repeatCount = repeatCount,
-            settings = settings,
-            sasayakiEnabled = true,
-            hasSasayakiAudio = true,
-            volumeKeysHoldToBoost = true,
-        )
-
-        assertEquals(
-            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward),
-            event(KeyEvent.ACTION_DOWN, 0).action,
-        )
-        assertEquals(ReaderHardwareKeyAction.SasayakiHoldBoostStart, event(KeyEvent.ACTION_DOWN, 1).action)
-        assertNull(event(KeyEvent.ACTION_DOWN, 2).action)
-        assertTrue(event(KeyEvent.ACTION_DOWN, 2).consumed)
-        assertEquals(ReaderHardwareKeyAction.SasayakiVolumeKeyReleased, event(KeyEvent.ACTION_UP, 0).action)
-
-        // With no tap action bound the key is still held for boost, and nothing fires on the first press.
-        val boostOnly = readerHardwareKeyEventForKeyEvent(
-            keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-            action = KeyEvent.ACTION_DOWN,
-            repeatCount = 0,
-            settings = ReaderSettings(),
-            sasayakiEnabled = true,
-            hasSasayakiAudio = true,
-            volumeKeysHoldToBoost = true,
-        )
-        assertTrue(boostOnly.consumed)
-        assertNull(boostOnly.action)
-        // Without audio the volume key falls back to the system.
-        assertFalse(
-            readerHardwareKeyEventForKeyEvent(
-                keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-                action = KeyEvent.ACTION_DOWN,
-                repeatCount = 0,
-                settings = ReaderSettings(),
-                sasayakiEnabled = true,
-                hasSasayakiAudio = false,
-                volumeKeysHoldToBoost = true,
-            ).consumed,
-        )
-    }
-
-    @Test
-    fun enabledVolumeKeysConsumeKeyUpWithoutAction() {
-        val settings = ReaderSettings(volumeKeysTurnPages = true)
-
-        val result = readerHardwareKeyEventForKeyEvent(
-            keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-            action = KeyEvent.ACTION_UP,
-            repeatCount = 0,
-            settings = settings,
-            sasayakiEnabled = false,
-            hasSasayakiAudio = false,
-        )
-
-        assertTrue(result.consumed)
-        assertNull(result.action)
-    }
-
-    @Test
-    fun disabledVolumeKeysAreNotConsumed() {
-        val settings = ReaderSettings(volumeKeysTurnPages = false, volumeKeysSeekSasayaki = false)
-
-        val result = readerHardwareKeyEventForKeyEvent(
-            keyCode = KeyEvent.KEYCODE_VOLUME_DOWN,
-            action = KeyEvent.ACTION_DOWN,
-            repeatCount = 1,
-            settings = settings,
-            sasayakiEnabled = true,
-            hasSasayakiAudio = true,
-        )
-
-        assertFalse(result.consumed)
-        assertNull(result.action)
-    }
-
-    @Test
-    fun enabledSasayakiVolumeKeysConsumeKeyUpWithoutAction() {
-        val settings = ReaderSettings(volumeKeysSeekSasayaki = true)
-
-        val result = readerHardwareKeyEventForKeyEvent(
-            keyCode = KeyEvent.KEYCODE_VOLUME_UP,
-            action = KeyEvent.ACTION_UP,
-            repeatCount = 0,
-            settings = settings,
-            sasayakiEnabled = true,
-            hasSasayakiAudio = true,
-        )
-
-        assertTrue(result.consumed)
-        assertNull(result.action)
     }
 
     @Test
     fun aReboundKeyFiresAndItsOldKeyGoesBackToThePage() {
         val bindings = ReaderKeyBindings().withKeys(ReaderKeyAction.PageForward, listOf(ReaderKey(KeyEvent.KEYCODE_N)))
 
-        assertEquals(
-            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward),
-            boundKeyEvent(KeyEvent.KEYCODE_N, keyBindings = bindings).action,
-        )
+        assertEquals(forward, boundKeyEvent(KeyEvent.KEYCODE_N, keyBindings = bindings).action)
         assertFalse(boundKeyEvent(KeyEvent.KEYCODE_PAGE_DOWN, keyBindings = bindings).consumed)
     }
 
     @Test
     fun gamepadButtonsTurnPagesAndPlayByDefault() {
-        assertEquals(
-            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward),
-            boundKeyEvent(KeyEvent.KEYCODE_BUTTON_R1).action,
-        )
-        assertEquals(
-            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Backward),
-            boundKeyEvent(KeyEvent.KEYCODE_BUTTON_L1).action,
-        )
+        assertEquals(forward, boundKeyEvent(KeyEvent.KEYCODE_BUTTON_R1).action)
+        assertEquals(backward, boundKeyEvent(KeyEvent.KEYCODE_BUTTON_L1).action)
         assertEquals(ReaderHardwareKeyAction.ToggleFocusMode, boundKeyEvent(KeyEvent.KEYCODE_BUTTON_SELECT).action)
         assertEquals(
             ReaderHardwareKeyAction.SasayakiTogglePlayback,
@@ -776,14 +227,8 @@ class ReaderHardwareKeyNavigationTest {
 
     @Test
     fun popupKeysOnlyWorkWhileAPopupIsOpen() {
-        assertEquals(
-            ReaderHardwareKeyAction.CloseLookupPopup,
-            boundKeyEvent(KeyEvent.KEYCODE_ESCAPE, hasLookupPopup = true).action,
-        )
-        assertEquals(
-            ReaderHardwareKeyAction.CloseLookupPopup,
-            boundKeyEvent(KeyEvent.KEYCODE_BUTTON_B, hasLookupPopup = true).action,
-        )
+        assertEquals(ReaderHardwareKeyAction.CloseLookupPopup, boundKeyEvent(KeyEvent.KEYCODE_ESCAPE, hasLookupPopup = true).action)
+        assertEquals(ReaderHardwareKeyAction.CloseLookupPopup, boundKeyEvent(KeyEvent.KEYCODE_BUTTON_B, hasLookupPopup = true).action)
         assertEquals(
             ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Previous),
             boundKeyEvent(KeyEvent.KEYCODE_DPAD_UP, hasLookupPopup = true).action,
@@ -798,17 +243,13 @@ class ReaderHardwareKeyNavigationTest {
 
     @Test
     fun aKeyFallsBackToItsReadingActionWithoutAudio() {
-        val bindings = ReaderKeyBindings()
-            .withKeys(ReaderKeyAction.PageForward, listOf(ReaderKey(KeyEvent.KEYCODE_DPAD_RIGHT)))
+        val bindings = ReaderKeyBindings().withKeys(ReaderKeyAction.PageForward, listOf(ReaderKey(KeyEvent.KEYCODE_DPAD_RIGHT)))
 
         assertEquals(
             ReaderHardwareKeyAction.SasayakiSeekForward,
             boundKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT, audioLoaded = true, keyBindings = bindings).action,
         )
-        assertEquals(
-            ReaderHardwareKeyAction.ReaderNavigation(ReaderNavigationDirection.Forward),
-            boundKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT, keyBindings = bindings).action,
-        )
+        assertEquals(forward, boundKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT, keyBindings = bindings).action)
     }
 
     @Test
@@ -820,23 +261,19 @@ class ReaderHardwareKeyNavigationTest {
             ReaderHardwareKeyAction.ChapterNavigation(ReaderNavigationDirection.Forward),
             boundKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT, metaState = KeyEvent.META_CTRL_ON, keyBindings = bindings).action,
         )
-        val repeat = boundKeyEvent(
-            KeyEvent.KEYCODE_DPAD_RIGHT,
-            repeatCount = 1,
-            metaState = KeyEvent.META_CTRL_ON,
-            keyBindings = bindings,
-        )
+        val repeat = boundKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT, repeatCount = 1, metaState = KeyEvent.META_CTRL_ON, keyBindings = bindings)
         assertTrue(repeat.consumed)
         assertNull(repeat.action)
     }
 
     @Test
     fun nothingIsBoundWhileTyping() {
-        listOf(KeyEvent.KEYCODE_PAGE_DOWN, KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_SPACE).forEach { keyCode ->
-            assertFalse(
-                boundKeyEvent(keyCode, audioLoaded = true, hasLookupPopup = true, textEditorFocused = true).consumed,
-            )
-        }
+        listOf(KeyEvent.KEYCODE_PAGE_DOWN, KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_VOLUME_UP)
+            .forEach { keyCode ->
+                assertFalse(
+                    boundKeyEvent(keyCode, audioLoaded = true, hasLookupPopup = true, textEditorFocused = true, keyBindings = legacyVolumeKeys).consumed,
+                )
+            }
     }
 
     @Test
@@ -881,8 +318,7 @@ class ReaderHardwareKeyNavigationTest {
     @Test
     fun aPressKeepsItsActionWhenThePopupClosesUnderIt() {
         // One key closes the popup and plays: closing the popup must not also toggle playback on release.
-        val key = ReaderKey(KeyEvent.KEYCODE_BUTTON_A)
-        val bindings = ReaderKeyBindings().withKeys(ReaderKeyAction.ClosePopup, listOf(key))
+        val bindings = ReaderKeyBindings().withKeys(ReaderKeyAction.ClosePopup, listOf(ReaderKey(KeyEvent.KEYCODE_BUTTON_A)))
         val presses = ReaderKeyPresses()
         fun event(action: Int, hasLookupPopup: Boolean) = boundKeyEvent(
             KeyEvent.KEYCODE_BUTTON_A,
@@ -915,15 +351,6 @@ class ReaderHardwareKeyNavigationTest {
         assertFalse(boundKeyEvent(KeyEvent.KEYCODE_PAGE_DOWN, action = KeyEvent.ACTION_UP, presses = presses).consumed)
     }
 
-    @Test
-    fun volumeKeysKeepTheirSwitchesWhateverIsBound() {
-        val bindings = ReaderKeyBindings(
-            mapOf(ReaderKeyAction.PageForward to listOf(ReaderKey(KeyEvent.KEYCODE_VOLUME_DOWN))),
-        )
-
-        assertFalse(boundKeyEvent(KeyEvent.KEYCODE_VOLUME_DOWN, keyBindings = bindings).consumed)
-    }
-
     private fun boundKeyEvent(
         keyCode: Int,
         action: Int = KeyEvent.ACTION_DOWN,
@@ -933,18 +360,19 @@ class ReaderHardwareKeyNavigationTest {
         hasLookupPopup: Boolean = false,
         textEditorFocused: Boolean = false,
         sasayakiHoldToBoost: Boolean = false,
+        volumeKeysHoldToBoost: Boolean = false,
         keyBindings: ReaderKeyBindings = ReaderKeyBindings(),
         presses: ReaderKeyPresses? = null,
     ) = readerHardwareKeyEventForKeyEvent(
         keyCode = keyCode,
         action = action,
         repeatCount = repeatCount,
-        settings = ReaderSettings(volumeKeysTurnPages = false),
         sasayakiEnabled = audioLoaded,
         hasSasayakiAudio = audioLoaded,
         textEditorFocused = textEditorFocused,
         hasLookupPopup = hasLookupPopup,
         sasayakiHoldToBoost = sasayakiHoldToBoost,
+        volumeKeysHoldToBoost = volumeKeysHoldToBoost,
         metaState = metaState,
         keyBindings = keyBindings,
         presses = presses,

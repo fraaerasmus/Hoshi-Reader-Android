@@ -5,6 +5,7 @@ import moe.antimony.hoshi.features.reader.input.ReaderKey
 import moe.antimony.hoshi.features.reader.input.ReaderKeyAction
 import moe.antimony.hoshi.features.reader.input.ReaderKeyBindings
 import moe.antimony.hoshi.features.reader.input.READER_KEY_MODIFIER_MASK
+import moe.antimony.hoshi.features.reader.input.isReaderVolumeKey
 
 internal enum class PopupTermNavigationDirection {
     Previous,
@@ -55,13 +56,11 @@ internal fun readerNavigationDirectionForKeyEvent(
     keyCode: Int,
     action: Int,
     repeatCount: Int,
-    settings: ReaderSettings,
 ): ReaderNavigationDirection? =
     (readerHardwareKeyEventForKeyEvent(
         keyCode = keyCode,
         action = action,
         repeatCount = repeatCount,
-        settings = settings,
         sasayakiEnabled = false,
         hasSasayakiAudio = false,
     ).action as? ReaderHardwareKeyAction.ReaderNavigation)?.direction
@@ -70,7 +69,6 @@ internal fun readerHardwareKeyActionForKeyEvent(
     keyCode: Int,
     action: Int,
     repeatCount: Int,
-    settings: ReaderSettings,
     sasayakiEnabled: Boolean,
     hasSasayakiAudio: Boolean,
     textEditorFocused: Boolean = false,
@@ -81,7 +79,6 @@ internal fun readerHardwareKeyActionForKeyEvent(
         keyCode = keyCode,
         action = action,
         repeatCount = repeatCount,
-        settings = settings,
         sasayakiEnabled = sasayakiEnabled,
         hasSasayakiAudio = hasSasayakiAudio,
         textEditorFocused = textEditorFocused,
@@ -93,7 +90,6 @@ internal fun readerHardwareKeyEventForKeyEvent(
     keyCode: Int,
     action: Int,
     repeatCount: Int,
-    settings: ReaderSettings,
     sasayakiEnabled: Boolean,
     hasSasayakiAudio: Boolean,
     textEditorFocused: Boolean = false,
@@ -105,40 +101,36 @@ internal fun readerHardwareKeyEventForKeyEvent(
     /** Null resolves every event on its own, which is what the tests of single events want. */
     presses: ReaderKeyPresses? = null,
 ): ReaderHardwareKeyEventResult {
-    return when (keyCode) {
-        KeyEvent.KEYCODE_VOLUME_DOWN,
-        KeyEvent.KEYCODE_VOLUME_UP,
-        -> volumeKeyResult(
-            keyCode = keyCode,
-            action = action,
-            repeatCount = repeatCount,
-            settings = settings,
-            sasayakiEnabled = sasayakiEnabled,
-            hasSasayakiAudio = hasSasayakiAudio,
-            hasLookupPopup = hasLookupPopup,
-            holdToBoost = volumeKeysHoldToBoost && sasayakiEnabled && hasSasayakiAudio,
-        )
-        else -> {
-            // Nothing is bound while typing, since any key can be.
-            val resolve = {
-                if (textEditorFocused) {
-                    null
-                } else {
-                    keyBindings.actionFor(
-                        key = ReaderKey(keyCode, metaState and READER_KEY_MODIFIER_MASK),
-                        popupOpen = hasLookupPopup,
-                        audioLoaded = sasayakiEnabled && hasSasayakiAudio,
-                    )
-                }
-            }
-            boundKeyResult(
-                bound = if (presses == null) resolve() else presses.action(keyCode, action, repeatCount, resolve),
-                action = action,
-                repeatCount = repeatCount,
-                holdToBoost = sasayakiHoldToBoost,
+    val audioLoaded = sasayakiEnabled && hasSasayakiAudio
+    // Nothing is bound while typing, since any key can be.
+    val resolve = {
+        if (textEditorFocused) {
+            null
+        } else {
+            keyBindings.actionFor(
+                key = ReaderKey(keyCode, metaState and READER_KEY_MODIFIER_MASK),
+                popupOpen = hasLookupPopup,
+                audioLoaded = audioLoaded,
             )
         }
     }
+    val bound = if (presses == null) resolve() else presses.action(keyCode, action, repeatCount, resolve)
+    if (isReaderVolumeKey(keyCode) && volumeKeysHoldToBoost && audioLoaded) {
+        // The tap action fires on the first key-down as before; auto-repeat becomes the boost instead of repeating it.
+        val holdAction = when {
+            action == KeyEvent.ACTION_UP -> ReaderHardwareKeyAction.SasayakiVolumeKeyReleased
+            action == KeyEvent.ACTION_DOWN && repeatCount == 0 -> bound?.hardwareAction()
+            action == KeyEvent.ACTION_DOWN && repeatCount == 1 -> ReaderHardwareKeyAction.SasayakiHoldBoostStart
+            else -> null
+        }
+        return ReaderHardwareKeyEventResult(consumed = true, action = holdAction)
+    }
+    return boundKeyResult(
+        bound = bound,
+        action = action,
+        repeatCount = repeatCount,
+        holdToBoost = sasayakiHoldToBoost,
+    )
 }
 
 /** A bound key is consumed whole, down to its release, so none of it reaches the page. */
@@ -185,121 +177,3 @@ private fun ReaderKeyAction.hardwareAction(): ReaderHardwareKeyAction? = when (t
     ReaderKeyAction.PopupNextTerm -> ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Next)
     ReaderKeyAction.BoostWhileHeld -> null
 }
-
-private fun volumeKeyResult(
-    keyCode: Int,
-    action: Int,
-    repeatCount: Int,
-    settings: ReaderSettings,
-    sasayakiEnabled: Boolean,
-    hasSasayakiAudio: Boolean,
-    hasLookupPopup: Boolean,
-    holdToBoost: Boolean,
-): ReaderHardwareKeyEventResult {
-    val keyAction = readerVolumeKeyAction(
-        keyCode = keyCode,
-        settings = settings,
-        sasayakiEnabled = sasayakiEnabled,
-        hasSasayakiAudio = hasSasayakiAudio,
-        hasLookupPopup = hasLookupPopup,
-    )
-    if (keyAction == null && !holdToBoost) return ReaderHardwareKeyEventResult(consumed = false)
-    if (holdToBoost) {
-        // The tap action fires on the first key-down as before; auto-repeat becomes the boost instead of repeating it.
-        val holdAction = when {
-            action == KeyEvent.ACTION_UP -> ReaderHardwareKeyAction.SasayakiVolumeKeyReleased
-            action == KeyEvent.ACTION_DOWN && repeatCount == 0 -> keyAction
-            action == KeyEvent.ACTION_DOWN && repeatCount == 1 -> ReaderHardwareKeyAction.SasayakiHoldBoostStart
-            else -> null
-        }
-        return ReaderHardwareKeyEventResult(consumed = true, action = holdAction)
-    }
-    return ReaderHardwareKeyEventResult(
-        consumed = true,
-        action = keyAction.takeIf { action == KeyEvent.ACTION_DOWN },
-    )
-}
-
-private fun readerVolumeKeyAction(
-    keyCode: Int,
-    settings: ReaderSettings,
-    sasayakiEnabled: Boolean,
-    hasSasayakiAudio: Boolean,
-    hasLookupPopup: Boolean,
-): ReaderHardwareKeyAction? {
-    if (settings.volumeKeysNavigatePopupTerms && hasLookupPopup) {
-        return ReaderHardwareKeyAction.PopupTermNavigation(
-            popupTermNavigationDirectionForVolumeKey(
-                keyCode = keyCode,
-                reverseDirection = settings.reverseVolumeKeyDirection,
-            ),
-        )
-    }
-    if (settings.volumeKeysSeekSasayaki && sasayakiEnabled && hasSasayakiAudio) {
-        return sasayakiSeekActionForVolumeKey(
-            keyCode = keyCode,
-            reverseDirection = settings.reverseVolumeKeyDirection,
-        )
-    }
-    if (!settings.volumeKeysTurnPages) return null
-    return ReaderHardwareKeyAction.ReaderNavigation(
-        volumePageTurnDirectionForKey(
-            keyCode = keyCode,
-            reverseDirection = settings.reverseVolumeKeyDirection,
-        ),
-    )
-}
-
-private fun popupTermNavigationDirectionForVolumeKey(
-    keyCode: Int,
-    reverseDirection: Boolean,
-): PopupTermNavigationDirection =
-    when (keyCode) {
-        KeyEvent.KEYCODE_VOLUME_UP -> if (reverseDirection) {
-            PopupTermNavigationDirection.Next
-        } else {
-            PopupTermNavigationDirection.Previous
-        }
-        KeyEvent.KEYCODE_VOLUME_DOWN -> if (reverseDirection) {
-            PopupTermNavigationDirection.Previous
-        } else {
-            PopupTermNavigationDirection.Next
-        }
-        else -> error("Unsupported volume key: $keyCode")
-    }
-
-private fun sasayakiSeekActionForVolumeKey(
-    keyCode: Int,
-    reverseDirection: Boolean,
-): ReaderHardwareKeyAction =
-    when (keyCode) {
-        KeyEvent.KEYCODE_VOLUME_UP -> if (reverseDirection) {
-            ReaderHardwareKeyAction.SasayakiSeekForward
-        } else {
-            ReaderHardwareKeyAction.SasayakiSeekBackward
-        }
-        KeyEvent.KEYCODE_VOLUME_DOWN -> if (reverseDirection) {
-            ReaderHardwareKeyAction.SasayakiSeekBackward
-        } else {
-            ReaderHardwareKeyAction.SasayakiSeekForward
-        }
-        else -> error("Unsupported volume key: $keyCode")
-    }
-
-private fun volumePageTurnDirectionForKey(
-    keyCode: Int,
-    reverseDirection: Boolean,
-): ReaderNavigationDirection =
-    when (keyCode) {
-        KeyEvent.KEYCODE_VOLUME_DOWN -> if (reverseDirection) {
-            ReaderNavigationDirection.Backward
-        } else {
-            ReaderNavigationDirection.Forward
-        }
-        KeyEvent.KEYCODE_VOLUME_UP -> if (reverseDirection) {
-            ReaderNavigationDirection.Forward
-        } else {
-            ReaderNavigationDirection.Backward
-        }
-        else -> error("Unsupported volume key: $keyCode")
-    }

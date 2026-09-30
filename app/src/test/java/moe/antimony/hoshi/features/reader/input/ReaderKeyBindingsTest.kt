@@ -127,19 +127,40 @@ class ReaderKeyBindingsTest {
         assertEquals(bindings, ReaderKeyBindings.decode(bindings.encode()))
 
         val messy = ReaderKeyBindings.decode(
-            """{"Unknown":[{"keyCode":62}],"PageForward":[{"keyCode":24},{"keyCode":4},{"keyCode":62,"extra":1}]}""",
+            """{"Unknown":[{"keyCode":62}],"PageForward":[{"keyCode":59},{"keyCode":4},{"keyCode":62,"extra":1}]}""",
         )
         assertEquals(mapOf(ReaderKeyAction.PageForward to listOf(space)), messy.map)
         assertEquals(ReaderKeyBindings(), ReaderKeyBindings.decode("not json"))
     }
 
     @Test
-    fun modifiersBackAndVolumeKeysCannotBeBound() {
+    fun modifiersAndBackCannotBeBoundButVolumeKeysCan() {
         assertNull(readerKeyOrNull(KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.META_SHIFT_ON))
         assertNull(readerKeyOrNull(KeyEvent.KEYCODE_BACK, 0))
-        assertNull(readerKeyOrNull(KeyEvent.KEYCODE_VOLUME_UP, 0))
-        assertNull(readerKeyOrNull(KeyEvent.KEYCODE_VOLUME_DOWN, 0))
+        assertEquals(ReaderKey(KeyEvent.KEYCODE_VOLUME_UP), readerKeyOrNull(KeyEvent.KEYCODE_VOLUME_UP, 0))
         assertEquals(ReaderKey(KeyEvent.KEYCODE_BUTTON_B), readerKeyOrNull(KeyEvent.KEYCODE_BUTTON_B, 0))
+        assertTrue(isReaderVolumeKey(KeyEvent.KEYCODE_VOLUME_DOWN))
+        assertFalse(isReaderVolumeKey(KeyEvent.KEYCODE_BUTTON_B))
+    }
+
+    @Test
+    fun legacyVolumeSwitchesSeedRowsThatKeepTheirDefaults() {
+        val up = ReaderKey(KeyEvent.KEYCODE_VOLUME_UP)
+        val down = ReaderKey(KeyEvent.KEYCODE_VOLUME_DOWN)
+        val seeded = ReaderKeyBindings.fromLegacyVolumeKeys(turnPages = true, navigatePopupTerms = true, seekSasayaki = false, reverseDirection = false)
+
+        assertEquals(listOf(ReaderKey(KeyEvent.KEYCODE_PAGE_UP), ReaderKey(KeyEvent.KEYCODE_BUTTON_L1), up), seeded.keys(ReaderKeyAction.PageBackward))
+        assertEquals(listOf(ReaderKey(KeyEvent.KEYCODE_PAGE_DOWN), ReaderKey(KeyEvent.KEYCODE_BUTTON_R1), down), seeded.keys(ReaderKeyAction.PageForward))
+        assertEquals(listOf(ReaderKey(KeyEvent.KEYCODE_DPAD_UP), up), seeded.keys(ReaderKeyAction.PopupPreviousTerm))
+        assertFalse(up in seeded.keys(ReaderKeyAction.SkipBackward))
+        // Seeded rows are stored, so a later default cannot take them back.
+        assertEquals(4, seeded.map.size)
+
+        val reversed = ReaderKeyBindings.fromLegacyVolumeKeys(turnPages = true, navigatePopupTerms = false, seekSasayaki = false, reverseDirection = true)
+        assertTrue(down in reversed.keys(ReaderKeyAction.PageBackward))
+        assertTrue(up in reversed.keys(ReaderKeyAction.PageForward))
+
+        assertEquals(ReaderKeyBindings(), ReaderKeyBindings.fromLegacyVolumeKeys(turnPages = false, navigatePopupTerms = false, seekSasayaki = false, reverseDirection = true))
     }
 
     @Test

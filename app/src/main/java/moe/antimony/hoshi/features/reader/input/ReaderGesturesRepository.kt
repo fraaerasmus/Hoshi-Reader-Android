@@ -39,20 +39,26 @@ data class ReaderGestureSettings(
 
 private val Context.readerGesturesDataStore by preferencesDataStore(name = ReaderGesturesRepository.DataStoreName)
 
-fun Context.readerGesturesRepository(legacyEdgeSwipeControls: suspend () -> Boolean): ReaderGesturesRepository =
-    ReaderGesturesRepository(readerGesturesDataStore, legacyEdgeSwipeControls)
+fun Context.readerGesturesRepository(
+    legacyEdgeSwipeControls: suspend () -> Boolean,
+    legacyKeyBindings: suspend () -> ReaderKeyBindings,
+): ReaderGesturesRepository =
+    ReaderGesturesRepository(readerGesturesDataStore, legacyEdgeSwipeControls, legacyKeyBindings)
 
 /** Rebindable gestures and the playback-control placement, in their own store so they ride the settings backup. */
 class ReaderGesturesRepository(
     private val dataStore: DataStore<Preferences>,
     private val legacyEdgeSwipeControls: suspend () -> Boolean,
+    /** What the volume-key switches said before keys were bindable; stands in until the keys are edited. */
+    private val legacyKeyBindings: suspend () -> ReaderKeyBindings,
 ) {
-    val settings: Flow<ReaderGestureSettings> = dataStore.data.map { it.toSettings(legacyEdgeSwipeControls()) }
+    val settings: Flow<ReaderGestureSettings> = dataStore.data.map { it.toSettings(legacyEdgeSwipeControls(), legacyKeyBindings()) }
 
     suspend fun update(transform: (ReaderGestureSettings) -> ReaderGestureSettings) {
         val legacy = legacyEdgeSwipeControls()
+        val legacyKeys = legacyKeyBindings()
         dataStore.edit { preferences ->
-            val next = transform(preferences.toSettings(legacy))
+            val next = transform(preferences.toSettings(legacy, legacyKeys))
             preferences[KEY_BINDINGS] = next.bindings.encode()
             preferences[KEY_PLACEMENT] = next.controlsPlacement.name
             preferences[KEY_DOCK_OFFSET] = next.dockOffsetFraction.coerceIn(0f, 1f)
@@ -61,7 +67,7 @@ class ReaderGesturesRepository(
             preferences[KEY_EDGE_ZONE_WIDTH] = next.edgeZoneWidthDp.coerceIn(ReaderGestureSettings.MinEdgeZoneWidthDp, ReaderGestureSettings.MaxEdgeZoneWidthDp)
             preferences[KEY_DOCK_COMPACT] = next.dockCompact
             // Left out while nothing is changed, so the defaults of a later build still reach this install.
-            if (next.keyBindings.map.isEmpty()) {
+            if (next.keyBindings == legacyKeys) {
                 preferences.remove(KEY_KEY_BINDINGS)
             } else {
                 preferences[KEY_KEY_BINDINGS] = next.keyBindings.encode()
@@ -69,7 +75,7 @@ class ReaderGesturesRepository(
         }
     }
 
-    private fun Preferences.toSettings(legacyEdgeSwipeControls: Boolean): ReaderGestureSettings =
+    private fun Preferences.toSettings(legacyEdgeSwipeControls: Boolean, legacyKeyBindings: ReaderKeyBindings): ReaderGestureSettings =
         ReaderGestureSettings(
             bindings = this[KEY_BINDINGS]?.let(ReaderInputBindings::decode) ?: ReaderInputBindings.fromLegacy(legacyEdgeSwipeControls),
             controlsPlacement = this[KEY_PLACEMENT]?.let { name ->
@@ -81,7 +87,7 @@ class ReaderGesturesRepository(
             edgeZoneWidthDp = (this[KEY_EDGE_ZONE_WIDTH] ?: ReaderGestureSettings.DefaultEdgeZoneWidthDp)
                 .coerceIn(ReaderGestureSettings.MinEdgeZoneWidthDp, ReaderGestureSettings.MaxEdgeZoneWidthDp),
             dockCompact = this[KEY_DOCK_COMPACT] ?: false,
-            keyBindings = this[KEY_KEY_BINDINGS]?.let(ReaderKeyBindings::decode) ?: ReaderKeyBindings(),
+            keyBindings = this[KEY_KEY_BINDINGS]?.let(ReaderKeyBindings::decode) ?: legacyKeyBindings,
         )
 
     suspend fun exportEntries(): JsonObject = PreferencesBackup.export(dataStore)

@@ -42,15 +42,12 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
-import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.settings.SettingsDetailScaffold
 import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
 
 /** Advanced › Gestures & shortcuts: where the playback controls live and what each gesture and key does. */
 @Composable
 fun ReaderGesturesView(
-    readerSettings: ReaderSettings,
-    onReaderSettingsChange: (ReaderSettings) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -144,23 +141,13 @@ fun ReaderGesturesView(
                 item {
                     SectionTitle(stringResource(R.string.gestures_section_volume))
                     GesturesCard {
-                        SwitchRow(stringResource(R.string.reader_behavior_volume_keys_turn_pages), readerSettings.volumeKeysTurnPages) {
-                            onReaderSettingsChange(readerSettings.copy(volumeKeysTurnPages = it))
-                        }
-                        HorizontalDivider()
-                        SwitchRow(stringResource(R.string.reader_behavior_volume_keys_navigate_popup_terms), readerSettings.volumeKeysNavigatePopupTerms) {
-                            onReaderSettingsChange(readerSettings.copy(volumeKeysNavigatePopupTerms = it))
-                        }
-                        HorizontalDivider()
-                        SwitchRow(stringResource(R.string.reader_behavior_volume_keys_seek_sasayaki), readerSettings.volumeKeysSeekSasayaki) {
-                            onReaderSettingsChange(readerSettings.copy(volumeKeysSeekSasayaki = it))
-                        }
-                        HorizontalDivider()
-                        SwitchRow(stringResource(R.string.reader_behavior_reverse_volume_key_direction), readerSettings.reverseVolumeKeyDirection) {
-                            onReaderSettingsChange(readerSettings.copy(reverseVolumeKeyDirection = it))
-                        }
-                        HorizontalDivider()
                         BindingRow(ReaderInputSource.VolumeKeyHold, gestures.bindings.action(ReaderInputSource.VolumeKeyHold), ::bind)
+                        Text(
+                            text = stringResource(R.string.gestures_volume_help),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                        )
                     }
                 }
                 item {

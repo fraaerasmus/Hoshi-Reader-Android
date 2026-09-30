@@ -180,7 +180,6 @@ private fun ReaderKeysDialog(
     var keys by remember { mutableStateOf(bindings.keys(action)) }
     // An action with no key yet starts out waiting for one.
     var listening by remember { mutableStateOf(keys.isEmpty()) }
-    var volumeRefused by remember { mutableStateOf(false) }
     // Held until the key is let go, so its release does not click whatever takes the focus next.
     var pending by remember { mutableStateOf<ReaderKey?>(null) }
     val focusRequester = remember { FocusRequester() }
@@ -231,15 +230,8 @@ private fun ReaderKeysDialog(
                                 when {
                                     // Back has to keep closing the dialog.
                                     pressed.keyCode == KeyEvent.KEYCODE_BACK -> false
-                                    isReaderVolumeKey(pressed.keyCode) -> {
-                                        volumeRefused = true
-                                        true
-                                    }
                                     pressed.action == KeyEvent.ACTION_DOWN && pressed.repeatCount == 0 -> {
-                                        readerKeyOrNull(pressed.keyCode, pressed.metaState)?.let {
-                                            pending = it
-                                            volumeRefused = false
-                                        }
+                                        readerKeyOrNull(pressed.keyCode, pressed.metaState)?.let { pending = it }
                                         true
                                     }
                                     pressed.action == KeyEvent.ACTION_UP -> {
@@ -259,11 +251,9 @@ private fun ReaderKeysDialog(
                         Column(modifier = Modifier.padding(12.dp)) {
                             Text(stringResource(R.string.gestures_keys_press), style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                text = stringResource(
-                                    if (volumeRefused) R.string.gestures_keys_volume_refused else R.string.gestures_keys_press_help,
-                                ),
+                                text = stringResource(R.string.gestures_keys_press_help),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (volumeRefused) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
