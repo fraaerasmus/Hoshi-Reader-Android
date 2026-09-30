@@ -251,7 +251,8 @@ class ReaderHardwareKeyNavigationTest {
             boundKeyEvent(KeyEvent.KEYCODE_BUTTON_R1, hasLookupPopup = true, repeatCount = 2).action,
         )
         assertEquals(forward, boundKeyEvent(KeyEvent.KEYCODE_BUTTON_R1).action)
-        assertFalse(boundKeyEvent(KeyEvent.KEYCODE_BUTTON_X).consumed)
+        assertEquals(ReaderHardwareKeyAction.PickWord, boundKeyEvent(KeyEvent.KEYCODE_BUTTON_X).action)
+        assertFalse(boundKeyEvent(KeyEvent.KEYCODE_BUTTON_Y).consumed)
     }
 
     @Test
