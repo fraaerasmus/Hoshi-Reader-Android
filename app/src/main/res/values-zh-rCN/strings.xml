@@ -696,7 +696,7 @@
     <string name="advanced_sasayaki_audiobooks">有声书</string>
     <string name="advanced_sasayaki_subtitle">配合已匹配的有声书字幕阅读</string>
     <string name="gestures_title">手势与快捷键</string>
-    <string name="advanced_gestures_subtitle">播放控件的位置，以及屏幕边缘和音量键的功能。</string>
+    <string name="advanced_gestures_subtitle">播放控件的位置，以及屏幕边缘、按键和手柄按钮的功能。</string>
     <string name="gestures_section_controls">播放控件</string>
     <string name="gestures_controls_placement">位置</string>
     <string name="gestures_placement_bottom" comment="Playback controls placement option.">底部栏</string>
@@ -723,10 +723,20 @@
     <string name="gestures_mouse_selection_colors_help">选择后在光标处显示标注颜色。</string>
     <string name="gestures_mouse_side_click">点击两侧翻页</string>
     <string name="gestures_mouse_side_click_help">点击页面两侧翻页；滚轮始终可翻页。</string>
-    <string name="gestures_section_keyboard">键盘</string>
-    <string name="gestures_keyboard_skip">快退 / 快进</string>
-    <string name="gestures_keyboard_speed">速度 −/+ 0.1×</string>
-    <string name="gestures_keyboard_pages">翻页</string>
+    <string name="gestures_section_keyboard">键盘与手柄</string>
+    <string name="gestures_keys_help">查词弹窗打开时，按键执行弹窗操作；否则在已加载有声书时执行有声书操作；其余情况执行阅读操作。音量键在上方设置。</string>
+    <string name="gestures_keys_layer_reading">阅读时</string>
+    <string name="gestures_keys_layer_audiobook">已加载有声书时</string>
+    <string name="gestures_keys_layer_popup">查词弹窗打开时</string>
+    <string name="gestures_keys_not_set">未设置</string>
+    <string name="gestures_keys_add">添加按键</string>
+    <string name="gestures_keys_press">请按下按键或手柄按钮</string>
+    <string name="gestures_keys_press_help">按住 Ctrl、Alt 或 Shift 再按键可设置组合键。</string>
+    <string name="gestures_keys_volume_refused">音量键请在上方的“音量键”部分设置。</string>
+    <string name="gestures_keys_taken_format">当前用于“%1$s”，保存后将被替换。</string>
+    <string name="gestures_keys_reset">恢复默认按键</string>
+    <string name="gestures_keys_reset_title">恢复默认按键？</string>
+    <string name="gestures_keys_reset_message">所有按键和手柄按钮将恢复为默认操作。</string>
     <string name="input_action_none" comment="Gesture binding option meaning the gesture does nothing.">无</string>
     <string name="input_action_toggle_playback">播放 / 暂停</string>
     <string name="input_action_skip_forward">快进</string>
@@ -734,6 +744,13 @@
     <string name="input_action_page_forward">下一页</string>
     <string name="input_action_page_backward">上一页</string>
     <string name="input_action_toggle_focus">切换专注模式</string>
+    <string name="input_action_chapter_forward">下一章</string>
+    <string name="input_action_chapter_backward">上一章</string>
+    <string name="input_action_speed_down">速度 −0.1×</string>
+    <string name="input_action_speed_up">速度 +0.1×</string>
+    <string name="input_action_close_popup">关闭查词弹窗</string>
+    <string name="input_action_popup_previous_term">上一个弹窗词条</string>
+    <string name="input_action_popup_next_term">下一个弹窗词条</string>
     <string name="input_action_boost">按住时加速</string>
     <string name="input_action_scrub">拖动音频进度</string>
     <string name="input_action_brightness" comment="Gesture binding option, intentionally matching other Brightness labels.">亮度</string>
@@ -910,7 +927,7 @@
     </plurals>
     <string name="sasayaki_scrub_seconds">%1$s 秒</string>
     <string name="sasayaki_hold_playback_controls_to_boost">长按加速</string>
-    <string name="sasayaki_hold_playback_controls_to_boost_help">长按播放按钮或底部播放控件的空白处（键盘上按住空格或 K）以双倍速度播放，松手后恢复。</string>
+    <string name="sasayaki_hold_playback_controls_to_boost_help">长按播放按钮或底部播放控件的空白处（或按住键盘、手柄上的播放 / 暂停键）以双倍速度播放，松手后恢复。</string>
     <string name="sasayaki_double_tap_playback_controls_to_toggle">双击播放/暂停</string>
     <string name="sasayaki_double_tap_playback_controls_to_toggle_help">双击底部播放控件的空白处以暂停或继续播放。</string>
     <string name="sasayaki_scrub_hint">拖动以跳转</string>

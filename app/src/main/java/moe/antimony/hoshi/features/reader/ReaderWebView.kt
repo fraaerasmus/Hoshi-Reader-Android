@@ -1552,6 +1552,7 @@ fun ReaderWebView(
         sasayakiPlayer?.endSpeedBoost()
     }
     val sasayakiKeyBoosting = remember { booleanArrayOf(false) }
+    val readerKeyPresses = remember { ReaderKeyPresses() }
     val currentReaderKeyHandler = rememberUpdatedState<(KeyEvent) -> Boolean> { event ->
         val textEditorFocused = context.findActivity()?.currentFocus?.onCheckIsTextEditor() == true
         if (event.keyCode == KeyEvent.KEYCODE_SHIFT_LEFT || event.keyCode == KeyEvent.KEYCODE_SHIFT_RIGHT) {
@@ -1570,14 +1571,6 @@ fun ReaderWebView(
             }
             return@rememberUpdatedState false
         }
-        if (event.keyCode == KeyEvent.KEYCODE_ESCAPE &&
-            event.action == KeyEvent.ACTION_DOWN &&
-            event.repeatCount == 0 &&
-            lookupPopups.isNotEmpty()
-        ) {
-            closeLookupPopupsAndSelection()
-            return@rememberUpdatedState true
-        }
         val keyEvent = readerHardwareKeyEventForKeyEvent(
             keyCode = event.keyCode,
             action = event.action,
@@ -1589,10 +1582,22 @@ fun ReaderWebView(
             hasLookupPopup = stateHolder.lookupPopups.isNotEmpty(),
             sasayakiHoldToBoost = sasayakiSettings.holdPlaybackControlsToBoost,
             volumeKeysHoldToBoost = inputBindings.action(ReaderInputSource.VolumeKeyHold) == ReaderInputAction.BoostWhileHeld,
+            metaState = event.metaState,
+            keyBindings = gestureSettings.keyBindings,
+            presses = readerKeyPresses,
         )
         if (!keyEvent.consumed) return@rememberUpdatedState false
         when (val action = keyEvent.action) {
             is ReaderHardwareKeyAction.ReaderNavigation -> navigateReaderPage(action.direction)
+            is ReaderHardwareKeyAction.ChapterNavigation -> {
+                closeLookupPopupsAndSelection()
+                when (action.direction) {
+                    ReaderNavigationDirection.Forward -> goToNextChapter()
+                    ReaderNavigationDirection.Backward -> goToPreviousChapter()
+                }
+            }
+            ReaderHardwareKeyAction.ToggleFocusMode -> handleReaderTapOutside()
+            ReaderHardwareKeyAction.CloseLookupPopup -> closeLookupPopupsAndSelection()
             ReaderHardwareKeyAction.SasayakiTogglePlayback -> {
                 sasayakiPlayer?.togglePlayback()
             }

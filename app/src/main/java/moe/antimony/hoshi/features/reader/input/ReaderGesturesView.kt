@@ -192,31 +192,16 @@ fun ReaderGesturesView(
                     }
                 }
                 item {
-                    SectionTitle(stringResource(R.string.gestures_section_keyboard))
-                    GesturesCard {
-                        keyboardShortcutRows().forEachIndexed { index, (actionRes, keysRes) ->
-                            if (index > 0) HorizontalDivider()
-                            ListItem(
-                                colors = transparent(),
-                                headlineContent = { Text(stringResource(actionRes)) },
-                                trailingContent = { Text(stringResource(keysRes), color = MaterialTheme.colorScheme.onSurfaceVariant) },
-                            )
-                        }
-                    }
+                    ReaderKeyBindingsSection(
+                        bindings = gestures.keyBindings,
+                        onBindingsChange = { next -> scope.launch { gesturesRepository.update { it.copy(keyBindings = next) } } },
+                    )
                 }
             }
             EdgeZoneOverlay(zoneWidthDp = edgeZonePreviewDp)
         }
     }
 }
-
-/** Action → keys, in the order the card lists them. */
-internal fun keyboardShortcutRows(): List<Pair<Int, Int>> = listOf(
-    R.string.input_action_toggle_playback to R.string.gestures_keyboard_keys_play,
-    R.string.gestures_keyboard_skip to R.string.gestures_keyboard_keys_skip,
-    R.string.gestures_keyboard_speed to R.string.gestures_keyboard_keys_speed,
-    R.string.gestures_keyboard_pages to R.string.gestures_keyboard_keys_pages,
-)
 
 /** The two edge strips at their real width, over whatever screen this is drawn on; nothing when [zoneWidthDp] is null. */
 @Composable
@@ -320,7 +305,7 @@ private fun SwitchRow(label: String, checked: Boolean, onCheckedChange: (Boolean
 }
 
 @Composable
-private fun SectionTitle(text: String) {
+internal fun SectionTitle(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
@@ -330,7 +315,7 @@ private fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun GesturesCard(content: @Composable () -> Unit) {
+internal fun GesturesCard(content: @Composable () -> Unit) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -344,7 +329,7 @@ private fun GesturesCard(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun transparent() = ListItemDefaults.colors(containerColor = Color.Transparent)
+internal fun transparent() = ListItemDefaults.colors(containerColor = Color.Transparent)
 
 internal fun ReaderInputSource.labelRes(): Int = when (this) {
     ReaderInputSource.EdgeLeftHold -> R.string.gestures_edge_left_hold

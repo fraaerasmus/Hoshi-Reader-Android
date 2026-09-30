@@ -27,6 +27,7 @@ data class ReaderGestureSettings(
     val edgeZoneWidthDp: Int = DefaultEdgeZoneWidthDp,
     /** Side dock only: the tab itself is the control (tap, hold, pull to scrub) and no drawer opens. */
     val dockCompact: Boolean = false,
+    val keyBindings: ReaderKeyBindings = ReaderKeyBindings(),
 ) {
     companion object {
         const val DefaultDockOffsetFraction = 0.6f
@@ -59,6 +60,12 @@ class ReaderGesturesRepository(
             preferences[KEY_MOUSE_SELECTION_COLORS] = next.mouseSelectionShowsHighlightColors
             preferences[KEY_EDGE_ZONE_WIDTH] = next.edgeZoneWidthDp.coerceIn(ReaderGestureSettings.MinEdgeZoneWidthDp, ReaderGestureSettings.MaxEdgeZoneWidthDp)
             preferences[KEY_DOCK_COMPACT] = next.dockCompact
+            // Left out while nothing is changed, so the defaults of a later build still reach this install.
+            if (next.keyBindings.map.isEmpty()) {
+                preferences.remove(KEY_KEY_BINDINGS)
+            } else {
+                preferences[KEY_KEY_BINDINGS] = next.keyBindings.encode()
+            }
         }
     }
 
@@ -74,6 +81,7 @@ class ReaderGesturesRepository(
             edgeZoneWidthDp = (this[KEY_EDGE_ZONE_WIDTH] ?: ReaderGestureSettings.DefaultEdgeZoneWidthDp)
                 .coerceIn(ReaderGestureSettings.MinEdgeZoneWidthDp, ReaderGestureSettings.MaxEdgeZoneWidthDp),
             dockCompact = this[KEY_DOCK_COMPACT] ?: false,
+            keyBindings = this[KEY_KEY_BINDINGS]?.let(ReaderKeyBindings::decode) ?: ReaderKeyBindings(),
         )
 
     suspend fun exportEntries(): JsonObject = PreferencesBackup.export(dataStore)
@@ -91,5 +99,6 @@ class ReaderGesturesRepository(
         private val KEY_MOUSE_SELECTION_COLORS = booleanPreferencesKey("mouseSelectionShowsHighlightColors")
         private val KEY_EDGE_ZONE_WIDTH = intPreferencesKey("edgeZoneWidthDp")
         private val KEY_DOCK_COMPACT = booleanPreferencesKey("sasayakiDockCompact")
+        private val KEY_KEY_BINDINGS = stringPreferencesKey("readerKeyBindings")
     }
 }

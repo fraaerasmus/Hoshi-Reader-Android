@@ -59,6 +59,9 @@ else comes from upstream and is taken as-is.
     position/size and hardware-keyboard shortcuts; hold the rewind/forward
     controls — on-screen, hardware keys, or headphone/Bluetooth — to seek
     continuously.
+  - **Rebindable keyboard keys and gamepad buttons** for page turns, chapters,
+    the lookup popup and audiobook playback, layered so one key can act
+    differently with a popup open, with audio loaded, or while just reading.
   - Yomitan-style **Shift-hover** dictionary lookup (scan the word under the
     pointer without tapping), and **Esc** to dismiss the lookup popup.
   - **Multi-word phrase** scanning for space-delimited languages.

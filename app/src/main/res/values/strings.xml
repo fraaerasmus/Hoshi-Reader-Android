@@ -698,7 +698,7 @@
     <string name="advanced_sasayaki_audiobooks">Sasayaki (Audiobooks)</string>
     <string name="advanced_sasayaki_subtitle">Read along with matched audiobook subtitles</string>
     <string name="gestures_title">Gestures &amp; Shortcuts</string>
-    <string name="advanced_gestures_subtitle">Where the playback controls sit, and what screen edges and volume keys do.</string>
+    <string name="advanced_gestures_subtitle">Where the playback controls sit, and what screen edges, keys and gamepad buttons do.</string>
     <string name="gestures_section_controls">Playback controls</string>
     <string name="gestures_controls_placement">Placement</string>
     <string name="gestures_placement_bottom" comment="Playback controls placement option.">Bottom row</string>
@@ -725,14 +725,20 @@
     <string name="gestures_mouse_selection_colors_help">Shows the highlight colours at the cursor after a selection.</string>
     <string name="gestures_mouse_side_click">Click the sides to turn pages</string>
     <string name="gestures_mouse_side_click_help">Clicks near the sides turn the page; the wheel always does.</string>
-    <string name="gestures_section_keyboard">Keyboard</string>
-    <string name="gestures_keyboard_skip">Skip back / forward</string>
-    <string name="gestures_keyboard_speed">Speed −/+ 0.1×</string>
-    <string name="gestures_keyboard_pages">Turn pages</string>
-    <string name="gestures_keyboard_keys_play" translatable="false">Space · K</string>
-    <string name="gestures_keyboard_keys_skip" translatable="false">J · L</string>
-    <string name="gestures_keyboard_keys_speed" translatable="false">&lt; · &gt;</string>
-    <string name="gestures_keyboard_keys_pages" translatable="false">Page Up · Page Down</string>
+    <string name="gestures_section_keyboard">Keyboard &amp; gamepad</string>
+    <string name="gestures_keys_help">A key does its popup action while a lookup popup is open, otherwise its audiobook action while an audiobook is loaded, otherwise its reading action. Volume keys are set above.</string>
+    <string name="gestures_keys_layer_reading">While reading</string>
+    <string name="gestures_keys_layer_audiobook">With an audiobook loaded</string>
+    <string name="gestures_keys_layer_popup">While a lookup popup is open</string>
+    <string name="gestures_keys_not_set">Not set</string>
+    <string name="gestures_keys_add">Add a key</string>
+    <string name="gestures_keys_press">Press a key or button</string>
+    <string name="gestures_keys_press_help">Hold Ctrl, Alt or Shift while pressing for a combination.</string>
+    <string name="gestures_keys_volume_refused">Volume keys have their own section above.</string>
+    <string name="gestures_keys_taken_format">Now set to “%1$s”. Saving replaces that.</string>
+    <string name="gestures_keys_reset">Reset keys to defaults</string>
+    <string name="gestures_keys_reset_title">Reset keys to defaults?</string>
+    <string name="gestures_keys_reset_message">Every key and button goes back to its default action.</string>
     <string name="input_action_none" comment="Gesture binding option meaning the gesture does nothing.">Nothing</string>
     <string name="input_action_toggle_playback">Play / pause</string>
     <string name="input_action_skip_forward">Skip forward</string>
@@ -740,6 +746,13 @@
     <string name="input_action_page_forward">Next page</string>
     <string name="input_action_page_backward">Previous page</string>
     <string name="input_action_toggle_focus">Toggle focus mode</string>
+    <string name="input_action_chapter_forward">Next chapter</string>
+    <string name="input_action_chapter_backward">Previous chapter</string>
+    <string name="input_action_speed_down">Speed −0.1×</string>
+    <string name="input_action_speed_up">Speed +0.1×</string>
+    <string name="input_action_close_popup">Close lookup popup</string>
+    <string name="input_action_popup_previous_term">Previous popup term</string>
+    <string name="input_action_popup_next_term">Next popup term</string>
     <string name="input_action_boost">Speed up while held</string>
     <string name="input_action_scrub">Scrub audio</string>
     <string name="input_action_brightness" comment="Gesture binding option, intentionally matching other Brightness labels.">Brightness</string>
@@ -916,7 +929,7 @@
     </plurals>
     <string name="sasayaki_scrub_seconds">%1$s s</string>
     <string name="sasayaki_hold_playback_controls_to_boost">Hold to Speed Up</string>
-    <string name="sasayaki_hold_playback_controls_to_boost_help">Press and hold the play button or the empty part of the bottom playback controls (or Space / K on a keyboard) to play at double speed until you let go.</string>
+    <string name="sasayaki_hold_playback_controls_to_boost_help">Press and hold the play button or the empty part of the bottom playback controls (or the play / pause key on a keyboard or gamepad) to play at double speed until you let go.</string>
     <string name="sasayaki_double_tap_playback_controls_to_toggle">Double-tap to Play/Pause</string>
     <string name="sasayaki_double_tap_playback_controls_to_toggle_help">Double-tap the empty part of the bottom playback controls to pause or resume.</string>
     <string name="sasayaki_scrub_hint">Drag to scrub</string>
