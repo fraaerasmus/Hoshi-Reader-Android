@@ -228,7 +228,21 @@ class ReaderHardwareKeyNavigationTest {
             boundKeyEvent(KeyEvent.KEYCODE_DPAD_DOWN, hasLookupPopup = true, repeatCount = 3).action,
         )
         assertFalse(boundKeyEvent(KeyEvent.KEYCODE_ESCAPE).consumed)
-        assertFalse(boundKeyEvent(KeyEvent.KEYCODE_DPAD_UP, audioLoaded = true).consumed)
+        assertFalse(boundKeyEvent(KeyEvent.KEYCODE_DPAD_UP).consumed)
+    }
+
+    @Test
+    fun upAndDownChangeTheVolumeWhileAudioIsLoadedAndNoPopupIsOpen() {
+        assertEquals(ReaderHardwareKeyAction.AdjustVolume(up = true), boundKeyEvent(KeyEvent.KEYCODE_DPAD_UP, audioLoaded = true).action)
+        assertEquals(
+            ReaderHardwareKeyAction.AdjustVolume(up = false),
+            boundKeyEvent(KeyEvent.KEYCODE_DPAD_DOWN, audioLoaded = true, repeatCount = 2).action,
+        )
+        assertEquals(
+            ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Previous),
+            boundKeyEvent(KeyEvent.KEYCODE_DPAD_UP, audioLoaded = true, hasLookupPopup = true).action,
+        )
+        assertFalse(boundKeyEvent(KeyEvent.KEYCODE_DPAD_DOWN).consumed)
     }
 
     @Test

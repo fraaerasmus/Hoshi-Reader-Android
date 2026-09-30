@@ -3,6 +3,7 @@ package moe.antimony.hoshi.features.reader
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
@@ -1597,6 +1598,11 @@ fun ReaderWebView(
             }
             ReaderHardwareKeyAction.ToggleFocusMode -> handleReaderTapOutside()
             ReaderHardwareKeyAction.CloseLookupPopup -> closeLookupPopupsAndSelection()
+            is ReaderHardwareKeyAction.AdjustVolume -> (context.getSystemService(Context.AUDIO_SERVICE) as AudioManager).adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                if (action.up) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                AudioManager.FLAG_SHOW_UI,
+            )
             ReaderHardwareKeyAction.PickWord -> webView?.evaluateJavascript(
                 "window.hoshiWordCursor && window.hoshiWordCursor.start(${readerSelectionMaxLength(dictionarySettings)})",
                 null,

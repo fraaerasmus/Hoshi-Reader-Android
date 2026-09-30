@@ -762,6 +762,8 @@
     <string name="input_action_popup_back">Back in popup</string>
     <string name="input_action_popup_forward">Forward in popup</string>
     <string name="input_action_pick_word">Pick a word</string>
+    <string name="input_action_volume_up">Volume up</string>
+    <string name="input_action_volume_down">Volume down</string>
     <string name="input_action_word_previous">Previous word</string>
     <string name="input_action_word_next">Next word</string>
     <string name="input_action_boost">Speed up while held</string>

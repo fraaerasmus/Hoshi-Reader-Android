@@ -318,6 +318,8 @@ internal fun ReaderKeyAction.labelRes(): Int = when (this) {
     ReaderKeyAction.SpeedDown -> R.string.input_action_speed_down
     ReaderKeyAction.SpeedUp -> R.string.input_action_speed_up
     ReaderKeyAction.BoostWhileHeld -> R.string.input_action_boost
+    ReaderKeyAction.VolumeUp -> R.string.input_action_volume_up
+    ReaderKeyAction.VolumeDown -> R.string.input_action_volume_down
     ReaderKeyAction.ClosePopup -> R.string.input_action_close_popup
     ReaderKeyAction.PopupPreviousTerm -> R.string.input_action_popup_previous_term
     ReaderKeyAction.PopupNextTerm -> R.string.input_action_popup_next_term

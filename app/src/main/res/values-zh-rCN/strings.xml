@@ -760,6 +760,8 @@
     <string name="input_action_popup_back">弹窗后退</string>
     <string name="input_action_popup_forward">弹窗前进</string>
     <string name="input_action_pick_word">选择词语</string>
+    <string name="input_action_volume_up">调高音量</string>
+    <string name="input_action_volume_down">调低音量</string>
     <string name="input_action_word_previous">上一个词</string>
     <string name="input_action_word_next">下一个词</string>
     <string name="input_action_boost">按住时加速</string>
