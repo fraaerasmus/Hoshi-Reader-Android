@@ -10,6 +10,20 @@ class HoshiDictsAbiTest {
     // own shapes; upstream's complete-pitch and kanji models are plain adapters on top. Guard the
     // JNI constructors so a merge cannot silently change them.
     @Test
+    fun lookupMatchesJniArgumentsAndTakesOptionsOnTop() {
+        val cls = loadClass("de.manhhao.hoshi.HoshiDicts")
+        val native = cls.getDeclaredMethod(
+            "lookup", Long::class.javaPrimitiveType, String::class.java,
+            Int::class.javaPrimitiveType, Int::class.javaPrimitiveType,
+        )
+        assertEquals(arrayClass("de.manhhao.hoshi.LookupResult"), native.returnType)
+        cls.getDeclaredMethod(
+            "lookup", Long::class.javaPrimitiveType, String::class.java,
+            Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, loadClass("de.manhhao.hoshi.LookupOptions"),
+        )
+    }
+
+    @Test
     fun typedModelsExposeCompletePitchAndKanjiAbi() {
         assertHasConstructor(
             className = "de.manhhao.hoshi.ImportResult",

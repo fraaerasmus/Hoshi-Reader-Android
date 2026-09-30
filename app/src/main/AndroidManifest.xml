@@ -74,7 +74,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:documentLaunchMode="never"
             android:exported="true"
             android:label="${appLabel}"
@@ -99,6 +99,7 @@
         </activity>
         <activity
             android:name=".features.dictionary.ProcessTextLookupActivity"
+            android:configChanges="uiMode"
             android:excludeFromRecents="true"
             android:exported="true"
             android:finishOnTaskLaunch="true"

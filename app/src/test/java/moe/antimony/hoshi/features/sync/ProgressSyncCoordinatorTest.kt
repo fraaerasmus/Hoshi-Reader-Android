@@ -76,7 +76,7 @@ class ProgressSyncCoordinatorTest {
         assertEquals(UiText.Resource(R.string.sync_error_server_timeout), failure.error)
         assertEquals(listOf(SyncBackend.Kosync to "connect timed out"), statuses)
         assertNull(report.applied)
-        assertEquals(UiText.Multi(listOf(UiText.Multi(listOf(UiText.Literal("KOReader: "), failure.error), separator = ""))), report.toUiText())
+        assertEquals(UiText.Joined(listOf(UiText.Joined(listOf(UiText.Literal("KOReader: "), failure.error), separator = ""))), report.toUiText())
         assertEquals(UiText.Resource(R.string.sync_error_tailscale_off), NetworkUnavailableException(NetworkUnavailableException.Reason.VpnRequired).toSyncErrorText())
         assertEquals(UiText.Resource(R.string.sync_error_offline), GoogleDriveApiException(GoogleDriveApiException.NoInternetConnectionMessage).toSyncErrorText())
     }

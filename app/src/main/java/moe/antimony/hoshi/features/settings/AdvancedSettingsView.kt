@@ -1,5 +1,7 @@
 package moe.antimony.hoshi.features.settings
 
+import moe.antimony.hoshi.ui.theme.hoshiSurfaces
+import moe.antimony.hoshi.ui.theme.hoshiContainerBorder
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,7 +38,6 @@ import moe.antimony.hoshi.features.anki.AnkiConnectView
 import moe.antimony.hoshi.features.audio.AudioSettingsView
 import moe.antimony.hoshi.features.backup.BackupSettingsView
 import moe.antimony.hoshi.features.reader.ReaderSettings
-import moe.antimony.hoshi.features.reader.ReaderStatisticsSettingsView
 import moe.antimony.hoshi.features.reader.input.ReaderGesturesView
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsView
 import moe.antimony.hoshi.features.kosync.KosyncSettingsView
@@ -46,7 +47,7 @@ import moe.antimony.hoshi.features.wallpaper.BookCoverWallpaperSettingsView
 @Composable
 fun AdvancedSettingsView(
     readerSettings: ReaderSettings,
-    onReaderSettingsChange: (ReaderSettings) -> Unit,
+    onReaderSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
     onClose: () -> Unit,
     onBooksRestored: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -54,15 +55,6 @@ fun AdvancedSettingsView(
     var destination by remember { mutableStateOf<AdvancedDestination?>(null) }
     if (destination == AdvancedDestination.Audio) {
         AudioSettingsView(
-            onClose = { destination = null },
-            modifier = modifier,
-        )
-        return
-    }
-    if (destination == AdvancedDestination.Statistics) {
-        ReaderStatisticsSettingsView(
-            settings = readerSettings,
-            onSettingsChange = onReaderSettingsChange,
             onClose = { destination = null },
             modifier = modifier,
         )
@@ -125,7 +117,7 @@ fun AdvancedSettingsView(
         title = stringResource(R.string.settings_advanced),
         onClose = onClose,
         modifier = modifier.fillMaxSize(),
-        containerColor = colorScheme.background,
+        containerColor = hoshiSurfaces.page,
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -169,7 +161,6 @@ fun AdvancedSettingsView(
 
 internal enum class AdvancedDestination {
     Audio,
-    Statistics,
     Sasayaki,
     Gestures,
     Backup,
@@ -181,7 +172,6 @@ internal enum class AdvancedDestination {
 
 internal enum class AdvancedSettingsIcon {
     Speaker,
-    Chart,
     Waveform,
     Touch,
     Cloud,
@@ -209,12 +199,6 @@ internal fun advancedSettingsSections(): List<AdvancedSettingsSection> =
                     titleRes = R.string.advanced_audio,
                     destination = AdvancedDestination.Audio,
                     icon = AdvancedSettingsIcon.Speaker,
-                ),
-                AdvancedSettingsRow(
-                    titleRes = R.string.advanced_statistics,
-                    destination = AdvancedDestination.Statistics,
-                    icon = AdvancedSettingsIcon.Chart,
-                    subtitleRes = R.string.advanced_statistics_subtitle,
                 ),
                 AdvancedSettingsRow(
                     titleRes = R.string.advanced_sasayaki_audiobooks,
@@ -279,7 +263,6 @@ internal fun advancedSettingsSections(): List<AdvancedSettingsSection> =
 private fun AdvancedSettingsIcon.imageVector(): ImageVector =
     when (this) {
         AdvancedSettingsIcon.Speaker -> Icons.AutoMirrored.Rounded.VolumeUp
-        AdvancedSettingsIcon.Chart -> Icons.AutoMirrored.Rounded.ShowChart
         AdvancedSettingsIcon.Waveform -> Icons.Rounded.GraphicEq
         AdvancedSettingsIcon.Touch -> Icons.Rounded.TouchApp
         AdvancedSettingsIcon.Cloud -> Icons.Rounded.Cloud

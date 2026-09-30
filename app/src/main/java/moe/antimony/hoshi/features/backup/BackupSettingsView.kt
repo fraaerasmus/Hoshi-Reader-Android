@@ -1,5 +1,7 @@
 package moe.antimony.hoshi.features.backup
 
+import moe.antimony.hoshi.ui.theme.hoshiSurfaces
+import moe.antimony.hoshi.ui.theme.hoshiContainerBorder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
@@ -238,7 +240,7 @@ fun BackupSettingsView(
             }
         },
         modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = hoshiSurfaces.page,
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -363,8 +365,8 @@ internal fun BackupGroupCard(content: @Composable () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = hoshiSurfaces.group,
+        border = hoshiContainerBorder(),
         tonalElevation = 0.dp,
     ) {
         Column(content = { content() })

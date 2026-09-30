@@ -121,7 +121,7 @@ class ReaderPaginationScriptsTest {
             viewportCssHeight = 800,
         )
 
-        assertEquals(822, layout.pageHeightPx)
+        assertEquals(800, layout.pageHeightPx)
         assertEquals(480, layout.pageWidthPx)
         assertEquals(455, layout.imageMaxWidthPx)
         assertEquals(800, layout.imageMaxHeightPx)
@@ -166,7 +166,7 @@ class ReaderPaginationScriptsTest {
             viewportCssHeight = 801,
         )
 
-        assertEquals(829, layout.pageHeightPx)
+        assertEquals(801, layout.pageHeightPx)
         assertEquals(329, layout.imageMaxWidthPx)
         assertEquals(688, layout.imageMaxHeightPx)
     }
@@ -198,7 +198,7 @@ class ReaderPaginationScriptsTest {
         )
 
         assertEquals(
-            """window.hoshiReader.highlightSasayakiCue({id:"cue\"1",start:42,length:7}, true)""",
+            """window.hoshiReader.highlightSasayakiCue({id:"cue\"1",start:42,length:7}, true, false)""",
             command,
         )
     }

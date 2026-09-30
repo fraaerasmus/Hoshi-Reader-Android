@@ -301,9 +301,9 @@ fun ProgressSyncReport.toUiText(): UiText? {
             is BackendOutcome.Applied -> UiText.Resource(R.string.sync_outcome_applied_format, name, outcome.percentage.toPercent())
             is BackendOutcome.Sent -> UiText.Resource(R.string.sync_outcome_sent_format, name, outcome.percentage.toPercent())
             is BackendOutcome.UpToDate -> UiText.Resource(R.string.sync_outcome_up_to_date_format, name)
-            is BackendOutcome.Failed -> UiText.Multi(listOf(UiText.Literal("$name: "), outcome.error), separator = "")
+            is BackendOutcome.Failed -> UiText.Joined(listOf(UiText.Literal("$name: "), outcome.error), separator = "")
             is BackendOutcome.Skipped -> null
         }
     }
-    return if (lines.isEmpty()) null else UiText.Multi(lines)
+    return if (lines.isEmpty()) null else UiText.Joined(lines)
 }

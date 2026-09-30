@@ -40,6 +40,7 @@ class DictionarySettingsRepositoryTest {
                 maxResults = 100,
                 scanLength = 0,
                 nestedLookupStyle = NestedLookupStyle.Popup,
+                searchTextSize = 100,
                 collapseMode = DictionaryCollapseMode.CollapseAll,
                 expandFirstDictionary = true,
                 collapsedDictionaries = setOf("JMdict"),
@@ -64,6 +65,7 @@ class DictionarySettingsRepositoryTest {
             assertEquals(50, migrated.maxResults)
             assertEquals(1, migrated.scanLength)
             assertEquals(NestedLookupStyle.Popup, migrated.nestedLookupStyle)
+            assertEquals(48, migrated.searchTextSize)
             assertEquals(DictionaryCollapseMode.CollapseAll, migrated.collapseMode)
             assertTrue(migrated.expandFirstDictionary)
             assertEquals(setOf("JMdict"), migrated.collapsedDictionaries)
@@ -95,6 +97,7 @@ class DictionarySettingsRepositoryTest {
                     maxResults = 0,
                     scanLength = 100,
                     nestedLookupStyle = NestedLookupStyle.Stacked,
+                    searchTextSize = 31,
                     collapseMode = DictionaryCollapseMode.Custom,
                     expandFirstDictionary = true,
                     collapsedDictionaries = setOf("JMdict"),
@@ -119,6 +122,7 @@ class DictionarySettingsRepositoryTest {
             assertEquals(1, saved.maxResults)
             assertEquals(64, saved.scanLength)
             assertEquals(NestedLookupStyle.Stacked, saved.nestedLookupStyle)
+            assertEquals(31, saved.searchTextSize)
             assertEquals(DictionaryCollapseMode.Custom, saved.collapseMode)
             assertTrue(saved.expandFirstDictionary)
             assertEquals(setOf("JMdict"), saved.collapsedDictionaries)

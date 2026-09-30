@@ -269,7 +269,7 @@ class DeviceCodeDriveAuthorizer @Inject constructor(
         const val TransientNetworkBackoffMultiplier = 2L
         const val MaxTransientNetworkBackoffSeconds = 60L
         private const val TokenRefreshSkewMillis = 60_000L
-        private const val RequestTimeoutMillis = 15_000
+        private const val RequestTimeoutMillis = 10_000
     }
 }
 

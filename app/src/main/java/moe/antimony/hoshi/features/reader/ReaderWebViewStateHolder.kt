@@ -7,6 +7,8 @@ import androidx.compose.ui.unit.IntSize
 import moe.antimony.hoshi.features.dictionary.LookupPopupItem
 import moe.antimony.hoshi.features.sasayaki.SasayakiSheetTab
 
+internal data class ReaderSearchHighlight(val chapterIndex: Int, val offset: Int, val length: Int)
+
 internal class ReaderWebViewStateHolder(
     initialSettings: ReaderSettings,
     initialPosition: ReaderChapterPosition,
@@ -15,6 +17,9 @@ internal class ReaderWebViewStateHolder(
         private set
 
     var showAppearance by mutableStateOf(false)
+        private set
+
+    var showDisplaySettings by mutableStateOf(false)
         private set
 
     var showGoTo by mutableStateOf(false)
@@ -38,7 +43,7 @@ internal class ReaderWebViewStateHolder(
         private set
 
     val hasStatisticsBlockingSheet: Boolean
-        get() = showAppearance || showGoTo || showSasayaki || showStatistics || showSync
+        get() = showAppearance || showDisplaySettings || showGoTo || showSasayaki || showStatistics || showSync
 
     var showReaderMenu by mutableStateOf(false)
         private set
@@ -62,6 +67,9 @@ internal class ReaderWebViewStateHolder(
         private set
 
     var isWebViewRestoring by mutableStateOf(true)
+        private set
+
+    var webViewGeneration by mutableStateOf(0)
         private set
 
     var webViewRestoreEpoch by mutableStateOf(0)
@@ -155,6 +163,15 @@ internal class ReaderWebViewStateHolder(
         showAppearance = false
     }
 
+    fun openDisplaySettingsFromMenu() {
+        showReaderMenu = false
+        showDisplaySettings = true
+    }
+
+    fun dismissDisplaySettings() {
+        showDisplaySettings = false
+    }
+
     fun openSasayakiFromMenu(initialTab: SasayakiSheetTab) {
         showReaderMenu = false
         if (!hasInitializedSasayakiTab) {
@@ -242,7 +259,27 @@ internal class ReaderWebViewStateHolder(
         markWebViewRestoring()
     }
 
+    private var pendingSearchHighlight: ReaderSearchHighlight? = null
+
+    fun jumpToSearchResult(position: ReaderChapterPosition, offset: Int, length: Int): ReaderChapterPosition {
+        if (!isCurrentDisplayedTarget(position, null)) recordJumpOrigin()
+        readerPosition = readerPosition.jumpTo(position)
+        pendingSearchHighlight = ReaderSearchHighlight(position.index, offset, length)
+        // Even a result at the current position needs a fresh, token-guarded restore.
+        markWebViewRestoring()
+        return readerPosition.displayedPosition
+    }
+
+    fun takeSearchHighlight(chapterIndex: Int, restoreEpoch: Int): ReaderSearchHighlight? {
+        if (isWebViewRestoring || restoreEpoch != webViewRestoreEpoch) return null
+        val pending = pendingSearchHighlight ?: return null
+        if (pending.chapterIndex != chapterIndex) return null
+        pendingSearchHighlight = null
+        return pending
+    }
+
     fun jumpTo(position: ReaderChapterPosition, fragment: String? = null): ReaderChapterPosition {
+        pendingSearchHighlight = null
         if (isCurrentDisplayedTarget(position, fragment)) {
             return readerPosition.displayedPosition
         }
@@ -276,6 +313,18 @@ internal class ReaderWebViewStateHolder(
         if (backHistory.isEmpty()) {
             forwardHistory = emptyList()
         }
+    }
+
+    fun onRendererTerminated(event: ReaderRendererTermination): Boolean {
+        if (event.generation != webViewGeneration) return false
+        // An unfinished navigation still owns its fragment/target. Otherwise recover
+        // the latest accepted display position, including scrolls not yet persisted.
+        if (!isWebViewRestoring) {
+            readerPosition = readerPosition.prepareReloadAtDisplayedPosition()
+        }
+        webViewGeneration += 1
+        markWebViewRestoring()
+        return true
     }
 
     fun markWebViewRestoring() {
@@ -330,7 +379,7 @@ internal data class ReaderContentReloadKey(
     val selectedFontFamilyId: String?,
     val selectedFontVariantId: String?,
     val fontSize: Int,
-    val hideFurigana: Boolean,
+    val furiganaMode: FuriganaMode,
     val viewMode: ReaderViewMode,
     val visualNovelScreenMode: VisualNovelScreenMode,
     val visualNovelSentencesPerScreen: Int,
@@ -354,7 +403,7 @@ internal fun ReaderSettings.readerContentReloadKey(): ReaderContentReloadKey =
         selectedFontFamilyId = selectedFontFamilyId,
         selectedFontVariantId = selectedFontVariantId,
         fontSize = fontSize,
-        hideFurigana = hideFurigana,
+        furiganaMode = furiganaMode,
         viewMode = viewMode,
         visualNovelScreenMode = visualNovelScreenMode,
         visualNovelSentencesPerScreen = visualNovelSentencesPerScreen.coerceIn(1, 12),
@@ -370,3 +419,5 @@ internal fun ReaderSettings.readerContentReloadKey(): ReaderContentReloadKey =
         characterSpacing = characterSpacing,
         paragraphSpacing = paragraphSpacing,
     )
+
+internal data class ReaderRendererTermination(val generation: Int)

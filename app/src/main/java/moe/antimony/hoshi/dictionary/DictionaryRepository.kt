@@ -2,6 +2,7 @@ package moe.antimony.hoshi.dictionary
 
 import android.content.ContentResolver
 import android.net.Uri
+import de.manhhao.hoshi.LookupOptions
 import de.manhhao.hoshi.LookupResult
 import de.manhhao.hoshi.KanjiResult
 import java.io.File
@@ -166,6 +167,7 @@ internal class DictionaryRepository @Inject constructor(
                     renames += DictionaryRename(
                         oldTitle = installedIndex.title,
                         newTitle = replacement.index.title,
+                        type = candidate.type,
                     )
                 }
                 successfulCount += 1
@@ -248,20 +250,20 @@ internal class DictionaryRepository @Inject constructor(
         }
     }
 
-    fun lookup(text: String, maxResults: Int = 16, scanLength: Int = 16): List<LookupResult> {
+    fun lookup(text: String, maxResults: Int = 16, scanLength: Int = 16, options: LookupOptions = LookupOptions()): List<LookupResult> {
         ensureLookupQueryReady()
-        val results = lookupQueryService.lookup(text, maxResults, scanLength)
+        val results = lookupQueryService.lookup(text, maxResults, scanLength, options)
         // Also search the elision-stripped form (e.g. French l'homme → homme), keeping the original
         // results too (Yomitan searchOriginal); merged and de-duped by entry.
         val stripped = ElisionTextReplacement.stripElision(text, lookupQueryLanguageId)
             ?: return LemmaOrdering.lemmaFirst(results)
-        val strippedResults = lookupQueryService.lookup(stripped, maxResults, scanLength)
+        val strippedResults = lookupQueryService.lookup(stripped, maxResults, scanLength, options)
         // Longest match first so the content word (homme) outranks the bare article (l'); then sink
         // "form of" (non-lemma) entries so the real definition leads.
         return (results + strippedResults)
             .sortedByDescending { it.matched.codePointCount(0, it.matched.length) }
             .let(LemmaOrdering::lemmaFirst)
-            .distinctBy { "${it.term.expression} ${it.term.reading} ${it.matched}" }
+            .distinctBy { "${it.term.expression} ${it.term.reading} ${it.matched}" }
     }
 
     fun lookupKanji(kanji: String): KanjiResult {

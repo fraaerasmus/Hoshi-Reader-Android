@@ -1,7 +1,8 @@
 package de.manhhao.hoshi
 
 // NOTE: constructed by the kaihouguide JNI engine; keep the constructor exactly.
-// `kanjiCount` is a computed adapter — the kaihouguide engine has no kanji dictionaries.
+// `kanjiCount` and `error` are computed adapters — the kaihouguide engine has no kanji
+// dictionaries and reports no import diagnostics beyond success.
 class ImportResult(
     val success: Boolean,
     val title: String,
@@ -12,6 +13,7 @@ class ImportResult(
     val mediaCount: Long,
 ) {
     val kanjiCount: Long get() = 0
+    val error: String get() = ""
 }
 
 class DictionaryStyle(
@@ -138,6 +140,13 @@ class LookupResult(
         )
 }
 
+enum class LookupFrequencyOrder(val nativeValue: Int) { Auto(0), Ascending(1), Descending(2), Disabled(3) }
+
+data class LookupOptions(
+    val frequencyOrder: LookupFrequencyOrder = LookupFrequencyOrder.Auto,
+    val frequencyDictionary: String? = null,
+)
+
 object HoshiDicts {
     init {
         System.loadLibrary("hoshidicts_jni")
@@ -166,6 +175,34 @@ object HoshiDicts {
 
     external fun setLookupLanguage(session: Long, language: String)
     external fun lookup(session: Long, text: String, maxResults: Int, scanLength: Int): Array<LookupResult>
+
+    /**
+     * The kaihouguide engine orders by the first frequency dictionary, ascending, before capping at
+     * [maxResults]; the other orders are applied here, on the capped results, until the engine takes
+     * the options itself.
+     */
+    fun lookup(session: Long, text: String, maxResults: Int, scanLength: Int, options: LookupOptions): Array<LookupResult> =
+        orderByFrequency(lookup(session, text, maxResults, scanLength), options)
     external fun getStyles(session: Long): Array<DictionaryStyle>
     external fun getMediaFile(session: Long, dictName: String, mediaPath: String): ByteArray?
+}
+
+/** Longest match first as the engine has it; within a length, by the chosen dictionary's frequency, entries without one last. */
+internal fun orderByFrequency(results: Array<LookupResult>, options: LookupOptions): Array<LookupResult> {
+    val descending = when (options.frequencyOrder) {
+        LookupFrequencyOrder.Ascending -> false
+        LookupFrequencyOrder.Descending -> true
+        LookupFrequencyOrder.Auto, LookupFrequencyOrder.Disabled -> return results
+    }
+    fun rank(result: LookupResult): Int? = result.term.frequencies
+        .filter { options.frequencyDictionary == null || it.dictName == options.frequencyDictionary }
+        .flatMap { it.frequencies.asIterable() }
+        .minOfOrNull { it.value }
+    return results
+        .sortedWith(
+            compareByDescending<LookupResult> { it.matched.codePointCount(0, it.matched.length) }
+                .thenBy { rank(it) == null }
+                .thenBy { rank(it)?.let { value -> if (descending) -value else value } ?: 0 },
+        )
+        .toTypedArray()
 }

@@ -30,6 +30,37 @@ import moe.antimony.hoshi.R
 import moe.antimony.hoshi.features.backup.PreferencesBackup
 import moe.antimony.hoshi.profiles.ProfileRepository
 
+enum class FrequencySortOrder(val rawValue: String, @get:StringRes val labelRes: Int) {
+    Auto("Auto", R.string.dictionary_frequency_auto),
+    Ascending("Ascending", R.string.dictionary_frequency_ascending),
+    Descending("Descending", R.string.dictionary_frequency_descending),
+    Disabled("Disabled", R.string.dictionary_frequency_disabled);
+
+    val usesDictionary: Boolean get() = this == Ascending || this == Descending
+
+    companion object {
+        fun fromRawValue(value: String?): FrequencySortOrder = entries.firstOrNull { it.rawValue == value } ?: Auto
+    }
+}
+
+fun DictionarySettings.withFrequencySortOrder(order: FrequencySortOrder, enabledTitles: List<String>): DictionarySettings =
+    copy(
+        frequencySortOrder = order,
+        frequencySortDictionary = if (order.usesDictionary && frequencySortDictionary !in enabledTitles) {
+            enabledTitles.firstOrNull().orEmpty()
+        } else frequencySortDictionary,
+    )
+
+fun DictionarySettings.lookupOptions(): de.manhhao.hoshi.LookupOptions = de.manhhao.hoshi.LookupOptions(
+    frequencyOrder = when (frequencySortOrder) {
+        FrequencySortOrder.Auto -> de.manhhao.hoshi.LookupFrequencyOrder.Auto
+        FrequencySortOrder.Ascending -> de.manhhao.hoshi.LookupFrequencyOrder.Ascending
+        FrequencySortOrder.Descending -> de.manhhao.hoshi.LookupFrequencyOrder.Descending
+        FrequencySortOrder.Disabled -> de.manhhao.hoshi.LookupFrequencyOrder.Disabled
+    },
+    frequencyDictionary = frequencySortDictionary.takeIf { frequencySortOrder.usesDictionary && it.isNotEmpty() },
+)
+
 enum class DictionaryCollapseMode(val rawValue: String, @get:StringRes val labelRes: Int) {
     ExpandAll("Expand All", R.string.dictionary_collapse_mode_expand_all),
     CollapseAll("Collapse All", R.string.dictionary_collapse_mode_collapse_all),
@@ -86,6 +117,9 @@ data class DictionarySettings(
     val maxResults: Int = 16,
     val scanLength: Int = 16,
     val nestedLookupStyle: NestedLookupStyle = NestedLookupStyle.Tabs,
+    val searchTextSize: Int = 22,
+    val frequencySortOrder: FrequencySortOrder = FrequencySortOrder.Auto,
+    val frequencySortDictionary: String = "",
     val collapseMode: DictionaryCollapseMode = DictionaryCollapseMode.ExpandAll,
     val expandFirstDictionary: Boolean = false,
     val collapsedDictionaries: Set<String> = emptySet(),
@@ -100,6 +134,7 @@ data class DictionarySettings(
     fun normalized(): DictionarySettings = copy(
         maxResults = maxResults.coerceIn(MIN_MAX_RESULTS, MAX_MAX_RESULTS),
         scanLength = scanLength.coerceIn(MIN_SCAN_LENGTH, MAX_SCAN_LENGTH),
+        searchTextSize = searchTextSize.coerceIn(MIN_SEARCH_TEXT_SIZE, MAX_SEARCH_TEXT_SIZE),
     )
 
     companion object {
@@ -107,6 +142,8 @@ data class DictionarySettings(
         const val MAX_MAX_RESULTS = 50
         const val MIN_SCAN_LENGTH = 1
         const val MAX_SCAN_LENGTH = 64
+        const val MIN_SEARCH_TEXT_SIZE = 12
+        const val MAX_SEARCH_TEXT_SIZE = 48
     }
 }
 
@@ -136,6 +173,9 @@ class DictionarySettingsStore(context: Context) : DictionarySettingsLegacySource
         scanLength = preferences.getInt(KEY_SCAN_LENGTH, 16),
         nestedLookupStyle = NestedLookupStyle.fromRawValue(preferences.getString(KEY_NESTED_LOOKUP_STYLE, null))
             ?: NestedLookupStyle.Tabs,
+        searchTextSize = preferences.getInt(KEY_SEARCH_TEXT_SIZE, 22),
+        frequencySortOrder = FrequencySortOrder.fromRawValue(preferences.getString(KEY_FREQUENCY_SORT_ORDER, null)),
+        frequencySortDictionary = preferences.getString(KEY_FREQUENCY_SORT_DICTIONARY, "").orEmpty(),
         collapseMode = DictionaryCollapseMode.fromRawValue(preferences.getString(KEY_COLLAPSE_MODE, null))
             ?: if (preferences.getBoolean(KEY_COLLAPSE_DICTIONARIES, false)) {
                 DictionaryCollapseMode.CollapseAll
@@ -177,6 +217,9 @@ class DictionarySettingsStore(context: Context) : DictionarySettingsLegacySource
             .putInt(KEY_MAX_RESULTS, normalized.maxResults)
             .putInt(KEY_SCAN_LENGTH, normalized.scanLength)
             .putString(KEY_NESTED_LOOKUP_STYLE, normalized.nestedLookupStyle.rawValue)
+            .putInt(KEY_SEARCH_TEXT_SIZE, normalized.searchTextSize)
+            .putString(KEY_FREQUENCY_SORT_ORDER, normalized.frequencySortOrder.rawValue)
+            .putString(KEY_FREQUENCY_SORT_DICTIONARY, normalized.frequencySortDictionary)
             .putString(KEY_COLLAPSE_MODE, normalized.collapseMode.rawValue)
             .putBoolean(KEY_EXPAND_FIRST_DICTIONARY, normalized.expandFirstDictionary)
             .putStringSet(KEY_COLLAPSED_DICTIONARIES, normalized.collapsedDictionaries)
@@ -201,6 +244,9 @@ class DictionarySettingsStore(context: Context) : DictionarySettingsLegacySource
         const val KEY_MINE_NESTED_READING_CONTEXT = "mineNestedWithReadingContext"
         const val KEY_MAX_RESULTS = "maxResults"
         const val KEY_SCAN_LENGTH = "scanLength"
+        const val KEY_FREQUENCY_SORT_ORDER = "frequencySortOrder"
+        const val KEY_FREQUENCY_SORT_DICTIONARY = "frequencySortDictionary"
+        const val KEY_SEARCH_TEXT_SIZE = "searchTextSize"
         const val KEY_COLLAPSE_DICTIONARIES = "collapseDictionaries"
         const val KEY_NESTED_LOOKUP_STYLE = "nestedLookupStyle"
         const val KEY_COLLAPSE_MODE = "collapseMode"
@@ -343,6 +389,9 @@ class DictionarySettingsRepository(
             scanLength = this[KEY_SCAN_LENGTH] ?: 16,
             nestedLookupStyle = NestedLookupStyle.fromRawValue(this[KEY_NESTED_LOOKUP_STYLE])
                 ?: NestedLookupStyle.Tabs,
+            searchTextSize = this[KEY_SEARCH_TEXT_SIZE] ?: 22,
+            frequencySortOrder = FrequencySortOrder.fromRawValue(this[KEY_FREQUENCY_SORT_ORDER]),
+            frequencySortDictionary = this[KEY_FREQUENCY_SORT_DICTIONARY].orEmpty(),
             collapseMode = DictionaryCollapseMode.fromRawValue(this[KEY_COLLAPSE_MODE])
                 ?: if (legacyCollapseDictionaries == true) {
                     DictionaryCollapseMode.CollapseAll
@@ -379,6 +428,9 @@ class DictionarySettingsRepository(
         this[KEY_MAX_RESULTS] = normalized.maxResults
         this[KEY_SCAN_LENGTH] = normalized.scanLength
         this[KEY_NESTED_LOOKUP_STYLE] = normalized.nestedLookupStyle.rawValue
+        this[KEY_SEARCH_TEXT_SIZE] = normalized.searchTextSize
+        this[KEY_FREQUENCY_SORT_ORDER] = normalized.frequencySortOrder.rawValue
+        this[KEY_FREQUENCY_SORT_DICTIONARY] = normalized.frequencySortDictionary
         this[KEY_COLLAPSE_MODE] = normalized.collapseMode.rawValue
         this[KEY_EXPAND_FIRST_DICTIONARY] = normalized.expandFirstDictionary
         this[KEY_COLLAPSED_DICTIONARIES] = normalized.collapsedDictionaries
@@ -463,6 +515,9 @@ class DictionarySettingsRepository(
         private val KEY_MINE_NESTED_READING_CONTEXT = booleanPreferencesKey("mineNestedWithReadingContext")
         private val KEY_MAX_RESULTS = intPreferencesKey("maxResults")
         private val KEY_SCAN_LENGTH = intPreferencesKey("scanLength")
+        private val KEY_FREQUENCY_SORT_ORDER = stringPreferencesKey("frequencySortOrder")
+        private val KEY_FREQUENCY_SORT_DICTIONARY = stringPreferencesKey("frequencySortDictionary")
+        private val KEY_SEARCH_TEXT_SIZE = intPreferencesKey("searchTextSize")
         private val KEY_COLLAPSE_DICTIONARIES = booleanPreferencesKey("collapseDictionaries")
         private val KEY_NESTED_LOOKUP_STYLE = stringPreferencesKey("nestedLookupStyle")
         private val KEY_COLLAPSE_MODE = stringPreferencesKey("collapseMode")
@@ -493,6 +548,9 @@ private data class ProfileDictionarySettings(
     val maxResults: Int = 16,
     val scanLength: Int = 16,
     val nestedLookupStyle: NestedLookupStyle = NestedLookupStyle.Tabs,
+    val searchTextSize: Int = 22,
+    val frequencySortOrder: String = "Auto",
+    val frequencySortDictionary: String = "",
     val collapseMode: DictionaryCollapseMode = DictionaryCollapseMode.ExpandAll,
     val expandFirstDictionary: Boolean = false,
     val collapsedDictionaries: Set<String> = emptySet(),
@@ -506,6 +564,10 @@ private data class ProfileDictionarySettings(
     fun normalized(): ProfileDictionarySettings = copy(
         maxResults = maxResults.coerceIn(DictionarySettings.MIN_MAX_RESULTS, DictionarySettings.MAX_MAX_RESULTS),
         scanLength = scanLength.coerceIn(DictionarySettings.MIN_SCAN_LENGTH, DictionarySettings.MAX_SCAN_LENGTH),
+        searchTextSize = searchTextSize.coerceIn(
+            DictionarySettings.MIN_SEARCH_TEXT_SIZE,
+            DictionarySettings.MAX_SEARCH_TEXT_SIZE,
+        ),
     )
 }
 
@@ -520,6 +582,9 @@ private fun DictionarySettings.toProfileDictionarySettings(): ProfileDictionaryS
             maxResults = settings.maxResults,
             scanLength = settings.scanLength,
             nestedLookupStyle = settings.nestedLookupStyle,
+            searchTextSize = settings.searchTextSize,
+            frequencySortOrder = settings.frequencySortOrder.rawValue,
+            frequencySortDictionary = settings.frequencySortDictionary,
             collapseMode = settings.collapseMode,
             expandFirstDictionary = settings.expandFirstDictionary,
             collapsedDictionaries = settings.collapsedDictionaries,
@@ -542,6 +607,9 @@ private fun DictionarySettings.withProfileDictionarySettings(profileSettings: Pr
         maxResults = profileSettings.maxResults,
         scanLength = profileSettings.scanLength,
         nestedLookupStyle = profileSettings.nestedLookupStyle,
+        searchTextSize = profileSettings.searchTextSize,
+        frequencySortOrder = FrequencySortOrder.fromRawValue(profileSettings.frequencySortOrder),
+        frequencySortDictionary = profileSettings.frequencySortDictionary,
         collapseMode = profileSettings.collapseMode,
         expandFirstDictionary = profileSettings.expandFirstDictionary,
         collapsedDictionaries = profileSettings.collapsedDictionaries,

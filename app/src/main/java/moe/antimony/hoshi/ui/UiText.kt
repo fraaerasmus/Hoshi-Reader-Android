@@ -18,7 +18,7 @@ sealed interface UiText {
 
     data class Literal(val value: String) : UiText
 
-    data class Multi(val parts: List<UiText>, val separator: String = "\n") : UiText
+    data class Joined(val parts: List<UiText>, val separator: String = "\n") : UiText
 }
 
 fun UiText.resolve(resources: Resources): String =
@@ -36,9 +36,9 @@ fun UiText.resolve(
 ): String =
     when (this) {
         is UiText.Literal -> value
-        is UiText.Resource -> getString(id, args.toTypedArray())
-        is UiText.Plural -> getQuantityString(id, quantity, args.toTypedArray())
-        is UiText.Multi -> parts.joinToString(separator) { it.resolve(getString, getQuantityString) }
+        is UiText.Resource -> getString(id, args.map { if (it is UiText) it.resolve(getString, getQuantityString) else it }.toTypedArray())
+        is UiText.Plural -> getQuantityString(id, quantity, args.map { if (it is UiText) it.resolve(getString, getQuantityString) else it }.toTypedArray())
+        is UiText.Joined -> parts.joinToString(separator) { it.resolve(getString, getQuantityString) }
     }
 
 @Composable

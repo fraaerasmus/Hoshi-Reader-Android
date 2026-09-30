@@ -45,6 +45,7 @@ internal interface SasayakiPlaybackControllerContract {
     fun startSpeedBoost(): Float?
     fun endSpeedBoost()
     fun updateMatchData(matchData: SasayakiMatchData?)
+    fun restoreCueDisplay()
     fun findCue(chapterIndex: Int, offset: Int): SasayakiMatch?
     fun playCue(cue: SasayakiMatch, stop: Boolean)
     fun exportCueAudio(cue: SasayakiMatch, sentence: String): File?
@@ -337,10 +338,18 @@ internal class SasayakiPlaybackController(
     }
 
     override fun updateMatchData(matchData: SasayakiMatchData?) {
-        clearAutoPageHoldResume()
         this.matchData = matchData
         hasCues = matchData?.matches?.isNotEmpty() == true
         cueNavigation.updateMatchData(matchData)
+        val cue = if (hasAudio && hasMatch) {
+            cueNavigation.cueAtPlaybackTime(time = currentTime, delay = delay)
+        } else {
+            null
+        }
+        applyCueDisplayAction(cueDisplay.refresh(cue, getCurrentChapterIndex()))
+    }
+
+    override fun restoreCueDisplay() {
         updateCue(currentTime, forceDisplay = true)
     }
 

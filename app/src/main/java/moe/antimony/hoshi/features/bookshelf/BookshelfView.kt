@@ -1,5 +1,7 @@
 package moe.antimony.hoshi.features.bookshelf
 
+import moe.antimony.hoshi.ui.theme.hoshiSurfaces
+import moe.antimony.hoshi.ui.theme.hoshiContainerBorder
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -53,6 +55,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Done
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.Keyboard
@@ -63,11 +66,11 @@ import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.ReportProblem
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Translate
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import moe.antimony.hoshi.ui.HoshiAlertDialog as AlertDialog
+import moe.antimony.hoshi.ui.HoshiButton as Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
+import moe.antimony.hoshi.ui.HoshiDropdownMenu as DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -311,6 +314,7 @@ fun BookshelfView(
         coverSourcesById = uiState.coverSourcesById,
         remoteCoverSourcesById = uiState.remoteCoverSourcesById,
         coverMode = uiState.coverMode,
+        hideCollapsedShelfThumbnails = uiState.hideCollapsedShelfThumbnails,
         sortOption = uiState.sortOption,
         hasLoadedBooks = uiState.hasLoadedBooks,
         isLoading = uiState.isLoading,
@@ -573,8 +577,10 @@ fun BookshelfView(
             shelves = uiState.shelves,
             showReading = uiState.showReading,
             coverMode = uiState.coverMode,
+            hideCollapsedShelfThumbnails = uiState.hideCollapsedShelfThumbnails,
             onShowReadingChange = booksViewModel::changeShowReading,
             onCoverModeChange = booksViewModel::changeCoverMode,
+            onHideCollapsedShelfThumbnailsChange = booksViewModel::changeHideCollapsedShelfThumbnails,
             onCreateShelf = booksViewModel::createShelf,
             onDeleteShelf = booksViewModel::deleteShelf,
             onRenameShelf = booksViewModel::renameShelf,
@@ -618,7 +624,7 @@ internal fun HoshiMainShell(
         if (layoutSpec.navigationLayout == MainShellNavigationLayout.BottomBar) {
             Scaffold(
                 modifier = Modifier.fillMaxSize(),
-                containerColor = MaterialTheme.colorScheme.background,
+                containerColor = hoshiSurfaces.page,
                 contentColor = MaterialTheme.colorScheme.onBackground,
                 contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
                 bottomBar = {
@@ -640,18 +646,17 @@ internal fun HoshiMainShell(
                             .padding(innerPadding),
                         layoutSpec,
                     )
-                    HorizontalDivider(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = innerPadding.calculateBottomPadding()),
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                    )
                 }
             }
         } else {
             NavigationSuiteScaffold(
                 modifier = Modifier.fillMaxSize(),
                 layoutType = layoutSpec.toNavigationSuiteType(),
+                navigationSuiteColors = androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults.colors(
+                    navigationBarContainerColor = hoshiSurfaces.navigation,
+                    navigationRailContainerColor = hoshiSurfaces.navigation,
+                    navigationDrawerContainerColor = hoshiSurfaces.navigation,
+                ),
                 navigationSuiteItems = {
                     visibleTabs.forEach { tab ->
                         item(
@@ -662,7 +667,7 @@ internal fun HoshiMainShell(
                         )
                     }
                 },
-                containerColor = MaterialTheme.colorScheme.background,
+                containerColor = hoshiSurfaces.page,
                 contentColor = MaterialTheme.colorScheme.onBackground,
             ) {
                 Column(Modifier.fillMaxSize()) {
@@ -686,7 +691,7 @@ private fun HoshiCompactBottomNavigation(
     visibleTabs: List<MainTab>,
     layoutSpec: MainShellLayoutSpec,
 ) {
-    val containerColor = MaterialTheme.colorScheme.background
+    val containerColor = hoshiSurfaces.navigation
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -821,6 +826,7 @@ private fun LazyGridScope.googleDriveSection(
     remoteBusyBookIds: Set<String>,
     remoteCoverSourcesById: Map<String, BookCoverSource>,
     coverMode: BookshelfCoverMode,
+    hideCollapsedShelfThumbnails: Boolean,
     layoutSpec: MainShellLayoutSpec,
     contentWidthDp: Int,
     fileTaskBlocked: Boolean,
@@ -879,7 +885,7 @@ private fun LazyGridScope.googleDriveSection(
                 )
             }
         }
-    } else {
+    } else if (!hideCollapsedShelfThumbnails) {
         item(
             key = "preview:google-drive",
             contentType = "collapsedPreview",
@@ -925,6 +931,7 @@ private fun BooksTab(
     coverSourcesById: Map<String, BookCoverSource>,
     remoteCoverSourcesById: Map<String, BookCoverSource>,
     coverMode: BookshelfCoverMode,
+    hideCollapsedShelfThumbnails: Boolean,
     sortOption: BookSortOption,
     hasLoadedBooks: Boolean,
     isLoading: Boolean,
@@ -974,7 +981,7 @@ private fun BooksTab(
     val fileTaskBlocked = blockingProgressMessage != null
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = hoshiSurfaces.page,
         contentColor = MaterialTheme.colorScheme.onBackground,
         contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
         topBar = {
@@ -1070,6 +1077,7 @@ private fun BooksTab(
                                     remoteImportProgressById = remoteImportProgressById,
                                     remoteBusyBookIds = remoteBusyBookIds,
                                     remoteCoverSourcesById = remoteCoverSourcesById,
+                                    hideCollapsedShelfThumbnails = hideCollapsedShelfThumbnails,
                                     coverMode = coverMode,
                                     layoutSpec = layoutSpec,
                                     contentWidthDp = contentWidthDp,
@@ -1152,7 +1160,7 @@ private fun BooksTab(
                                         )
                                     }
                                 }
-                            } else {
+                            } else if (!hideCollapsedShelfThumbnails) {
                                 item(
                                     key = "preview:${section.layoutKey}",
                                     contentType = "collapsedPreview",
@@ -1190,6 +1198,7 @@ private fun BooksTab(
                                 remoteImportProgressById = remoteImportProgressById,
                                 remoteBusyBookIds = remoteBusyBookIds,
                                 remoteCoverSourcesById = remoteCoverSourcesById,
+                                hideCollapsedShelfThumbnails = hideCollapsedShelfThumbnails,
                                 coverMode = coverMode,
                                 layoutSpec = layoutSpec,
                                 contentWidthDp = contentWidthDp,
@@ -1402,8 +1411,8 @@ private fun BooksTopAppBar(
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background,
-            scrolledContainerColor = MaterialTheme.colorScheme.background,
+            containerColor = hoshiSurfaces.page,
+            scrolledContainerColor = hoshiSurfaces.page,
         ),
     )
 }
@@ -1468,7 +1477,7 @@ private fun BookshelfSectionHeader(
         Text(
             text = count.toString(),
             style = layoutSpec.shelfCountTextStyle.toTextStyle(),
-            color = Color(0xFF8C8C92),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = textLayout.countMaxLines,
             softWrap = textLayout.countSoftWrap,
         )
@@ -1534,18 +1543,18 @@ private fun BookGridCell(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(8.dp)
-                        .background(MaterialTheme.colorScheme.background, RoundedCornerShape(100))
+                        .background(hoshiSurfaces.page, RoundedCornerShape(100))
                         .size(28.dp),
                 )
             } else if (isBookCompleted(progress)) {
                 Icon(
                     imageVector = Icons.Rounded.CheckCircle,
                     contentDescription = stringResource(R.string.bookshelf_read),
-                    tint = Color(0xFF8C8C92),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(8.dp)
-                        .background(MaterialTheme.colorScheme.background, RoundedCornerShape(100))
+                        .background(hoshiSurfaces.page, RoundedCornerShape(100))
                         .size(28.dp),
                 )
             }
@@ -1626,10 +1635,10 @@ private fun ReadingProgressPill(progress: Double, modifier: Modifier = Modifier)
     val clamped = progress.coerceIn(0.0, 1.0).toFloat()
     val eInkMode = LocalHoshiEInkMode.current
     val colorScheme = MaterialTheme.colorScheme
-    val progressTrackColor = if (eInkMode) colorScheme.surface else Color(0xFFD7D7DB)
-    val progressFillColor = if (eInkMode) colorScheme.onSurface else Color(0xFFAFAFB4)
+    val progressTrackColor = if (eInkMode) hoshiSurfaces.group else hoshiSurfaces.nested
+    val progressFillColor = if (eInkMode) colorScheme.onSurface else colorScheme.primary
     val progressBorderColor = if (eInkMode) colorScheme.outline else Color.Transparent
-    val progressTextColor = if (eInkMode) colorScheme.onBackground else Color(0xFF76767C)
+    val progressTextColor = colorScheme.onSurfaceVariant
     Row(
         modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -1979,8 +1988,10 @@ internal fun ShelfManagementDialog(
     shelves: List<BookShelf>,
     showReading: Boolean,
     coverMode: BookshelfCoverMode,
+    hideCollapsedShelfThumbnails: Boolean,
     onShowReadingChange: (Boolean) -> Unit,
     onCoverModeChange: (BookshelfCoverMode) -> Unit,
+    onHideCollapsedShelfThumbnailsChange: (Boolean) -> Unit,
     onCreateShelf: (String) -> Unit,
     onDeleteShelf: (String) -> Unit,
     onRenameShelf: (String, String) -> Unit,
@@ -2034,6 +2045,22 @@ internal fun ShelfManagementDialog(
                                 }
                             }
                         }
+                    }
+                }
+                item(key = "hide-collapsed-shelf-thumbnails") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            stringResource(R.string.bookshelf_hide_collapsed_shelf_thumbnails),
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyLarge,
+                        )
+                        Switch(
+                            checked = hideCollapsedShelfThumbnails,
+                            onCheckedChange = onHideCollapsedShelfThumbnailsChange,
+                        )
                     }
                 }
                 item(key = "reading-shelf") {
@@ -2244,7 +2271,7 @@ internal fun SettingsTab(
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = hoshiSurfaces.page,
         contentColor = MaterialTheme.colorScheme.onBackground,
         contentWindowInsets = WindowInsets(0.dp, 0.dp, 0.dp, 0.dp),
         topBar = {
@@ -2257,8 +2284,8 @@ internal fun SettingsTab(
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.background,
+                    containerColor = hoshiSurfaces.page,
+                    scrolledContainerColor = hoshiSurfaces.page,
                 ),
             )
         },
@@ -2298,8 +2325,8 @@ private fun SettingsGroupCard(
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = hoshiSurfaces.group,
+        border = hoshiContainerBorder(),
         tonalElevation = 0.dp,
         modifier = Modifier.fillMaxWidth(),
     ) {
@@ -2308,6 +2335,7 @@ private fun SettingsGroupCard(
                 SettingsRow(row = row, onClick = { onDestination(row.destination) })
                 if (index != rows.lastIndex) {
                     HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 16.dp),
                         color = MaterialTheme.colorScheme.outlineVariant,
                     )
                 }
@@ -2399,7 +2427,8 @@ private fun SettingsGlyph(destination: SettingsDestination, color: Color, modifi
         SettingsDestination.Dictionaries -> Icons.AutoMirrored.Rounded.MenuBook
         SettingsDestination.Anki -> Icons.Rounded.Inventory2
         SettingsDestination.Profiles -> Icons.Rounded.Person
-        SettingsDestination.Appearance -> Icons.Rounded.Palette
+        SettingsDestination.Display -> Icons.Rounded.Palette
+        SettingsDestination.Appearance -> Icons.Rounded.FormatSize
         SettingsDestination.Behavior -> Icons.Rounded.Keyboard
         SettingsDestination.Advanced -> Icons.Rounded.Settings
         SettingsDestination.ReportIssue -> Icons.Rounded.ReportProblem
