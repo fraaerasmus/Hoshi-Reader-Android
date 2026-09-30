@@ -698,11 +698,34 @@
         }
     }
 
-    function navigateTopTerm(direction) {
-        if (direction !== 'previous' && direction !== 'next') return;
+    function postToTopPopup(message) {
         const popupId = topPopupId();
         const record = popupId ? frames.get(popupId) : null;
-        record?.iframe.contentWindow?.postMessage({ type: 'navigateTerm', direction }, ORIGIN);
+        record?.iframe.contentWindow?.postMessage(message, ORIGIN);
+    }
+
+    function navigateTopTerm(direction) {
+        if (direction !== 'previous' && direction !== 'next') return;
+        postToTopPopup({ type: 'navigateTerm', direction });
+    }
+
+    function mineTopTerm() {
+        postToTopPopup({ type: 'mineTerm' });
+    }
+
+    function playTopTermAudio() {
+        postToTopPopup({ type: 'playTermAudio' });
+    }
+
+    /** [direction] is 1 for down and -1 for up, in viewports. */
+    function scrollTopPopup(direction) {
+        postToTopPopup({ type: 'scrollPopup', direction: direction < 0 ? -1 : 1 });
+    }
+
+    function navigateTopHistory(forward) {
+        const popupId = topPopupId();
+        if (!popupId) return;
+        if (forward) navigateForward(popupId); else navigateBack(popupId);
     }
 
     function adjustSelectionBody(popupId, body) {
@@ -934,6 +957,10 @@
         navigateBack,
         navigateForward,
         navigateTopTerm,
+        mineTopTerm,
+        playTopTermAudio,
+        scrollTopPopup,
+        navigateTopHistory,
         renderSasayakiHighlight,
         clearSasayakiHighlight,
         preloadIdleRootFrame

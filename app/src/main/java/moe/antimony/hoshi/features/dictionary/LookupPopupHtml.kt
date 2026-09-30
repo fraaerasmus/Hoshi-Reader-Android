@@ -357,6 +357,18 @@ internal object LookupPopupHtml {
                             }
                             if (message.type === 'navigateTerm') {
                                 window.navigatePopupTerm?.(message.direction);
+                                return;
+                            }
+                            if (message.type === 'mineTerm') {
+                                window.minePopupTerm?.();
+                                return;
+                            }
+                            if (message.type === 'playTermAudio') {
+                                window.playPopupTermAudio?.();
+                                return;
+                            }
+                            if (message.type === 'scrollPopup') {
+                                window.scrollPopupByViewport?.(message.direction);
                             }
                         });
                         webkit.messageHandlers.shellReady.postMessage(null);

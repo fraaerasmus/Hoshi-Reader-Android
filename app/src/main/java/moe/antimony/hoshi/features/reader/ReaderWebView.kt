@@ -1597,6 +1597,22 @@ fun ReaderWebView(
             }
             ReaderHardwareKeyAction.ToggleFocusMode -> handleReaderTapOutside()
             ReaderHardwareKeyAction.CloseLookupPopup -> closeLookupPopupsAndSelection()
+            ReaderHardwareKeyAction.MineTopTerm -> webView?.evaluateJavascript(
+                "window.hoshiReaderPopupHost && window.hoshiReaderPopupHost.mineTopTerm()",
+                null,
+            )
+            ReaderHardwareKeyAction.PlayTopTermAudio -> webView?.evaluateJavascript(
+                "window.hoshiReaderPopupHost && window.hoshiReaderPopupHost.playTopTermAudio()",
+                null,
+            )
+            is ReaderHardwareKeyAction.PopupScroll -> webView?.evaluateJavascript(
+                "window.hoshiReaderPopupHost && window.hoshiReaderPopupHost.scrollTopPopup(${if (action.down) 1 else -1})",
+                null,
+            )
+            is ReaderHardwareKeyAction.PopupHistory -> webView?.evaluateJavascript(
+                "window.hoshiReaderPopupHost && window.hoshiReaderPopupHost.navigateTopHistory(${action.forward})",
+                null,
+            )
             ReaderHardwareKeyAction.SasayakiTogglePlayback -> {
                 sasayakiPlayer?.togglePlayback()
             }

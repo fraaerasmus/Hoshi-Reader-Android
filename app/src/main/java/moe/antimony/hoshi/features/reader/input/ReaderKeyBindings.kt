@@ -25,6 +25,12 @@ enum class ReaderKeyAction(val layer: ReaderKeyLayer, val repeats: Boolean = fal
     ClosePopup(ReaderKeyLayer.Popup),
     PopupPreviousTerm(ReaderKeyLayer.Popup, repeats = true),
     PopupNextTerm(ReaderKeyLayer.Popup, repeats = true),
+    MineTerm(ReaderKeyLayer.Popup),
+    PlayTermAudio(ReaderKeyLayer.Popup),
+    PopupScrollUp(ReaderKeyLayer.Popup, repeats = true),
+    PopupScrollDown(ReaderKeyLayer.Popup, repeats = true),
+    PopupBack(ReaderKeyLayer.Popup),
+    PopupForward(ReaderKeyLayer.Popup),
 }
 
 /** A keyboard key or gamepad button, alone or with Ctrl, Alt or Shift. */
@@ -120,6 +126,10 @@ data class ReaderKeyBindings(val map: Map<ReaderKeyAction, List<ReaderKey>> = em
             ReaderKeyAction.ClosePopup to keysOf(KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_BUTTON_B),
             ReaderKeyAction.PopupPreviousTerm to keysOf(KeyEvent.KEYCODE_DPAD_UP),
             ReaderKeyAction.PopupNextTerm to keysOf(KeyEvent.KEYCODE_DPAD_DOWN),
+            ReaderKeyAction.MineTerm to keysOf(KeyEvent.KEYCODE_BUTTON_X),
+            ReaderKeyAction.PlayTermAudio to keysOf(KeyEvent.KEYCODE_BUTTON_Y),
+            ReaderKeyAction.PopupScrollUp to keysOf(KeyEvent.KEYCODE_BUTTON_L1),
+            ReaderKeyAction.PopupScrollDown to keysOf(KeyEvent.KEYCODE_BUTTON_R1),
         )
 
         /**

@@ -704,6 +704,24 @@ test('popup term navigation moves between rendered entry headers without wrappin
     assert.deepEqual(setup.scrollTargets, [120, 300, 120]);
 });
 
+test('popup term navigation knows which entry a key acts on', () => {
+    const setup = popupTermNavigator();
+    assert.equal(setup.navigator.currentIndex(), null);
+    setup.entries.push(
+        { index: 0, top: 0 },
+        { index: 1, top: 120 },
+        { index: 2, top: 300 },
+    );
+
+    assert.equal(setup.navigator.currentIndex(), 0);
+    setup.setScrollTop(180);
+    assert.equal(setup.navigator.currentIndex(), 1);
+
+    // While a navigation is still settling, the key acts on where it is going.
+    setup.navigator.navigate('next');
+    assert.equal(setup.navigator.currentIndex(), 2);
+});
+
 test('popup previous term first returns to the current entry header after manual scrolling', () => {
     const setup = popupTermNavigator();
     setup.entries.push(

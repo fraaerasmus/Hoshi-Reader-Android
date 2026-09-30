@@ -318,4 +318,10 @@ internal fun ReaderKeyAction.labelRes(): Int = when (this) {
     ReaderKeyAction.ClosePopup -> R.string.input_action_close_popup
     ReaderKeyAction.PopupPreviousTerm -> R.string.input_action_popup_previous_term
     ReaderKeyAction.PopupNextTerm -> R.string.input_action_popup_next_term
+    ReaderKeyAction.MineTerm -> R.string.dictionary_add_to_anki
+    ReaderKeyAction.PlayTermAudio -> R.string.dictionary_play_audio
+    ReaderKeyAction.PopupScrollUp -> R.string.input_action_popup_scroll_up
+    ReaderKeyAction.PopupScrollDown -> R.string.input_action_popup_scroll_down
+    ReaderKeyAction.PopupBack -> R.string.input_action_popup_back
+    ReaderKeyAction.PopupForward -> R.string.input_action_popup_forward
 }

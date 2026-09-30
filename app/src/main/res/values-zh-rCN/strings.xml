@@ -755,6 +755,10 @@
     <string name="input_action_close_popup">关闭查词弹窗</string>
     <string name="input_action_popup_previous_term">上一个弹窗词条</string>
     <string name="input_action_popup_next_term">下一个弹窗词条</string>
+    <string name="input_action_popup_scroll_up">弹窗向上滚动</string>
+    <string name="input_action_popup_scroll_down">弹窗向下滚动</string>
+    <string name="input_action_popup_back">弹窗后退</string>
+    <string name="input_action_popup_forward">弹窗前进</string>
     <string name="input_action_boost">按住时加速</string>
     <string name="input_action_scrub">拖动音频进度</string>
     <string name="input_action_brightness" comment="Gesture binding option, intentionally matching other Brightness labels.">亮度</string>

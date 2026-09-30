@@ -200,6 +200,10 @@ window.createPopupTermNavigator = function({ entryCount, entries, scrollTop, scr
         entryRendered() {
             fulfillPending();
         },
+        /** The entry a key acts on: the one being scrolled to, else the one at the top of the view. */
+        currentIndex() {
+            return pendingIndex ?? currentEntry(sortedEntries(), scrollTop())?.index ?? null;
+        },
         userScrolled() {
             pendingIndex = null;
         },
@@ -231,6 +235,23 @@ const popupTermNavigator = window.createPopupTermNavigator({
 window.installPopupTermNavigationInput(popupTermNavigator);
 
 window.navigatePopupTerm = direction => popupTermNavigator.navigate(direction);
+window.currentPopupEntryIndex = () => popupTermNavigator.currentIndex();
+// Keys act on the current entry through the buttons it already has, so nothing new is wired.
+window.minePopupTerm = function() {
+    const index = popupTermNavigator.currentIndex();
+    if (index === null) return false;
+    const slot = document.querySelector(`.button-slot[data-kind="mine"][data-entry-index="${index}"][data-enabled="true"]`);
+    if (!slot) return false;
+    slot.click();
+    return true;
+};
+window.playPopupTermAudio = function() {
+    const index = popupTermNavigator.currentIndex();
+    if (index === null) return false;
+    playEntryAudio(index);
+    return true;
+};
+window.scrollPopupByViewport = direction => popupGeometry.scrollByViewport(direction, 0.8);
 
 function getPopupSelectionText() {
     return window.hoshiSelection?.selection?.text || window.getSelection()?.toString() || '';

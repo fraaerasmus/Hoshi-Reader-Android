@@ -242,6 +242,19 @@ class ReaderHardwareKeyNavigationTest {
     }
 
     @Test
+    fun gamepadButtonsWorkThePopupWhileItIsOpenAndTurnPagesOtherwise() {
+        assertEquals(ReaderHardwareKeyAction.MineTopTerm, boundKeyEvent(KeyEvent.KEYCODE_BUTTON_X, hasLookupPopup = true).action)
+        assertEquals(ReaderHardwareKeyAction.PlayTopTermAudio, boundKeyEvent(KeyEvent.KEYCODE_BUTTON_Y, hasLookupPopup = true).action)
+        assertEquals(ReaderHardwareKeyAction.PopupScroll(down = false), boundKeyEvent(KeyEvent.KEYCODE_BUTTON_L1, hasLookupPopup = true).action)
+        assertEquals(
+            ReaderHardwareKeyAction.PopupScroll(down = true),
+            boundKeyEvent(KeyEvent.KEYCODE_BUTTON_R1, hasLookupPopup = true, repeatCount = 2).action,
+        )
+        assertEquals(forward, boundKeyEvent(KeyEvent.KEYCODE_BUTTON_R1).action)
+        assertFalse(boundKeyEvent(KeyEvent.KEYCODE_BUTTON_X).consumed)
+    }
+
+    @Test
     fun aKeyFallsBackToItsReadingActionWithoutAudio() {
         val bindings = ReaderKeyBindings().withKeys(ReaderKeyAction.PageForward, listOf(ReaderKey(KeyEvent.KEYCODE_DPAD_RIGHT)))
 

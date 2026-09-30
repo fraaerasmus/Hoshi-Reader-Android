@@ -17,6 +17,12 @@ internal sealed interface ReaderHardwareKeyAction {
     data class ChapterNavigation(val direction: ReaderNavigationDirection) : ReaderHardwareKeyAction
     data object ToggleFocusMode : ReaderHardwareKeyAction
     data object CloseLookupPopup : ReaderHardwareKeyAction
+    data object MineTopTerm : ReaderHardwareKeyAction
+    data object PlayTopTermAudio : ReaderHardwareKeyAction
+    /** Scroll the top popup by most of a viewport. */
+    data class PopupScroll(val down: Boolean) : ReaderHardwareKeyAction
+    /** Back or forward through the top popup's lookup history. */
+    data class PopupHistory(val forward: Boolean) : ReaderHardwareKeyAction
     data object SasayakiTogglePlayback : ReaderHardwareKeyAction
     data class PopupTermNavigation(val direction: PopupTermNavigationDirection) : ReaderHardwareKeyAction
     data object SasayakiSeekForward : ReaderHardwareKeyAction
@@ -175,5 +181,11 @@ private fun ReaderKeyAction.hardwareAction(): ReaderHardwareKeyAction? = when (t
     ReaderKeyAction.ClosePopup -> ReaderHardwareKeyAction.CloseLookupPopup
     ReaderKeyAction.PopupPreviousTerm -> ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Previous)
     ReaderKeyAction.PopupNextTerm -> ReaderHardwareKeyAction.PopupTermNavigation(PopupTermNavigationDirection.Next)
+    ReaderKeyAction.MineTerm -> ReaderHardwareKeyAction.MineTopTerm
+    ReaderKeyAction.PlayTermAudio -> ReaderHardwareKeyAction.PlayTopTermAudio
+    ReaderKeyAction.PopupScrollUp -> ReaderHardwareKeyAction.PopupScroll(down = false)
+    ReaderKeyAction.PopupScrollDown -> ReaderHardwareKeyAction.PopupScroll(down = true)
+    ReaderKeyAction.PopupBack -> ReaderHardwareKeyAction.PopupHistory(forward = false)
+    ReaderKeyAction.PopupForward -> ReaderHardwareKeyAction.PopupHistory(forward = true)
     ReaderKeyAction.BoostWhileHeld -> null
 }
