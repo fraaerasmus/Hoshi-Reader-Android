@@ -9,6 +9,8 @@ import android.util.Log
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.activity.ComponentActivity
@@ -26,6 +28,7 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.launch
 import moe.antimony.hoshi.features.dictionary.PendingDictionaryLookupRequest
+import moe.antimony.hoshi.features.reader.ReaderJoystickDpad
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.reader.usesDarkInterface
 import moe.antimony.hoshi.features.reader.usesDarkSystemBarIcons
@@ -45,6 +48,7 @@ class MainActivity : ComponentActivity() {
     private var dictionaryLookupRequestId = 0L
     private var readerKeyEventHandler: ((KeyEvent) -> Boolean)? = null
     private var readerGenericMotionHandler: ((MotionEvent) -> Boolean)? = null
+    private val joystickDpad by lazy { ReaderJoystickDpad(Handler(Looper.getMainLooper())) { dispatchKeyEvent(it) } }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +100,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onReaderKeyEventHandlerChange = { handler ->
                             readerKeyEventHandler = handler
+                            if (handler == null) joystickDpad.clear()
                         },
                         onReaderGenericMotionHandlerChange = { handler ->
                             readerGenericMotionHandler = handler
@@ -128,6 +133,10 @@ class MainActivity : ComponentActivity() {
         // Like dispatchKeyEvent, runs before the WebView so reader hover survives a split-screen
         // refocus that stops DOM mousemove. Non-consuming: it only reads the cursor position.
         if (readerGenericMotionHandler?.invoke(event) == true) {
+            return true
+        }
+        // A controller's D-pad is joystick motion; while the reader is open it becomes D-pad keys here.
+        if (readerKeyEventHandler != null && joystickDpad.onGenericMotionEvent(event)) {
             return true
         }
         return super.dispatchGenericMotionEvent(event)
