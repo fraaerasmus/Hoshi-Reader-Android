@@ -588,6 +588,15 @@ window.hoshiSelection = {
             return null;
         }
 
+        return this.selectAtHit(hit, maxLength, { x: rectX, y: rectY });
+    },
+
+    /**
+     * Selects from [hit] on, as a tap there would, and posts it for lookup. [anchor] is the point the
+     * popup hangs off; without one it hangs off the word's first character.
+     */
+    selectAtHit(hit, maxLength, anchor = null) {
+        const projection = this.options.textProjection;
         this.clearSelection();
 
         const container = this.findParagraph(hit.node) || document.body;
@@ -655,7 +664,7 @@ window.hoshiSelection = {
         this.postTextSelected({
             text,
             sentence: sentenceContext.sentence,
-            rect: this.getSelectionRect(rectX, rectY),
+            rect: this.getSelectionRect(anchor?.x ?? Number.NaN, anchor?.y ?? Number.NaN),
             normalizedOffset,
             sentenceOffset: sentenceContext.sentenceOffset
         });
@@ -740,6 +749,8 @@ window.hoshiSelection = {
         if (!this.selection?.ranges.length) {
             return [];
         }
+        // Native reports how much of the selection the dictionary matched; the word cursor steps by that.
+        if (window.hoshiWordCursor) window.hoshiWordCursor.lastMatchLength = charCount;
 
         const ranges = [];
         let remaining = charCount;
@@ -901,6 +912,195 @@ window.hoshiSelection = {
         }
         this.selectText(state.pointer.x, state.pointer.y, state.length);
     }
+};
+
+/**
+ * Keys walk the text word by word with the popup following. A word ends where the dictionary's
+ * best match ends, so the cursor and a tap on the same character look up the same text; a spot
+ * the dictionary does not know is one character, or a whole word in a spaced language.
+ */
+window.hoshiWordCursor = {
+    /** Starts already visited, so going back retraces them. */
+    history: [],
+    /** The start the popup is open on, or null. */
+    current: null,
+    /** Code points the last lookup matched, filled in when native highlights the selection. */
+    lastMatchLength: 0,
+
+    /** Opens the popup on the first word of the current audiobook sentence, else of the first visible line. */
+    start(maxLength) {
+        const selection = window.hoshiSelection;
+        // VN reads its text from its own stream; a DOM hit here would be the wrong text.
+        if (!selection || selection.options.textProjection) return false;
+        const hit = this.activeCueStart() || this.firstVisibleStart();
+        if (!hit) return false;
+        this.history = [];
+        return this.open(this.skipForward(hit), maxLength);
+    },
+
+    next(maxLength) {
+        if (!this.syncToSelection()) return false;
+        const selection = window.hoshiSelection;
+        let hit = this.skipForward(this.stepped(this.current, Math.max(1, this.lastMatchLength)));
+        // A match shorter than the word would snap back to the same word start; move on to the next word.
+        if (hit && this.sameStart(selection.selectionStartForHit(hit), this.current)) {
+            hit = this.skipForward(this.wordEnd(hit));
+        }
+        if (!hit) return false;
+        this.history.push(this.current);
+        return this.open(hit, maxLength);
+    },
+
+    previous(maxLength) {
+        if (!this.syncToSelection()) return false;
+        const hit = this.history.pop() || this.wordBefore(this.current);
+        if (!hit) return false;
+        return this.open(hit, maxLength);
+    },
+
+    open(hit, maxLength) {
+        if (!hit) return false;
+        const selection = window.hoshiSelection;
+        const start = selection.selectionStartForHit(hit);
+        this.current = start;
+        this.lastMatchLength = 0;
+        return selection.selectAtHit(start, maxLength) !== null;
+    },
+
+    /** A popup opened by a tap is walked from where it was opened; no popup means no cursor. */
+    syncToSelection() {
+        const selection = window.hoshiSelection?.selection;
+        if (!selection) {
+            this.current = null;
+            this.history = [];
+            return false;
+        }
+        if (selection.startNode !== this.current?.node || selection.startOffset !== this.current?.offset) {
+            this.current = { node: selection.startNode, offset: selection.startOffset };
+            this.history = [];
+        }
+        return true;
+    },
+
+    activeCueStart() {
+        const reader = window.hoshiReader;
+        const cueId = reader?.activeCueId;
+        if (!cueId) return null;
+        // Inline cue targets re-wrap the text, so the wrapper's own text node is the live one.
+        const wrapper = reader.sasayakiInlineTargetsForCue?.(cueId)?.[0];
+        if (wrapper) {
+            const node = window.hoshiSelection.createWalker(wrapper).nextNode();
+            return node ? { node, offset: 0 } : null;
+        }
+        const range = reader.cueSourceRanges?.get(cueId)?.ranges?.[0];
+        return range?.node?.isConnected ? { node: range.node, offset: range.start } : null;
+    },
+
+    firstVisibleStart() {
+        const selection = window.hoshiSelection;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        const visible = rect => rect.width > 0 && rect.height > 0 &&
+            rect.right > 0 && rect.bottom > 0 && rect.left < width && rect.top < height;
+        const walker = selection.createWalker(document.body);
+        const range = document.createRange();
+        let node;
+        while ((node = walker.nextNode())) {
+            range.selectNodeContents(node);
+            if (!visible(range.getBoundingClientRect())) continue;
+            const text = node.textContent;
+            for (let offset = 0; offset < text.length; offset = selection.nextCodePointOffset(text, offset)) {
+                range.setStart(node, offset);
+                range.setEnd(node, selection.nextCodePointOffset(text, offset));
+                if (visible(range.getBoundingClientRect())) return { node, offset };
+            }
+        }
+        return null;
+    },
+
+    /** [hit] moved by [codePoints] characters, across text nodes; null past the end. */
+    stepped(hit, codePoints) {
+        const selection = window.hoshiSelection;
+        const walker = selection.createWalker(document.body);
+        walker.currentNode = hit.node;
+        let node = hit.node;
+        let offset = hit.offset;
+        for (let i = 0; i < codePoints; i++) {
+            if (offset >= node.textContent.length) {
+                node = walker.nextNode();
+                if (!node) return null;
+                offset = 0;
+            }
+            offset = selection.nextCodePointOffset(node.textContent, offset);
+        }
+        return { node, offset };
+    },
+
+    /** The first character from [hit] on that a lookup can start at, crossing nodes; null past the end. */
+    skipForward(hit) {
+        const selection = window.hoshiSelection;
+        const walker = selection.createWalker(document.body);
+        walker.currentNode = hit.node;
+        let node = hit.node;
+        let offset = hit.offset;
+        for (;;) {
+            const text = node.textContent;
+            while (offset < text.length && !this.startsWord(text, offset)) {
+                offset = selection.nextCodePointOffset(text, offset);
+            }
+            if (offset < text.length) return { node, offset };
+            node = walker.nextNode();
+            if (!node) return null;
+            offset = 0;
+        }
+    },
+
+    /** The character before [hit] that a lookup can start at; open() then snaps it to its word's start where the language has words. */
+    wordBefore(hit) {
+        const selection = window.hoshiSelection;
+        const walker = selection.createWalker(document.body);
+        walker.currentNode = hit.node;
+        let node = hit.node;
+        let offset = hit.offset;
+        for (;;) {
+            while (offset > 0) {
+                const previous = selection.previousCodePointStartOffset(node.textContent, offset);
+                if (this.startsWord(node.textContent, previous)) return { node, offset: previous };
+                offset = previous;
+            }
+            node = walker.previousNode();
+            if (!node) return null;
+            offset = node.textContent.length;
+        }
+    },
+
+    /** The first position from [hit] on that is not part of a word, crossing nodes; null past the end. */
+    wordEnd(hit) {
+        const selection = window.hoshiSelection;
+        const walker = selection.createWalker(document.body);
+        walker.currentNode = hit.node;
+        let node = hit.node;
+        let offset = hit.offset;
+        for (;;) {
+            const text = node.textContent;
+            while (offset < text.length && this.startsWord(text, offset)) {
+                offset = selection.nextCodePointOffset(text, offset);
+            }
+            if (offset < text.length) return { node, offset };
+            node = walker.nextNode();
+            if (!node) return null;
+            offset = 0;
+        }
+    },
+
+    sameStart(a, b) {
+        return !!a && !!b && a.node === b.node && a.offset === b.offset;
+    },
+
+    startsWord(text, offset) {
+        const char = window.hoshiSelection.codePointAt(text, offset);
+        return char.trim() !== '' && !window.hoshiSelection.isScanBoundaryAt(text, offset);
+    },
 };
 
 let lastHasSelection = false;

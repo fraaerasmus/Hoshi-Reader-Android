@@ -59,9 +59,11 @@ else comes from upstream and is taken as-is.
     position/size and hardware-keyboard shortcuts; hold the rewind/forward
     controls — on-screen, hardware keys, or headphone/Bluetooth — to seek
     continuously.
-  - **Rebindable keyboard keys and gamepad buttons** for page turns, chapters,
-    the lookup popup and audiobook playback, layered so one key can act
-    differently with a popup open, with audio loaded, or while just reading.
+  - **Rebindable keyboard keys and gamepad buttons** (volume keys included) for
+    page turns, chapters, the lookup popup and audiobook playback, layered so one
+    key can act differently with a popup open, with audio loaded, or while just
+    reading. A word cursor opens the popup from a key and walks it word by word,
+    and keys add the current term to Anki, play its audio and scroll the popup.
   - Yomitan-style **Shift-hover** dictionary lookup (scan the word under the
     pointer without tapping), and **Esc** to dismiss the lookup popup.
   - **Multi-word phrase** scanning for space-delimited languages.

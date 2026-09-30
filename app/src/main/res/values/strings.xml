@@ -761,6 +761,9 @@
     <string name="input_action_popup_scroll_down">Scroll popup down</string>
     <string name="input_action_popup_back">Back in popup</string>
     <string name="input_action_popup_forward">Forward in popup</string>
+    <string name="input_action_pick_word">Pick a word</string>
+    <string name="input_action_word_previous">Previous word</string>
+    <string name="input_action_word_next">Next word</string>
     <string name="input_action_boost">Speed up while held</string>
     <string name="input_action_scrub">Scrub audio</string>
     <string name="input_action_brightness" comment="Gesture binding option, intentionally matching other Brightness labels.">Brightness</string>

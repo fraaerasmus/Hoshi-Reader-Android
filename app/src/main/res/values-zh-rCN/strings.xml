@@ -759,6 +759,9 @@
     <string name="input_action_popup_scroll_down">弹窗向下滚动</string>
     <string name="input_action_popup_back">弹窗后退</string>
     <string name="input_action_popup_forward">弹窗前进</string>
+    <string name="input_action_pick_word">选择词语</string>
+    <string name="input_action_word_previous">上一个词</string>
+    <string name="input_action_word_next">下一个词</string>
     <string name="input_action_boost">按住时加速</string>
     <string name="input_action_scrub">拖动音频进度</string>
     <string name="input_action_brightness" comment="Gesture binding option, intentionally matching other Brightness labels.">亮度</string>

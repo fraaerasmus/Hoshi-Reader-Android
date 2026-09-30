@@ -780,3 +780,86 @@ test('shared selection keeps vertical lookup rects split when adjacent ruby-awar
         ],
     );
 });
+
+function wordCursorSetup(text) {
+    const { selection, textNode, window } = loadSelection(text);
+    const opened = [];
+    selection.selectAtHit = (hit) => {
+        opened.push(hit.offset);
+        selection.selection = {
+            startNode: hit.node,
+            startOffset: hit.offset,
+            ranges: [{ node: hit.node, start: hit.offset, end: hit.offset + 1 }],
+            text: '',
+        };
+        return 'selected';
+    };
+    const cursor = window.hoshiWordCursor;
+    cursor.firstVisibleStart = () => ({ node: textNode, offset: 0 });
+    return { cursor, opened, selection, textNode };
+}
+
+test('word cursor steps by the matched length, skips punctuation and retraces its steps', () => {
+    const { cursor, opened } = wordCursorSetup('猫が、犬を見た。');
+
+    assert.equal(cursor.start(16), true);
+    cursor.lastMatchLength = 1; // 猫
+    cursor.next(16);
+    cursor.lastMatchLength = 1; // が, then 、 is skipped
+    cursor.next(16);
+    cursor.lastMatchLength = 2; // 犬を
+    cursor.next(16);
+    cursor.previous(16);
+    cursor.previous(16);
+    cursor.previous(16);
+
+    assert.deepEqual(opened, [0, 1, 3, 5, 3, 1, 0]);
+});
+
+test('word cursor stops at the end of the text and treats an unknown spot as one character', () => {
+    const { cursor, opened } = wordCursorSetup('見た。');
+
+    cursor.start(16);
+    cursor.lastMatchLength = 0; // nothing matched
+    cursor.next(16);
+    cursor.lastMatchLength = 1;
+    assert.equal(cursor.next(16), false); // only 。 is left
+
+    assert.deepEqual(opened, [0, 1]);
+});
+
+test('word cursor walks a popup opened by a tap and goes back without history', () => {
+    const { cursor, opened, selection, textNode } = wordCursorSetup('猫が犬を見た');
+    selection.selection = { startNode: textNode, startOffset: 4, ranges: [], text: '' };
+
+    cursor.lastMatchLength = 1;
+    cursor.next(16);
+    cursor.previous(16);
+    cursor.previous(16);
+
+    assert.deepEqual(opened, [5, 4, 3]);
+});
+
+test('word cursor does nothing without a popup or in a projected text', () => {
+    const { cursor, opened, selection } = wordCursorSetup('猫');
+
+    assert.equal(cursor.next(16), false);
+    assert.equal(cursor.previous(16), false);
+    selection.configure({ textProjection: { toSemanticHit: (hit) => hit } });
+    assert.equal(cursor.start(16), false);
+    assert.deepEqual(opened, []);
+});
+
+test('word cursor moves on to the next word when the match was shorter than the word', () => {
+    const { cursor, opened, selection } = wordCursorSetup('running fast');
+    selection.configure({ language: 'en' });
+
+    cursor.start(16);
+    cursor.lastMatchLength = 3; // "run"
+    cursor.next(16);
+    cursor.lastMatchLength = 4;
+    assert.equal(cursor.next(16), false);
+    cursor.previous(16);
+
+    assert.deepEqual(opened, [0, 8, 0]);
+});

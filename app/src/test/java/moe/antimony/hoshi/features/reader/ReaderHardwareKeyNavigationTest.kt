@@ -255,6 +255,21 @@ class ReaderHardwareKeyNavigationTest {
     }
 
     @Test
+    fun theArrowsWalkWordsInAPopupAndSeekOutsideOne() {
+        assertEquals(ReaderHardwareKeyAction.PickWord, boundKeyEvent(KeyEvent.KEYCODE_ENTER).action)
+        assertEquals(ReaderHardwareKeyAction.PickWord, boundKeyEvent(KeyEvent.KEYCODE_BUTTON_X, audioLoaded = true).action)
+        assertEquals(
+            ReaderHardwareKeyAction.WordStep(forward = true),
+            boundKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT, audioLoaded = true, hasLookupPopup = true, repeatCount = 1).action,
+        )
+        assertEquals(
+            ReaderHardwareKeyAction.WordStep(forward = false),
+            boundKeyEvent(KeyEvent.KEYCODE_DPAD_LEFT, hasLookupPopup = true).action,
+        )
+        assertEquals(ReaderHardwareKeyAction.SasayakiSeekForward, boundKeyEvent(KeyEvent.KEYCODE_DPAD_RIGHT, audioLoaded = true).action)
+    }
+
+    @Test
     fun aKeyFallsBackToItsReadingActionWithoutAudio() {
         val bindings = ReaderKeyBindings().withKeys(ReaderKeyAction.PageForward, listOf(ReaderKey(KeyEvent.KEYCODE_DPAD_RIGHT)))
 

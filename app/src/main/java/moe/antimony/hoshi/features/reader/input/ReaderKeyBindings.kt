@@ -16,6 +16,8 @@ enum class ReaderKeyAction(val layer: ReaderKeyLayer, val repeats: Boolean = fal
     ChapterForward(ReaderKeyLayer.Reading),
     ChapterBackward(ReaderKeyLayer.Reading),
     ToggleFocusMode(ReaderKeyLayer.Reading),
+    /** Opens the popup on the first word of the audiobook sentence, else of the first visible line. */
+    PickWord(ReaderKeyLayer.Reading),
     TogglePlayback(ReaderKeyLayer.Audiobook),
     SkipBackward(ReaderKeyLayer.Audiobook, repeats = true),
     SkipForward(ReaderKeyLayer.Audiobook, repeats = true),
@@ -31,6 +33,8 @@ enum class ReaderKeyAction(val layer: ReaderKeyLayer, val repeats: Boolean = fal
     PopupScrollDown(ReaderKeyLayer.Popup, repeats = true),
     PopupBack(ReaderKeyLayer.Popup),
     PopupForward(ReaderKeyLayer.Popup),
+    WordPrevious(ReaderKeyLayer.Popup, repeats = true),
+    WordNext(ReaderKeyLayer.Popup, repeats = true),
 }
 
 /** A keyboard key or gamepad button, alone or with Ctrl, Alt or Shift. */
@@ -111,6 +115,7 @@ data class ReaderKeyBindings(val map: Map<ReaderKeyAction, List<ReaderKey>> = em
             ReaderKeyAction.PageForward to keysOf(KeyEvent.KEYCODE_PAGE_DOWN, KeyEvent.KEYCODE_BUTTON_R1),
             ReaderKeyAction.PageBackward to keysOf(KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_BUTTON_L1),
             ReaderKeyAction.ToggleFocusMode to keysOf(KeyEvent.KEYCODE_BUTTON_SELECT),
+            ReaderKeyAction.PickWord to keysOf(KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_X),
             ReaderKeyAction.TogglePlayback to keysOf(KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_K, KeyEvent.KEYCODE_BUTTON_A),
             ReaderKeyAction.SkipBackward to keysOf(KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_J),
             ReaderKeyAction.SkipForward to keysOf(KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.KEYCODE_L),
@@ -130,6 +135,9 @@ data class ReaderKeyBindings(val map: Map<ReaderKeyAction, List<ReaderKey>> = em
             ReaderKeyAction.PlayTermAudio to keysOf(KeyEvent.KEYCODE_BUTTON_Y),
             ReaderKeyAction.PopupScrollUp to keysOf(KeyEvent.KEYCODE_BUTTON_L1),
             ReaderKeyAction.PopupScrollDown to keysOf(KeyEvent.KEYCODE_BUTTON_R1),
+            // With a popup open the arrows walk words, as in chimahon; delete these two to seek instead.
+            ReaderKeyAction.WordPrevious to keysOf(KeyEvent.KEYCODE_DPAD_LEFT),
+            ReaderKeyAction.WordNext to keysOf(KeyEvent.KEYCODE_DPAD_RIGHT),
         )
 
         /**

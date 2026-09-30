@@ -1597,6 +1597,14 @@ fun ReaderWebView(
             }
             ReaderHardwareKeyAction.ToggleFocusMode -> handleReaderTapOutside()
             ReaderHardwareKeyAction.CloseLookupPopup -> closeLookupPopupsAndSelection()
+            ReaderHardwareKeyAction.PickWord -> webView?.evaluateJavascript(
+                "window.hoshiWordCursor && window.hoshiWordCursor.start(${readerSelectionMaxLength(dictionarySettings)})",
+                null,
+            )
+            is ReaderHardwareKeyAction.WordStep -> webView?.evaluateJavascript(
+                "window.hoshiWordCursor && window.hoshiWordCursor.${if (action.forward) "next" else "previous"}(${readerSelectionMaxLength(dictionarySettings)})",
+                null,
+            )
             ReaderHardwareKeyAction.MineTopTerm -> webView?.evaluateJavascript(
                 "window.hoshiReaderPopupHost && window.hoshiReaderPopupHost.mineTopTerm()",
                 null,

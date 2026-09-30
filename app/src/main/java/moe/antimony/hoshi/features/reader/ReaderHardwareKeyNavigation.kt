@@ -17,6 +17,8 @@ internal sealed interface ReaderHardwareKeyAction {
     data class ChapterNavigation(val direction: ReaderNavigationDirection) : ReaderHardwareKeyAction
     data object ToggleFocusMode : ReaderHardwareKeyAction
     data object CloseLookupPopup : ReaderHardwareKeyAction
+    data object PickWord : ReaderHardwareKeyAction
+    data class WordStep(val forward: Boolean) : ReaderHardwareKeyAction
     data object MineTopTerm : ReaderHardwareKeyAction
     data object PlayTopTermAudio : ReaderHardwareKeyAction
     /** Scroll the top popup by most of a viewport. */
@@ -173,6 +175,9 @@ private fun ReaderKeyAction.hardwareAction(): ReaderHardwareKeyAction? = when (t
     ReaderKeyAction.ChapterForward -> ReaderHardwareKeyAction.ChapterNavigation(ReaderNavigationDirection.Forward)
     ReaderKeyAction.ChapterBackward -> ReaderHardwareKeyAction.ChapterNavigation(ReaderNavigationDirection.Backward)
     ReaderKeyAction.ToggleFocusMode -> ReaderHardwareKeyAction.ToggleFocusMode
+    ReaderKeyAction.PickWord -> ReaderHardwareKeyAction.PickWord
+    ReaderKeyAction.WordPrevious -> ReaderHardwareKeyAction.WordStep(forward = false)
+    ReaderKeyAction.WordNext -> ReaderHardwareKeyAction.WordStep(forward = true)
     ReaderKeyAction.TogglePlayback -> ReaderHardwareKeyAction.SasayakiTogglePlayback
     ReaderKeyAction.SkipBackward -> ReaderHardwareKeyAction.SasayakiSeekBackward
     ReaderKeyAction.SkipForward -> ReaderHardwareKeyAction.SasayakiSeekForward
