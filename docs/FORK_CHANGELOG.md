@@ -59,6 +59,7 @@ below is a single living summary of everything the fork adds, grouped Added / Fi
 
 ## Fixed
 
+- Show the base word as well when looking up an inflected form the lookup rules cannot undo: a dictionary's "form of" entry that points at a base term now brings that term's own entries into the popup, listed ahead of the pointer entry, which itself now stays above shorter matches instead of dropping to the bottom of the popup. Works for any language whose dictionary carries such pointers.
 - A controller D-pad that stopped working after pressing up or down until the book was reopened. Controllers such as the 8BitDo in Switch mode send the D-pad as joystick motion; Android turned it into arrow keys only while nothing had focus, and an unbound up or down press moved the focus. The reader now turns D-pad motion into keys itself while a book is open, with hold-to-repeat, so the D-pad works whatever has focus.
 - Docking the tab lands where the finger lets go: the carried position is read through layout coordinates instead of summed deltas, and the side edges win the corners so a tab dragged from the bottom can reach the right edge.
 - Edge gestures and page touches work again while a side dock is shown: the drawer's tap-outside listener was a Compose layer above the WebView and took every touch; the reader now tells the dock about page touches instead.

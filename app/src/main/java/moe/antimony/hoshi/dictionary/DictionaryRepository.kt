@@ -256,15 +256,21 @@ internal class DictionaryRepository @Inject constructor(
         // Also search the elision-stripped form (e.g. French l'homme → homme), keeping the original
         // results too (Yomitan searchOriginal); merged and de-duped by entry.
         val stripped = ElisionTextReplacement.stripElision(text, lookupQueryLanguageId)
-            ?: return LemmaOrdering.lemmaFirst(results)
+            ?: return LemmaOrdering.lemmaFirst(withFormOfTargets(results, maxResults, options))
         val strippedResults = lookupQueryService.lookup(stripped, maxResults, scanLength, options)
         // Longest match first so the content word (homme) outranks the bare article (l'); then sink
         // "form of" (non-lemma) entries so the real definition leads.
         return (results + strippedResults)
             .sortedByDescending { it.matched.codePointCount(0, it.matched.length) }
-            .let(LemmaOrdering::lemmaFirst)
             .distinctBy { "${it.term.expression} ${it.term.reading} ${it.matched}" }
+            .let { withFormOfTargets(it, maxResults, options) }
+            .let(LemmaOrdering::lemmaFirst)
     }
+
+    private fun withFormOfTargets(results: List<LookupResult>, maxResults: Int, options: LookupOptions): List<LookupResult> =
+        FormOfExpansion.expand(results) { target ->
+            lookupQueryService.lookup(target, maxResults, target.codePointCount(0, target.length), options)
+        }
 
     fun lookupKanji(kanji: String): KanjiResult {
         ensureLookupQueryReady()
