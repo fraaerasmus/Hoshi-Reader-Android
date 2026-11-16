@@ -211,7 +211,7 @@ class DictionarySessionValidityTest {
         val paths = linkedMapOf<Long, List<String>>()
         var beforeRebuild: (Long) -> Unit = {}
 
-        override fun createLookupObject(languageId: String): Long = (++creates).toLong()
+        override fun createLookupObject(): Long = (++creates).toLong()
 
         override fun rebuildQuery(session: Long, termPaths: Array<String>, freqPaths: Array<String>, pitchPaths: Array<String>, kanjiPaths: Array<String>) {
             beforeRebuild(session)

@@ -50,7 +50,8 @@ class DictionaryLookupQueryServiceTest {
         }
         assertEquals("session-4:/dicts/ko", service.lookup("text").single().term.glossaries.single().glossary)
         assertEquals(listOf(1L, 2L, 3L, 5L), bridge.destroyedSessions)
-        assertEquals(listOf("ja", "en", "zh", "ko", "zh"), bridge.createdLanguageIds)
+        // The fork binds the language after the query builds, so the failed rebuild never applies "zh".
+        assertEquals(listOf("ja", "en", "zh", "ko"), bridge.appliedLanguageIds)
     }
 
     @Test

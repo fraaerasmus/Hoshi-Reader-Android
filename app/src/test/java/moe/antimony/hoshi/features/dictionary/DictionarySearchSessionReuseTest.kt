@@ -23,9 +23,10 @@ class DictionarySearchSessionReuseTest {
             val languages = mutableListOf<String>()
             var styleReads = 0
             override fun importDictionary(zipPath: String, outputDir: String, lowRam: Boolean): NativeDictionaryImportResult = error("unused")
-            override fun createLookupObject(languageId: String): Long {
-                languages += languageId
-                return languages.size.toLong()
+            private var sessions = 0L
+            override fun createLookupObject(): Long = ++sessions
+            override fun setLookupLanguage(session: Long, language: String) {
+                languages += language
             }
             override fun getStyles(session: Long): List<DictionaryStyle> {
                 styleReads++

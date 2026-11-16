@@ -29,7 +29,7 @@ internal class DictionaryLookupQueryService @Inject constructor(
     ) {
         synchronized(rebuildLock) {
             // kaihouguide bridge: create a session, build the query, then bind the
-            // profile's lookup language (the engine supports all 18 languages via
+            // profile's lookup language (the engine supports every language via
             // setLookupLanguage rather than baking it into createLookupObject).
             val nextSession = nativeBridge.createLookupObject()
             var committed = false

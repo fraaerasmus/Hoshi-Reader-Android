@@ -27,7 +27,7 @@ class JapaneseLookupPerformanceTest {
         var creates = 0
         var styleReads = 0
         val bridge = object : DictionaryNativeBridge by native {
-            override fun createLookupObject(languageId: String): Long = native.createLookupObject(languageId).also {
+            override fun createLookupObject(): Long = native.createLookupObject().also {
                 creates++
                 openSessions += it
             }

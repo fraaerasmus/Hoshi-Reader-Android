@@ -18,7 +18,7 @@ class DictionaryFrequencyNativeTest {
     fun nativeFrequencyOptionsSortSelectedDictionaryAndIgnoreUnavailableOnes() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val root = File(context.cacheDir, "frequency-test-${UUID.randomUUID()}").apply { mkdirs() }
-        val session = HoshiDicts.createLookupObject("ja")
+        val session = HoshiDicts.createLookupObject()
         try {
             val terms = import(root, "Terms", "term_bank_1.json", """[
                 ["橋","はし","","",0,["bridge"],1,""],
