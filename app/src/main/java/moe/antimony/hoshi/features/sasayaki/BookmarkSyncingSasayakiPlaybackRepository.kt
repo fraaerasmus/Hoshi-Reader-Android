@@ -23,6 +23,8 @@ internal class BookmarkSyncingSasayakiPlaybackRepository(
 
     override suspend fun load(): SasayakiPlaybackData? = delegate.load()
 
+    override suspend fun saveVolumeGainDb(value: Int) = delegate.saveVolumeGainDb(value)
+
     override suspend fun save(playback: SasayakiPlaybackData) {
         delegate.save(playback)
         val position = playback.lastPosition

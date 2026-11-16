@@ -42,7 +42,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
-import moe.antimony.hoshi.features.settings.SettingsDetailScaffold
+import moe.antimony.hoshi.features.settings.StaticSettingsDetailScaffold
 import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
 
 /** Advanced › Gestures & shortcuts: where the playback controls live and what each gesture and key does. */
@@ -65,7 +65,7 @@ fun ReaderGesturesView(
         scope.launch { gesturesRepository.update { it.copy(bindings = it.bindings.with(source, action)) } }
     }
 
-    SettingsDetailScaffold(
+    StaticSettingsDetailScaffold(
         title = stringResource(R.string.gestures_title),
         onClose = onClose,
         modifier = modifier,

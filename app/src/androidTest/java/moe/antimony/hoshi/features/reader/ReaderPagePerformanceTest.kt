@@ -166,7 +166,7 @@ class ReaderPagePerformanceTest {
                     resources.resourceForUrl(request.url.toString())?.toWebResourceResponse()
                 override fun onPageFinished(view: WebView, url: String) {
                     val start = SystemClock.elapsedRealtimeNanos()
-                    val script = readerSetupScript(progress, null, settings, null, font, false, false,
+                    val script = readerSetupScript(progress, null, settings, null, font, false, false, false, false,
                         ContentLanguageProfile.Japanese, size, 0L, 0L, null, null, token, assets)
                     setupGenerationMs = (SystemClock.elapsedRealtimeNanos() - start) / 1e6
                     view.evaluateReaderSetupScript(script + METRICS, token)
@@ -183,7 +183,7 @@ class ReaderPagePerformanceTest {
         val scheduler = ReaderPageMeasurementScheduler()
         fun startMeasurement() {
             measurer = ReaderPageMeasurer(host, book, measurementAssets, fontFile, scheduler) { measureToken, resources ->
-                readerSetupScript(0.0, null, settings.copy(textAnimation = false), null, resources.font(font), false, false,
+                readerSetupScript(0.0, null, settings.copy(textAnimation = false), null, resources.font(font), false, false, false, false,
                     ContentLanguageProfile.Japanese, size, 0L, 0L, null, null, measureToken, measurementAssets, measurementOnly = true) + """
                     (()=>{window.fixtureMeasurementTimes={};
                     const trace=(target,name)=>{const original=target[name];target[name]=function(...args){

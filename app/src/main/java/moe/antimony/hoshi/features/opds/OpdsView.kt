@@ -57,7 +57,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
-import moe.antimony.hoshi.features.settings.SettingsDetailScaffold
+import moe.antimony.hoshi.features.settings.StaticSettingsDetailScaffold
 import moe.antimony.hoshi.ui.hoshiOutlinedTextFieldColors
 
 /** Saved OPDS catalogs: browse, search, and download EPUBs into the bookshelf byte-for-byte. */
@@ -197,7 +197,7 @@ fun OpdsView(
 
     val currentCatalog = selected
     val currentFeed = feedStack.lastOrNull()
-    SettingsDetailScaffold(
+    StaticSettingsDetailScaffold(
         title = currentFeed?.title?.takeIf { it.isNotBlank() } ?: currentCatalog?.name ?: stringResource(R.string.opds_title),
         onClose = ::back,
         modifier = modifier.background(MaterialTheme.colorScheme.background),

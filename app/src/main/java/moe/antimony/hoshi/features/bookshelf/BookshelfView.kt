@@ -838,12 +838,15 @@ internal fun isRemoteBookContextMenuExpanded(
 internal data class BookSyncMenuState(
     val available: Boolean,
     val showDirectionMenu: Boolean,
+    /** Hoshi Drive lists books that are not downloaded yet. */
+    val hoshiDriveDownloads: Boolean = false,
 )
 
 internal fun bookSyncMenuState(syncSettings: SyncSettings, kosyncEnabled: Boolean): BookSyncMenuState =
     BookSyncMenuState(
         available = syncSettings.usesTtuSync || kosyncEnabled,
         showDirectionMenu = syncSettings.usesTtuSync && syncSettings.mode == SyncMode.Manual,
+        hoshiDriveDownloads = syncSettings.enabled && syncSettings.provider == SyncProvider.Gdrive,
     )
 
 internal fun shouldEnableBookshelfPullRefresh(
@@ -1773,7 +1776,8 @@ internal fun BookContextMenu(
         expanded = expanded && !moveMenuExpanded && !syncMenuExpanded && !profileMenuExpanded && !markMenuExpanded,
         onDismissRequest = onDismiss,
     ) {
-        if (syncMenuState.available || (syncSettings.enabled && entry.metadata.epub == null)) {
+        val offerDownload = syncMenuState.hoshiDriveDownloads && entry.metadata.epub == null
+        if (syncMenuState.available || offerDownload) {
             if (syncMenuState.showDirectionMenu) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bookshelf_sync)) },
@@ -1785,7 +1789,7 @@ internal fun BookContextMenu(
                     },
                     onClick = { syncMenuExpanded = true },
                 )
-            } else if (syncSettings.provider == SyncProvider.Ttu) {
+            } else if (syncMenuState.available) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bookshelf_sync)) },
                     onClick = {
@@ -1803,7 +1807,7 @@ internal fun BookContextMenu(
                     },
                 )
             }
-            if (syncSettings.provider == SyncProvider.Gdrive && entry.metadata.epub == null) {
+            if (offerDownload) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_download)) },
                     onClick = {

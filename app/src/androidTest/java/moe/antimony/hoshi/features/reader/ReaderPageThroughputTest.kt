@@ -97,7 +97,7 @@ class ReaderPageThroughputTest {
                             } else null
                         }, scheduler) { token, resources ->
                             (if (variant == "fallback") "Object.defineProperty(window,'scheduler',{value:undefined,configurable:true});" else "") +
-                            readerSetupScript(0.0, null, settings, null, resources.font(sampleFont), false, false,
+                            readerSetupScript(0.0, null, settings, null, resources.font(sampleFont), false, false, false, false,
                                 ContentLanguageProfile.Japanese, size, 0L, 0L, null, null, token, source, measurementOnly = true) +
                                 (if (variant == "unpaced") "hoshiReader.measurementYield=()=>Promise.resolve();" else "") + TRACE
                         }

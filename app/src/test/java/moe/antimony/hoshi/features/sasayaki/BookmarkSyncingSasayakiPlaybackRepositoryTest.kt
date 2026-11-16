@@ -30,6 +30,7 @@ class BookmarkSyncingSasayakiPlaybackRepositoryTest {
         val repository = BookmarkSyncingSasayakiPlaybackRepository(
             delegate = object : SasayakiPlaybackRepository {
                 override suspend fun load() = null
+                override suspend fun saveVolumeGainDb(value: Int) = Unit
                 override suspend fun save(playback: SasayakiPlaybackData) { saved += playback }
             },
             bookInfo = bookInfo,
@@ -59,6 +60,7 @@ class BookmarkSyncingSasayakiPlaybackRepositoryTest {
         val repository = BookmarkSyncingSasayakiPlaybackRepository(
             delegate = object : SasayakiPlaybackRepository {
                 override suspend fun load() = null
+                override suspend fun saveVolumeGainDb(value: Int) = Unit
                 override suspend fun save(playback: SasayakiPlaybackData) = Unit
             },
             bookInfo = bookInfo,

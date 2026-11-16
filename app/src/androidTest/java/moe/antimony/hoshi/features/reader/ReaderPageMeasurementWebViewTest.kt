@@ -160,7 +160,7 @@ class ReaderPageMeasurementWebViewTest {
                 val density = host.resources.displayMetrics.density
                 val size = IntSize((host.width / density).toInt(), (host.height / density).toInt())
                 val measurer = ReaderPageMeasurer(host, book, assets, { null }) { token, _ ->
-                    readerSetupScript(0.0, null, settings, null, null, false, false,
+                    readerSetupScript(0.0, null, settings, null, null, false, false, false, false,
                         ContentLanguageProfile.Japanese, size, 0L, 0L, null, null, token, assets, measurementOnly = true)
                 }
                 try {
@@ -209,7 +209,7 @@ class ReaderPageMeasurementWebViewTest {
                         if (name == "fixture.ttf") { requests.incrementAndGet(); file } else null
                     }) { token, resources ->
                         readerSetupScript(0.0, null, ReaderSettings(selectedFont = "Fixture", verticalWriting = false),
-                            null, resources.font(font), false, false, ContentLanguageProfile.English, size,
+                            null, resources.font(font), false, false, false, false, ContentLanguageProfile.English, size,
                             0L, 0L, null, null, token, assets, measurementOnly = true)
                     }
                     try {
@@ -248,7 +248,7 @@ class ReaderPageMeasurementWebViewTest {
                 val density = host.resources.displayMetrics.density
                 val size = IntSize((host.width / density).toInt(), (host.height / density).toInt())
                 val measurer = ReaderPageMeasurer(host, book, assets, { null }) { token, _ ->
-                    readerSetupScript(0.0, null, settings, null, null, false, false,
+                    readerSetupScript(0.0, null, settings, null, null, false, false, false, false,
                         ContentLanguageProfile.Japanese, size, 0L, 0L, null, null, token, assets, measurementOnly = true)
                 }
                 try {
@@ -411,7 +411,7 @@ class ReaderPageMeasurementWebViewTest {
             val measurer = ReaderPageMeasurer(host, book, assets, { null }, scheduler) { token, _ ->
                 scheduler.setReaderReady(false)
                 setup.complete(Unit)
-                readerSetupScript(0.0, null, ReaderSettings(progressCount = ReaderProgressCount.Pages), null, null, false, false,
+                readerSetupScript(0.0, null, ReaderSettings(progressCount = ReaderProgressCount.Pages), null, null, false, false, false, false,
                     ContentLanguageProfile.Japanese, size, 0L, 0L, null, null, token, assets, measurementOnly = true)
             }
             try {
@@ -451,7 +451,7 @@ class ReaderPageMeasurementWebViewTest {
                     bridge.resourceForUrl(request.url.toString())?.toWebResourceResponse()
                 override fun onPageFinished(view: WebView, url: String) {
                     view.evaluateJavascript("window.HoshiReaderPage={postMessage:(token,page)=>window.fixturePage=page};" +
-                        readerSetupScript(0.0, null, settings, null, null, false, false,
+                        readerSetupScript(0.0, null, settings, null, null, false, false, false, false,
                             ContentLanguageProfile.Japanese, size, 0L, 0L, null, null, "visible", assets), null)
                 }
             }

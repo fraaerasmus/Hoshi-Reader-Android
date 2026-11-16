@@ -99,7 +99,7 @@ internal fun ReaderPageCounter(
                             ReaderPageMeasurer(parent, book, assets, fontManager::fontFileForRequest, scheduler) { token, resources ->
                                 val measurementFont = resources.font(font)
                                 readerSetupScript(0.0, null, settings.copy(textAnimation = false), measurementFont?.faces?.firstOrNull()?.url,
-                                    measurementFont, false, false, contentLanguage, cssSize, 0L, 0L, null, null, token, assets, measurementOnly = true)
+                                    measurementFont, false, false, false, false, contentLanguage, cssSize, 0L, 0L, null, null, token, assets, measurementOnly = true)
                             }.also { measurer = it }
                         }
                         rendererView.measure(spine)

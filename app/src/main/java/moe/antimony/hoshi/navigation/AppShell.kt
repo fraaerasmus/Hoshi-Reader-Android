@@ -416,7 +416,7 @@ fun AppShell(
         selectedTab = selectedTab,
         visibleTabs = visibleMainTabs,
         onSelectedTabChange = ::selectMainTab,
-        onOpenReader = ::openReader,
+        onOpenReader = { openReader(it, skipSyncOnOpen = false) },
     )
     val booksEntries = rememberDecoratedNavEntries(
         backStack = booksBackStack,
