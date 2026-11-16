@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.ui.UiText
+import moe.antimony.hoshi.ui.withErrorDetails
 
 class SasayakiAudioAvailabilityState(
     initialHasAudio: Boolean = false,
@@ -16,8 +17,7 @@ class SasayakiAudioAvailabilityState(
         private set
 
     fun markRestoreFailed(error: Throwable) {
-        errorMessage = sasayakiRestoreFailureMessage(error)?.let(UiText::Literal)
-            ?: UiText.Resource(R.string.sasayaki_import_audiobook_failed)
+        errorMessage = UiText.Resource(R.string.sasayaki_import_audiobook_failed).withErrorDetails(error)
         hasAudio = false
     }
 
@@ -41,9 +41,3 @@ class SasayakiAudioAvailabilityState(
 }
 
 /** Media3 reports "Source error" for everything; append the root cause so a 66 h m4b OOM is identifiable. */
-internal fun sasayakiRestoreFailureMessage(error: Throwable): String? {
-    val message = error.localizedMessage
-    val root = generateSequence(error.cause) { it.cause }.lastOrNull() ?: return message
-    val rootText = "${root::class.java.simpleName}: ${root.localizedMessage ?: ""}".trimEnd(':', ' ')
-    return if (message == null) rootText else if (message.contains(rootText)) message else "$message — $rootText"
-}

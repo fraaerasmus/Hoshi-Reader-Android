@@ -13,11 +13,17 @@ function selectionSource() {
         japaneseLanguageUrl,
         japaneseSelectionUrl,
         englishSelectionUrl,
+        new URL('../../main/assets/hoshi-web/shared/language-cjk.js', import.meta.url),
+        new URL('../../main/assets/hoshi-web/shared/selection-zh.js', import.meta.url),
+        new URL('../../main/assets/hoshi-web/shared/selection-ko.js', import.meta.url),
+        new URL('../../main/assets/hoshi-web/reader/reader-dom-text.js', import.meta.url),
         sharedSelectionUrl,
     ].map((url) => fs.readFileSync(url, 'utf8')).join('\n');
 }
 
 function loadSelection(text) {
+    let nativeSelection = null;
+    const listeners = {};
     const textNode = {
         nodeType: 3,
         textContent: text,
@@ -71,7 +77,7 @@ function loadSelection(text) {
         elementFromPoint() {
             return this.pointElement;
         },
-        addEventListener() {},
+        addEventListener(name, listener) { listeners[name] = listener; },
     };
     const window = {
         getComputedStyle() {
@@ -81,9 +87,11 @@ function loadSelection(text) {
 
     vm.runInNewContext(selectionSource(), {
         CSS: {},
+        innerWidth: 400,
+        innerHeight: 800,
         document,
         getSelection() {
-            return null;
+            return nativeSelection;
         },
         Node: { TEXT_NODE: 3 },
         NodeFilter: { SHOW_TEXT: 4, FILTER_ACCEPT: 1, FILTER_REJECT: 2 },
@@ -92,6 +100,11 @@ function loadSelection(text) {
 
     return {
         document,
+        dispatchDocumentEvent(name, event) { listeners[name]?.(event); },
+        changeNativeSelection(value) {
+            nativeSelection = value;
+            listeners.selectionchange();
+        },
         selection: window.hoshiSelection,
         textNode,
         window,
@@ -184,16 +197,70 @@ function loadAdjacentExpressionTags() {
     return selection;
 }
 
-function scanTextFromOffset(text, offset, configureOptions = {}) {
+function scanTextFromOffset(text, offset, configureOptions = {}, scanOtherLanguages = false) {
     const { document, selection, textNode, window } = loadSelection(text);
     document.pointElement = hitElement([]);
     selection.configure(configureOptions);
     selection.postTextSelected = () => {};
     selection.clearSelection = () => {};
     selection.getCharacterAtPoint = () => ({ node: textNode, offset });
-    window.scanNonJapaneseText = false;
+    window.scanNonJapaneseText = scanOtherLanguages;
     return selection.selectText(1, 1, 80);
 }
+
+function loadGlossaryList() {
+    const fixture = loadSelection('逢瀬');
+    const { document, selection, textNode, window } = fixture;
+    function element(selector, parentElement) {
+        return {
+            nodeType: 1,
+            parentElement,
+            closest(selectors) {
+                return selectors.split(',').map((s) => s.trim()).includes(selector)
+                    ? this : parentElement?.closest(selectors) ?? null;
+            },
+        };
+    }
+    const glossary = element('.glossary-content');
+    const firstItem = element('li', glossary);
+    const secondItem = element('li', glossary);
+    // Inline markup within a list item must remain one lookup context.
+    textNode.textContent = '逢';
+    textNode.parentElement = element('span', firstItem);
+    const suffix = { nodeType: 3, textContent: '瀬', parentElement: element('ruby', firstItem) };
+    const nextTerm = { nodeType: 3, textContent: '瀬戸際', parentElement: secondItem };
+    document.createTreeWalker = (root) => treeWalker(root === firstItem
+        ? [textNode, suffix] : root === secondItem ? [nextTerm] : [textNode, suffix, nextTerm]);
+    document.pointElement = hitElement([]);
+    selection.clearSelection = () => {};
+    selection.getSelectionRect = () => ({ x: 0, y: 0, width: 1, height: 1 });
+    selection.postTextSelected = (value) => { fixture.posted = value; };
+    window.scanNonJapaneseText = false;
+    fixture.scan = (node) => {
+        selection.selection = null;
+        selection.getCharacterAtPoint = () => ({ node, offset: 0 });
+        return selection.selectText(1, 1, 80);
+    };
+    return { fixture, textNode, suffix, nextTerm };
+}
+
+test('glossary lookup stops at the current list item instead of joining the next term', () => {
+    const { fixture, suffix } = loadGlossaryList();
+    assert.equal(fixture.scan(suffix), '瀬');
+    assert.equal(fixture.posted.sentence, '逢瀬');
+    assert.equal(fixture.posted.sentenceOffset, 1);
+    assert.equal(fixture.selection.selection.ranges.length, 1);
+});
+
+test('glossary list lookup keeps inline text together and excludes preceding items from context', () => {
+    const { fixture, textNode, nextTerm } = loadGlossaryList();
+    assert.equal(fixture.scan(textNode), '逢瀬');
+    assert.equal(fixture.posted.sentence, '逢瀬');
+    assert.equal(fixture.posted.sentenceOffset, 0);
+    assert.equal(fixture.scan(nextTerm), '瀬戸際');
+    assert.equal(fixture.posted.sentence, '瀬戸際');
+    assert.equal(fixture.posted.sentenceOffset, 0);
+});
 
 function hitElement(matches) {
     return {
@@ -309,107 +376,74 @@ test('shared selection can preserve reader link and image tap tokens', () => {
     assert.equal(selection.imageTapResult(), 'image');
 });
 
-test('shared selection reads semantic text while keeping projected visible ranges', () => {
-    const sourceText = '現在激しい抵抗を見せていた。';
-    const { document, selection, textNode: sourceNode, window } = loadSelection(sourceText);
-    const renderedNode = {
-        nodeType: 3,
-        textContent: '激',
-        parentElement: null,
-    };
-    let projectedRanges = null;
-    let posted = null;
-    document.pointElement = hitElement([]);
-    window.getSelection = () => null;
-    selection.getCharacterAtPoint = () => ({ node: renderedNode, offset: 0 });
-    selection.postTextSelected = (payload) => {
-        posted = payload;
-    };
-    selection.configure({
-        textProjection: {
-            toSemanticHit(renderedHit) {
-                assert.equal(renderedHit.node, renderedNode);
-                return { node: sourceNode, offset: sourceText.indexOf('激') };
-            },
-            normalizedOffsetForHit() {
-                return 314;
-            },
-            visibleRangesForSemanticRanges(ranges) {
-                projectedRanges = ranges;
-                return [{ node: renderedNode, start: 0, end: 1 }];
-            },
-        },
-    });
-    window.scanNonJapaneseText = false;
-
-    const selected = selection.selectText(1, 1, 80);
-
-    assert.equal(selected, '激しい抵抗を見せていた');
-    assert.equal(posted.text, '激しい抵抗を見せていた');
-    assert.equal(posted.sentence, sourceText);
-    assert.equal(posted.sentenceOffset, sourceText.indexOf('激'));
-    assert.equal(posted.normalizedOffset, 314);
-    assert.equal(projectedRanges.length, 1);
-    assert.equal(projectedRanges[0].node, sourceNode);
-    assert.equal(selection.selection.ranges[0].node, renderedNode);
-});
-
-test('shared selection fails closed when a configured text projection cannot map the hit', () => {
-    const { document, selection, textNode, window } = loadSelection('激');
-    document.pointElement = hitElement([]);
-    window.getSelection = () => null;
-    selection.getCharacterAtPoint = () => ({ node: textNode, offset: 0 });
-    selection.configure({
-        textProjection: {
-            toSemanticHit() {
-                return null;
-            },
-        },
-    });
-    window.scanNonJapaneseText = false;
-
-    assert.equal(selection.selectText(1, 1, 80), null);
-    assert.equal(selection.selection, null);
-});
-
-test('english selection can start before the visible clone fragment and continue in source text', () => {
-    const sourceText = 'A difficult resistance.';
-    const { document, selection, textNode: sourceNode, window } = loadSelection(sourceText);
-    const renderedNode = {
-        nodeType: 3,
-        textContent: 'A diff',
-        parentElement: null,
-    };
-    document.pointElement = hitElement([]);
-    window.getSelection = () => null;
-    selection.getCharacterAtPoint = () => ({ node: renderedNode, offset: 5 });
-    selection.configure({
-        language: 'en',
-        textProjection: {
-            toSemanticHit() {
-                return { node: sourceNode, offset: 5 };
-            },
-            normalizedOffsetForHit() {
-                return 5;
-            },
-            visibleRangesForSemanticRanges() {
-                return [{ node: renderedNode, start: 2, end: 6 }];
-            },
-        },
-    });
-
-    assert.equal(selection.selectText(1, 1, 80), 'difficult resistance');
-    assert.equal(selection.selection.startOffset, 2);
-    assert.equal(selection.selection.ranges[0].node, renderedNode);
-});
-
 test('shared selection treats missing language policy as a no-scan boundary', () => {
     const selection = loadSharedSelectionWithoutPolicy();
 
-    assert.equal(selection.languagePolicy(), undefined);
     assert.doesNotThrow(() => selection.isScanBoundary('猫'));
     assert.equal(selection.isScanBoundary('猫'), true);
     assert.equal(selection.selectionStartForHit({ node: {}, offset: 3 }).offset, 3);
+});
+
+test('configuration selects the language policy before scanning without rereading configuration', () => {
+    const { selection, window, textNode } = loadSelection('猫');
+    selection.configure({ language: 'ja' });
+    Object.defineProperty(selection.options, 'language', {
+        get() { assert.fail('character scanning must not read the configured language'); },
+    });
+    Object.defineProperty(window, 'hoshiSelectionLanguagePolicies', {
+        get() { assert.fail('character scanning must not look up the language policy'); },
+    });
+    Object.defineProperty(window, 'hoshiLanguageUtilities', {
+        get() { assert.fail('character scanning must not look up fixed language utilities'); },
+    });
+    Object.defineProperty(selection.languagePolicy, 'isScanBoundaryAt', {
+        get() { assert.fail('character scanning must not choose a boundary implementation'); },
+    });
+    for (const char of '猫が本を読んでいる') {
+        assert.equal(selection.isScanBoundary(char), false);
+        assert.equal(selection.isScanBoundaryAt(char, 0), false);
+        assert.equal(selection.isHitBoundary(char), false);
+        assert.equal(selection.isHitBoundaryAt(char, 0), false);
+        assert.equal(selection.isWordStartBoundary(char), false);
+        assert.equal(selection.isWordStartBoundaryAt(char, 0), false);
+    }
+    assert.equal(selection.selectionStartForHit({ node: textNode, offset: 0 }).offset, 0);
+});
+
+test('Japanese scanning extracts each codepoint once and reuses its UTF-16 width', () => {
+    const { document, selection, textNode, window } = loadSelection('猫𠮟る');
+    document.pointElement = hitElement([]);
+    selection.configure({ language: 'ja' });
+    selection.clearSelection = () => {};
+    selection.getCharacterAtPoint = () => ({ node: textNode, offset: 0 });
+    selection.getSelectionRect = () => null;
+    selection.getSentenceContext = () => ({ sentence: '猫𠮟る', sentenceOffset: 0 });
+    selection.postTextSelected = () => {};
+    window.scanNonJapaneseText = false;
+    let extractions = 0;
+    const extract = selection.codePointAt;
+    selection.codePointAt = function(...args) { extractions++; return extract.apply(this, args); };
+    selection.nextCodePointOffset = () => assert.fail('scanning already knows the codepoint width');
+
+    assert.equal(selection.selectText(1, 1, 16), '猫𠮟る');
+    assert.equal(extractions, 3);
+    assert.equal(selection.selection.ranges[0].end, 4);
+});
+
+test('configuration changes switch language policies and can pick up newly loaded rules', () => {
+    const { selection, window } = loadSelection('猫');
+    window.scanNonJapaneseText = false;
+    for (const language of ['ja', 'en', 'zh', 'ko', 'ja']) {
+        selection.configure({ language });
+        assert.equal(selection.isScanBoundary('あ'), language === 'zh' || language === 'ko');
+        assert.equal(selection.isScanBoundary('한'), language === 'ja' || language === 'zh');
+    }
+    selection.configure({ language: 'en' });
+    assert.equal(selection.isScanBoundary('-'), true);
+    const replacement = { isScanBoundary: () => false };
+    window.hoshiSelectionLanguagePolicies = { en: replacement };
+    selection.configure({ language: 'en' });
+    assert.equal(selection.isScanBoundary('-'), false);
 });
 
 test('english reader selection ignores the Japanese non-Japanese scan toggle', () => {
@@ -506,6 +540,13 @@ test('japanese reader selection still honors the non-Japanese scan toggle', () =
     assert.equal(
         scanTextFromOffset('reading', 0, { language: 'ja' }),
         null,
+    );
+});
+
+test('japanese reader selection scans full names across middle dots', () => {
+    assert.equal(
+        scanTextFromOffset('アーサー・コナン・ドイル。次の文', 0, { language: 'ja' }),
+        'アーサー・コナン・ドイル',
     );
 });
 
@@ -969,23 +1010,6 @@ test('Toggle setup marks only annotated ruby and other modes leave reveal marker
 });
 
 
-test('VN reveal also updates source ruby group so clones retain reveal on return', () => {
-    const { document, selection, window } = loadSelection('日本語。');
-    window.getSelection = () => null;
-    const clones = rubyGroupFixture();
-    const sources = rubyGroupFixture();
-    selection.configure({ textProjection: {
-        sourceRubyForRenderedRuby: (ruby) => sources[clones.indexOf(ruby)],
-    } });
-    document.pointElement = clones[2];
-    assert.equal(selection.selectText(10, 10, 16), 'furigana');
-    for (const index of [0, 2, 3]) {
-        assert.equal(clones[index].classList.contains('furigana-hidden'), false);
-        assert.equal(sources[index].classList.contains('furigana-hidden'), false);
-    }
-    assert.equal(sources[5].classList.contains('furigana-hidden'), true);
-});
-
 test('ruby reveal stops at styled siblings and non-ASCII whitespace as in iOS', () => {
     const { selection } = loadSelection('日本語。');
     for (const separator of [{ nodeType: 1, localName: 'span' }, { nodeType: 3, nodeValue: '\u00a0' }]) {
@@ -999,3 +1023,388 @@ test('ruby reveal stops at styled siblings and non-ASCII whitespace as in iOS', 
         assert.equal(nodes[2].classList.contains('furigana-hidden'), false);
     }
 });
+
+test('native selection locks the reader before notifying Android, independent of menu visibility', () => {
+    const { selection, window, changeNativeSelection } = loadSelection('本文');
+    const events = [];
+    selection.configure({ bridge: 'android-reader', nativeSelectionToken: 'chapter-a' });
+    window.hoshiReader = { setNativeSelectionActive: active => events.push(['lock', active]) };
+    window.HoshiNativeSelection = { postMessage: (active, token) => events.push(['android', active, token]) };
+    changeNativeSelection({ isCollapsed: false });
+    changeNativeSelection({ isCollapsed: false });
+    changeNativeSelection({ isCollapsed: true });
+    assert.deepEqual(events, [
+        ['lock', true], ['android', true, 'chapter-a'],
+        ['lock', false], ['android', false, 'chapter-a'],
+    ]);
+});
+
+test('selection notifications preserve the WebKit bridge outside the Android reader', () => {
+    const { window, changeNativeSelection } = loadSelection('本文');
+    const events = [];
+    window.webkit = { messageHandlers: { selectionState: { postMessage: active => events.push(active) } } };
+    window.HoshiNativeSelection = { postMessage: () => assert.fail('Popup selection must not lock the reader') };
+    changeNativeSelection({ isCollapsed: false });
+    changeNativeSelection(null);
+    assert.deepEqual(events, [true, false]);
+});
+
+
+test('native menu anchor includes only visible selection fragments without changing selection', () => {
+    const { selection, window } = loadSelection('読書');
+    let rects = [
+        { left: 30, top: -200, right: 80, bottom: -100 },
+        { left: 420, top: 50, right: 450, bottom: 60 },
+        { left: 280, top: 590, right: 320, bottom: 640 },
+        { left: 280, top: 640, right: 320, bottom: 830 },
+    ];
+    const native = {
+        isCollapsed: false, rangeCount: 1, toString: () => '読書',
+        getRangeAt: () => ({
+            getClientRects: () => rects,
+            cloneRange: () => ({
+                collapse(start) { this.start = start; },
+                getBoundingClientRect() { return this.start
+                    ? {left:30,top:-200,right:80,bottom:-200}
+                    : {left:280,top:830,right:320,bottom:830}; },
+            }),
+        }),
+    };
+    window.getSelection = () => native;
+    assert.deepEqual(JSON.parse(JSON.stringify(selection.nativeSelectionMenuRect())),
+        { left: 280, top: 590, right: 320, bottom: 800, viewportWidth: 400 });
+    rects = rects.slice(0, 2);
+    assert.equal(selection.nativeSelectionMenuRect(), null);
+    native.isCollapsed = true;
+    native.getRangeAt = () => assert.fail('Collapsed selection needs no geometry read');
+    assert.equal(selection.nativeSelectionMenuRect(), null);
+    native.isCollapsed = false;
+    native.toString = () => '';
+    assert.equal(selection.nativeSelectionMenuRect(), null);
+});
+
+test('native menu fallback uses current visible carets instead of intervening columns', () => {
+    const {selection,window} = loadSelection('本文。');
+    let endpoints = [{left:300,top:22,right:332,bottom:22},{left:220,top:44,right:252,bottom:44}];
+    const range = {
+        getClientRects:()=>[{left:220,top:0,right:332,bottom:748}],
+        cloneRange:()=>({
+            collapse(start) { this.start = start; },
+            getBoundingClientRect() { return endpoints[this.start?0:1]; },
+        }),
+    };
+    window.getSelection = () => ({isCollapsed:false,rangeCount:1,toString:()=> '本文。',getRangeAt:()=>range});
+    const bounds = () => JSON.parse(JSON.stringify(selection.nativeSelectionMenuRect()));
+    assert.deepEqual(bounds(),{left:220,top:22,right:332,bottom:45,viewportWidth:400},
+        'A period in a new vertical column keeps the menu near both handles');
+    endpoints = [{left:22,top:300,right:22,bottom:332},{left:44,top:220,right:44,bottom:252}];
+    assert.deepEqual(bounds(),{left:22,top:220,right:45,bottom:332,viewportWidth:400},
+        'Horizontal carets also form a nonempty anchor');
+    endpoints = [{left:300,top:-22,right:332,bottom:-22},{left:220,top:44,right:252,bottom:44}];
+    assert.deepEqual(bounds(),{left:220,top:44,right:252,bottom:45,viewportWidth:400},
+        'Only visible carets contribute to the anchor');
+    endpoints = [{left:0,top:0,right:0,bottom:0},{left:0,top:0,right:0,bottom:0}];
+    assert.deepEqual(bounds(),{left:220,top:0,right:332,bottom:748,viewportWidth:400},
+        'Element boundaries without caret geometry still use visible fragments');
+});
+
+
+test('native menu measurement is invalidated once by selection or scroll without reading layout', () => {
+    const { selection, window, changeNativeSelection, dispatchDocumentEvent } = loadSelection('読書');
+    const events = [];
+    let reads = 0;
+    const native = {
+        isCollapsed: false, rangeCount: 1, toString: () => '読書',
+        getRangeAt: () => ({
+            getClientRects: () => { reads++; return [{ left: 20, top: 50, right: 40, bottom: 90 }]; },
+            cloneRange: () => ({
+                collapse() {},
+                getBoundingClientRect() { reads++; return {left:0,top:0,right:0,bottom:0}; },
+            }),
+        }),
+    };
+    window.getSelection = () => native;
+    selection.configure({ bridge: 'android-reader', nativeSelectionToken: 'chapter-a' });
+    window.HoshiNativeSelection = {
+        postMessage() {},
+        invalidateMenuAnchor: (id, token) => events.push([id, token]),
+    };
+    selection.nativeSelectionMenuRect(1);
+    const measuredReads = reads;
+    changeNativeSelection(native);
+    changeNativeSelection(native);
+    dispatchDocumentEvent('scroll');
+    assert.deepEqual(events, [[1, 'chapter-a']]);
+    assert.equal(reads, measuredReads, 'Invalidation never reads layout');
+    selection.nativeSelectionMenuRect(2);
+    const remeasuredReads = reads;
+    assert.ok(remeasuredReads > measuredReads, 'A new menu measures its current geometry');
+    dispatchDocumentEvent('scroll');
+    dispatchDocumentEvent('scroll');
+    assert.deepEqual(events, [[1, 'chapter-a'], [2, 'chapter-a']]);
+    assert.equal(reads, remeasuredReads);
+});
+
+
+test('invalid handle menu requests recover once at a visible selected character', () => {
+    const { selection, window, document, dispatchDocumentEvent, changeNativeSelection } = loadSelection('読書');
+    const calls = [];
+    const invalidations = [];
+    const textNode = { nodeType: 3 };
+    const range = {
+        getClientRects: () => [{left:20,top:40,right:40,bottom:80}],
+        cloneRange: () => ({
+            collapse(start) { this.start = start; },
+            getBoundingClientRect() { return {left:20,right:40,top:this.start?40:80,bottom:this.start?40:80}; },
+        }),
+        comparePoint: (node) => node === textNode ? 0 : 1,
+    };
+    const native = { isCollapsed:false,rangeCount:1,toString:()=> '読書',getRangeAt:()=>range,
+        anchorNode:textNode,anchorOffset:0,focusNode:textNode,focusOffset:2 };
+    window.getSelection = () => native;
+    document.caretRangeFromPoint = () => ({startContainer:textNode,startOffset:0});
+    selection.configure({bridge:'android-reader',nativeSelectionToken:'chapter'});
+    window.HoshiNativeSelection = {
+        postMessage(){}, recoverMenu:(id,token)=>calls.push([id,token]),
+        invalidateMenuAnchor:(id,token)=>invalidations.push([id,token]),
+    };
+    const event = (overrides={}) => ({isTrusted:true,pointerType:'mouse',button:-1,clientX:30,clientY:-400,preventDefault(){this.prevented=true;},...overrides});
+    for (const pointerType of ['touch','pen']) {
+        const initialPress = event({pointerType,button:-1});
+        dispatchDocumentEvent('contextmenu', initialPress);
+        assert.notEqual(initialPress.prevented,true,'A native long press must not start a second touch before the user lifts their finger');
+    }
+    dispatchDocumentEvent('contextmenu', event({clientY:50}));
+    dispatchDocumentEvent('contextmenu', event({isTrusted:false}));
+    dispatchDocumentEvent('contextmenu', event({button:2}));
+    dispatchDocumentEvent('contextmenu', event({pointerType:'mouse',button:2}));
+    assert.equal(calls.length,0,'Normal, script, and secondary-button menus are not replayed');
+    // Chromium reports touch-handle adjustment as a mouse pointer with no changed button.
+    const broken = event({pointerType:'mouse',button:-1});
+    dispatchDocumentEvent('contextmenu',broken);
+    assert.equal(broken.prevented,true);
+    assert.equal(calls.length,1);
+    assert.equal(calls[0][1],'chapter');
+    assert.equal(selection.takeNativeMenuRecovery(calls[0][0]+1),null);
+    assert.deepEqual(JSON.parse(JSON.stringify(selection.takeNativeMenuRecovery(calls[0][0], 42))),
+        {x:30,y:60,viewportWidth:400});
+    assert.equal(selection.takeNativeMenuRecovery(calls[0][0]),null,'A request can be consumed only once');
+    const replayed = event({pointerType:'mouse',button:-1});
+    dispatchDocumentEvent('contextmenu', replayed);
+    assert.notEqual(replayed.prevented,true,'Let the recovery gesture open its native menu even if Chromium repeats bad coordinates');
+    const replayedAgain = event({pointerType:'mouse',button:-1});
+    dispatchDocumentEvent('contextmenu', replayedAgain);
+    assert.notEqual(replayedAgain.prevented,true,'Repeated callbacks remain native until a new interaction or invalidation');
+    assert.equal(calls.length,1,'A recovery gesture cannot recursively recover itself');
+    native.focusOffset=1;
+    changeNativeSelection(native);
+    assert.deepEqual(invalidations, [[42, 'chapter']], 'Moving after consumption invalidates the pending native reply');
+    dispatchDocumentEvent('contextmenu',event({pointerType:'mouse',button:-1}));
+    native.focusOffset=2;
+    changeNativeSelection(native);
+    assert.equal(selection.takeNativeMenuRecovery(calls.at(-1)[0]),null,'Moving the selection cancels recovery');
+    dispatchDocumentEvent('contextmenu',event());
+    dispatchDocumentEvent('scroll');
+    assert.equal(selection.takeNativeMenuRecovery(calls.at(-1)[0]),null,'Scrolling cancels recovery');
+    const precedingText = {nodeType:3};
+    range.comparePoint = (node) => node === precedingText ? -1 : node === textNode ? 0 : 1;
+    document.caretRangeFromPoint = (x) => ({startContainer:x === 100 ? precedingText : textNode,startOffset:0});
+    const misplaced = event({clientX:100,clientY:50});
+    dispatchDocumentEvent('contextmenu', misplaced);
+    assert.equal(misplaced.prevented,true,'Visible coordinates outside the selected text also need recovery');
+    assert.deepEqual(JSON.parse(JSON.stringify(selection.takeNativeMenuRecovery(calls.at(-1)[0], 43))),
+        {x:30,y:60,viewportWidth:400});
+});
+
+for (const {name, target, rangePosition} of [
+    {name:'unselected body text',target:{nodeType:3},rangePosition:1},
+    {name:'ruby annotations',target:{nodeType:3,parentElement:{closest:()=>({})}},rangePosition:0},
+]) {
+    test(`native menu recovery rejects ${name}`, () => {
+        const {selection,window,document,dispatchDocumentEvent} = loadSelection('読書');
+        const textNode = {nodeType:3};
+        const range = {
+            getClientRects:()=>[{left:20,top:40,right:40,bottom:80}],
+            comparePoint:node=>node===textNode?0:rangePosition,
+            cloneRange:()=>({
+                collapse(start) { this.start = start; },
+                getBoundingClientRect() { return {left:20,right:40,top:this.start?40:80,bottom:this.start?40:80}; },
+            }),
+        };
+        window.getSelection = () => ({isCollapsed:false,rangeCount:1,toString:()=> '読書',getRangeAt:()=>range});
+        document.caretRangeFromPoint = () => ({startContainer:target,startOffset:0});
+        selection.configure({bridge:'android-reader',nativeSelectionToken:'chapter'});
+        const calls = [];
+        window.HoshiNativeSelection = {recoverMenu:id=>calls.push(id)};
+        const request = () => {
+            const event = {isTrusted:true,pointerType:'mouse',button:-1,clientX:-1,clientY:-1,preventDefault(){this.prevented=true;}};
+            dispatchDocumentEvent('contextmenu',event);
+            return event;
+        };
+        assert.notEqual(request().prevented,true,'An invalid recovery target leaves the native event untouched');
+        assert.equal(calls.length,0,'An invalid recovery target cannot start a replay');
+        // A selected body target must still recover in the same fixture: the
+        // negative result cannot come from a replay guard or another early exit.
+        document.caretRangeFromPoint = () => ({startContainer:textNode,startOffset:0});
+        assert.equal(request().prevented,true,'A selected body target allows recovery');
+        assert.equal(calls.length,1);
+    });
+}
+
+test('cancelled native replays cannot suppress a later recovery and stale cancellations are ignored', () => {
+    const { selection, window, document, dispatchDocumentEvent } = loadSelection('読書');
+    const node = {nodeType:3};
+    const range = {
+        getClientRects:()=>[{left:20,top:40,right:40,bottom:80}], comparePoint:()=>0,
+        cloneRange:()=>({
+            collapse(start) { this.start = start; },
+            getBoundingClientRect() { return {left:20,right:40,top:this.start?40:80,bottom:this.start?40:80}; },
+        }),
+    };
+    window.getSelection = () => ({isCollapsed:false,rangeCount:1,toString:()=> '読書',getRangeAt:()=>range});
+    document.caretRangeFromPoint = () => ({startContainer:node,startOffset:0});
+    selection.configure({bridge:'android-reader',nativeSelectionToken:'chapter'});
+    const calls = [];
+    window.HoshiNativeSelection = {recoverMenu:id=>calls.push(id)};
+    const request = () => {
+        const event = {isTrusted:true,pointerType:'mouse',button:-1,clientX:30,clientY:-400,
+            preventDefault(){this.prevented=true;}};
+        dispatchDocumentEvent('contextmenu',event);
+        return event;
+    };
+    request();
+    const cancelled = calls.at(-1);
+    selection.takeNativeMenuRecovery(cancelled, 1);
+    selection.cancelNativeMenuRecoveryReplay(cancelled, 'chapter');
+    assert.equal(request().prevented,true,'A new recovery is allowed after the previous gesture is cancelled');
+    const current = calls.at(-1);
+    selection.takeNativeMenuRecovery(current, 2);
+    selection.cancelNativeMenuRecoveryReplay(cancelled, 'chapter');
+    selection.cancelNativeMenuRecoveryReplay(current, 'old-document');
+    assert.notEqual(request().prevented,true,'Stale cancellation cannot re-enable recursion for the active replay');
+});
+
+for (const consumed of [false, true]) {
+    test(`unchanged selection notifications preserve ${consumed ? 'replaying' : 'pending'} menu recovery`, () => {
+        const {selection,window,document,dispatchDocumentEvent,changeNativeSelection} = loadSelection('読書');
+        const node = {nodeType:3};
+        const range = {
+            getClientRects:()=>[{left:20,top:40,right:40,bottom:80}],comparePoint:()=>0,
+            cloneRange:()=>({
+                collapse(start) { this.start = start; },
+                getBoundingClientRect() { return {left:20,right:40,top:this.start?40:80,bottom:this.start?40:80}; },
+            }),
+        };
+        const native = {isCollapsed:false,rangeCount:1,toString:()=> '読書',getRangeAt:()=>range,
+            anchorNode:node,anchorOffset:0,focusNode:node,focusOffset:2};
+        window.getSelection = () => native;
+        document.caretRangeFromPoint = () => ({startContainer:node,startOffset:0});
+        selection.configure({bridge:'android-reader',nativeSelectionToken:'chapter'});
+        const calls = [],invalidations = [];
+        window.HoshiNativeSelection = {postMessage(){},recoverMenu:id=>calls.push(id),
+            invalidateMenuAnchor:(...args)=>invalidations.push(args)};
+        const request = () => {
+            const event = {isTrusted:true,pointerType:'mouse',button:-1,clientX:-1,clientY:-1,preventDefault(){this.prevented=true;}};
+            dispatchDocumentEvent('contextmenu',event);
+            return event;
+        };
+        request();
+        if (consumed) assert.ok(selection.takeNativeMenuRecovery(calls[0],42));
+        // WebView can deliver its final, duplicate selectionchange immediately
+        // after the handle's contextmenu, before Android has consumed the point.
+        changeNativeSelection(native);
+        if (!consumed) assert.ok(selection.takeNativeMenuRecovery(calls[0],42),
+            'The queued native reply still receives its recovery point');
+        assert.notEqual(request().prevented,true,'An unchanged selection cannot disarm the replay guard');
+        assert.equal(calls.length,1,'A duplicate notification cannot create another recovery');
+        assert.deepEqual(invalidations,[]);
+        // Identical text with reversed anchor/focus is still a real change.
+        native.anchorOffset=2;native.focusOffset=0;
+        changeNativeSelection(native);
+        assert.deepEqual(invalidations,[[42,'chapter']]);
+        assert.equal(request().prevented,true,'A real endpoint change permits a fresh recovery');
+    });
+}
+
+test('menu recovery targets selected text away from both handles regardless of text-node fragmentation', () => {
+    for (const vertical of [true, false]) for (const fragmented of [true, false]) {
+        const { selection, window, document, dispatchDocumentEvent } = loadSelection('読書の時間です');
+        window.getComputedStyle = () => ({writingMode:vertical?'vertical-rl':'horizontal-tb'});
+        const node = {nodeType:3};
+        const rect = (from, to) => vertical
+            ? {left:100,right:120,top:from,bottom:to}
+            : {left:from,right:to,top:100,bottom:120};
+        const range = {
+            getClientRects: () => fragmented
+                ? [rect(40,60),rect(60,80),rect(80,100),rect(100,120),rect(120,140)]
+                : [rect(40,140)],
+            comparePoint: candidate => candidate === node ? 0 : 1,
+            cloneRange: () => ({
+                collapse(start) { this.start = start; },
+                getBoundingClientRect() { return rect(this.start?40:140,this.start?40:140); },
+            }),
+        };
+        window.getSelection = () => ({isCollapsed:false,rangeCount:1,toString:()=> '読書の時間です',getRangeAt:()=>range});
+        document.caretRangeFromPoint = (x,y) => {
+            const along = vertical ? y : x, across = vertical ? x : y;
+            return across > 100 && across < 120 && along > 40 && along < 140
+                ? {startContainer:node,startOffset:2} : null;
+        };
+        selection.configure({bridge:'android-reader',nativeSelectionToken:'chapter'});
+        let point;
+        window.HoshiNativeSelection = {recoverMenu:id=>{point=selection.takeNativeMenuRecovery(id,1);}};
+        dispatchDocumentEvent('contextmenu',{isTrusted:true,button:-1,pointerType:'mouse',clientX:-1,clientY:-1,preventDefault(){}});
+        assert.ok(point, 'A visible selected body point is available');
+        const along = vertical ? point.y : point.x;
+        assert.ok(along >= 80 && along <= 100,
+            `Recovery must reach the selection interior instead of pressing an endpoint handle: ${JSON.stringify({vertical,fragmented,point})}`);
+    }
+});
+
+test('continuous reader padding taps never select nearby text', () => {
+    const { selection, window } = loadSelection('読書');
+    window.hoshiReader = { contentViewport: () => ({ left: 40, right: 360, top: 80, bottom: 720 }) };
+    window.getSelection = () => ({ removeAllRanges() {} });
+    selection.getCharacterAtPoint = () => assert.fail('Padding cannot request a text caret');
+    for (const [x, y] of [[1, 100], [399, 100], [100, 1], [100, 799]]) {
+        assert.equal(selection.selectText(x, y, 20), null);
+    }
+});
+
+test('continuous native menu clips to the body viewport while retaining full WebView coordinates', () => {
+    const { selection, window } = loadSelection('読書');
+    window.hoshiReader = { contentViewport: () => ({ left: 40, right: 360, top: 80, bottom: 720 }) };
+    const range = {
+        getClientRects: () => [{ left: 20, right: 380, top: 50, bottom: 750 }],
+        cloneRange: () => ({ collapse() {}, getBoundingClientRect: () => ({ left: 0, right: 0, top: 0, bottom: 0 }) }),
+    };
+    window.getSelection = () => ({ isCollapsed: false, rangeCount: 1, toString: () => '読書', getRangeAt: () => range });
+    assert.deepEqual(JSON.parse(JSON.stringify(selection.nativeSelectionMenuRect())),
+        { left: 40, right: 360, top: 80, bottom: 720, viewportWidth: 400 });
+});
+
+for (const [language, text, offset, expected] of [
+    ['zh', '学习汉语。下一句', 2, '汉语'],
+    ['ko', '읽었어요 다음', 2, '어요'],
+    ['ko', '읽었어요。다음', 0, '읽었어요'],
+    ['zh', 'ㄅㄆㄇ', 0, 'ㄅㄆㄇ'],
+    ['ko', 'ᄀㄱꥠힰﾡ', 0, 'ᄀㄱꥠힰﾡ'],
+    ['zh', '𠀀中文', 1, '𠀀中文'],
+    ['ko', '漢字한글', 0, '漢字한글'],
+]) {
+    test(`${language} scans from the clicked codepoint: ${text}`, () => {
+        assert.equal(scanTextFromOffset(text, offset, { language }), expected);
+    });
+}
+
+for (const language of ['zh', 'ko']) {
+    test(`${language} excludes Latin text when other-language scanning is disabled`, () => {
+        assert.equal(scanTextFromOffset('reading', 0, { language }), null);
+    });
+}
+
+for (const language of ['zh', 'ko']) {
+    test(`${language} allows mixed Latin text when other-language scanning is enabled`, () => {
+        assert.equal(scanTextFromOffset('reading 字', 0, { language }, true), 'reading');
+    });
+}

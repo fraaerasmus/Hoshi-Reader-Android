@@ -1,5 +1,10 @@
 package moe.antimony.hoshi.dictionary
 
+import moe.antimony.hoshi.ui.diagnosticMessage
+import moe.antimony.hoshi.R
+import moe.antimony.hoshi.ui.ErrorDiagnosticEvents
+import moe.antimony.hoshi.ui.UiText
+
 import android.content.ContentResolver
 import android.net.Uri
 import de.manhhao.hoshi.LookupOptions
@@ -10,7 +15,7 @@ import java.io.InputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
-import moe.antimony.hoshi.content.ContentLanguageProfile
+import moe.antimony.hoshi.profiles.HoshiProfile
 import moe.antimony.hoshi.profiles.ProfileRepository
 
 @Singleton
@@ -40,13 +45,7 @@ internal class DictionaryRepository @Inject constructor(
     private val lookupQueryLock = Any()
 
     @Volatile
-    private var lookupQueryReady = false
-
-    @Volatile
-    private var lookupQueryProfileId: String? = null
-
-    @Volatile
-    private var lookupQueryLanguageId: String? = null
+    private var lookupQueryProfile: HoshiProfile? = null
 
     fun loadDictionaries(type: DictionaryType): List<DictionaryInfo> =
         storage.loadDictionaries(type)
@@ -54,34 +53,61 @@ internal class DictionaryRepository @Inject constructor(
     fun updatableDictionaries(): List<DictionaryUpdateCandidate> =
         storage.updatableDictionaries()
 
-    fun importDictionary(contentResolver: ContentResolver, uri: Uri, lowRamImport: Boolean = false): Int {
-        val imported = importDataSource.importDictionaryByDetectedTypes(
+    fun importDictionary(
+        contentResolver: ContentResolver,
+        uri: Uri,
+        lowRamImport: Boolean = false,
+        onDictionariesChanged: () -> Unit = {},
+    ): Int = importManualDictionary(onDictionariesChanged) { publish ->
+        importDataSource.importDictionaryByDetectedTypes(
             contentResolver = contentResolver,
             uri = uri,
             importRootDirectory = storage.importRootDirectory(),
-            typeDirectories = typeDirectories(),
             lowRamImport = lowRamImport,
-            shouldSkip = { type, index -> storage.hasDictionaryWithIndex(type, index) },
-        ).values.sumOf { it.size }
-        if (imported > 0) {
-            storage.saveConfigFromStorage()
-            rebuildLookupQuery()
-        }
-        return imported
+            resolveTarget = storage::manualImportTarget,
+            publish = publish,
+        )
     }
 
-    fun importDictionary(input: InputStream, lowRamImport: Boolean = false): Int {
-        val imported = importDataSource.importDictionaryByDetectedTypes(
+    fun importDictionary(input: InputStream, lowRamImport: Boolean = false): Int = importManualDictionary({}) { publish ->
+        importDataSource.importDictionaryByDetectedTypes(
             input = input,
             importRootDirectory = storage.importRootDirectory(),
-            typeDirectories = typeDirectories(),
             lowRamImport = lowRamImport,
-            shouldSkip = { type, index -> storage.hasDictionaryWithIndex(type, index) },
-        ).values.sumOf { it.size }
-        if (imported > 0) {
-            storage.saveConfigFromStorage()
-            rebuildLookupQuery()
+            resolveTarget = storage::manualImportTarget,
+            publish = publish,
+        )
+    }
+
+    private fun importManualDictionary(
+        onDictionariesChanged: () -> Unit,
+        performImport: (publish: (commit: () -> Boolean) -> Unit) -> Unit,
+    ): Int {
+        var imported = 0
+        var addedDictionary = false
+        val importResult = runCatching {
+            performImport { commit ->
+                synchronized(lookupQueryLock) {
+                    if (commit()) addedDictionary = true
+                    lookupQueryProfile = null
+                    imported++
+                }
+            }
         }
+        if (imported > 0) {
+            val refreshResult = runCatching {
+                synchronized(lookupQueryLock) {
+                    if (addedDictionary) storage.saveConfigFromStorage()
+                    rebuildLookupQueryLocked(profileRepository.state.value.effectiveProfile)
+                }
+            }
+            onDictionariesChanged()
+            refreshResult.exceptionOrNull()?.let { refreshFailure ->
+                val importFailure = importResult.exceptionOrNull() ?: throw refreshFailure
+                importFailure.addSuppressed(refreshFailure)
+            }
+        }
+        importResult.getOrThrow()
         return imported
     }
 
@@ -93,16 +119,7 @@ internal class DictionaryRepository @Inject constructor(
 
     fun setDictionaryCategory(fileName: String, category: DictionaryCategory) {
         synchronized(lookupQueryLock) {
-            val previousConfig = storage.currentConfig()
             storage.saveConfig(storage.configWithDictionaryCategory(fileName, category))
-            try {
-                rebuildLookupQueryLocked()
-            } catch (error: Throwable) {
-                runCatching { storage.saveConfig(previousConfig) }
-                    .exceptionOrNull()
-                    ?.let(error::addSuppressed)
-                throw error
-            }
         }
     }
 
@@ -174,9 +191,10 @@ internal class DictionaryRepository @Inject constructor(
                 updatedCount += 1
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
+                ErrorDiagnosticEvents.buffer.record(UiText.Resource(R.string.dictionary_update_failed), error)
                 failures += DictionaryUpdateFailure(
                     title = installedIndex.title,
-                    message = error.localizedMessage ?: error::class.java.simpleName,
+                    message = error.diagnosticMessage(),
                 )
             }
         }
@@ -195,6 +213,7 @@ internal class DictionaryRepository @Inject constructor(
     fun importRecommendedDictionaries(
         dictionaries: List<RecommendedDictionary>,
         lowRamImport: Boolean = false,
+        onDictionariesChanged: () -> Unit = {},
         onProgress: (DictionaryUpdateProgress) -> Unit = {},
     ): Int {
         var importedCount = 0
@@ -222,7 +241,15 @@ internal class DictionaryRepository @Inject constructor(
             }
             importedCount += imported.size
             if (imported.isNotEmpty()) {
-                storage.saveConfigFromStorage()
+                try {
+                    synchronized(lookupQueryLock) {
+                        // The files are committed even if a later config write or download fails.
+                        lookupQueryProfile = null
+                        storage.saveConfigFromStorage()
+                    }
+                } finally {
+                    onDictionariesChanged()
+                }
             }
         }
         if (importedCount > 0) {
@@ -233,21 +260,24 @@ internal class DictionaryRepository @Inject constructor(
 
     fun rebuildLookupQuery() {
         synchronized(lookupQueryLock) {
-            rebuildLookupQueryLocked()
+            rebuildLookupQueryLocked(profileRepository.state.value.effectiveProfile)
         }
     }
 
     fun ensureLookupQueryReady() {
-        val profileId = profileRepository.currentEffectiveProfileId
-        val languageId = profileRepository.currentEffectiveContentLanguageProfile.dictionaryLanguageId
-        if (lookupQueryReady && lookupQueryProfileId == profileId && lookupQueryLanguageId == languageId) return
+        if (lookupQueryMatches(profileRepository.state.value.effectiveProfile)) return
         synchronized(lookupQueryLock) {
-            val lockedProfileId = profileRepository.currentEffectiveProfileId
-            val lockedLanguageId = profileRepository.currentEffectiveContentLanguageProfile.dictionaryLanguageId
-            if (!lookupQueryReady || lookupQueryProfileId != lockedProfileId || lookupQueryLanguageId != lockedLanguageId) {
-                rebuildLookupQueryLocked()
+            while (true) {
+                val profile = profileRepository.state.value.effectiveProfile
+                if (lookupQueryMatches(profile)) return
+                rebuildLookupQueryLocked(profile)
             }
         }
+    }
+
+    private fun lookupQueryMatches(profile: HoshiProfile): Boolean {
+        val loaded = lookupQueryProfile
+        return loaded?.id == profile.id && loaded.dictionaryLanguageId == profile.dictionaryLanguageId
     }
 
     fun lookup(text: String, maxResults: Int = 16, scanLength: Int = 16, options: LookupOptions = LookupOptions()): List<LookupResult> {
@@ -255,7 +285,7 @@ internal class DictionaryRepository @Inject constructor(
         val results = lookupQueryService.lookup(text, maxResults, scanLength, options)
         // Also search the elision-stripped form (e.g. French l'homme → homme), keeping the original
         // results too (Yomitan searchOriginal); merged and de-duped by entry.
-        val stripped = ElisionTextReplacement.stripElision(text, lookupQueryLanguageId)
+        val stripped = ElisionTextReplacement.stripElision(text, lookupQueryProfile?.dictionaryLanguageId)
             ?: return LemmaOrdering.lemmaFirst(withFormOfTargets(results, maxResults, options))
         val strippedResults = lookupQueryService.lookup(stripped, maxResults, scanLength, options)
         // Longest match first so the content word (homme) outranks the bare article (l'); then sink
@@ -279,32 +309,25 @@ internal class DictionaryRepository @Inject constructor(
 
     fun dictionaryStyles(): Map<String, String> {
         ensureLookupQueryReady()
-        return lookupQueryService.getStyles().associate { it.dictName to it.styles }
+        return lookupQueryService.getStyles()
     }
 
-    fun dictionaryMedia(dictionary: String, path: String): ByteArray? {
-        ensureLookupQueryReady()
-        return lookupQueryService.getMediaFile(dictionary, path)
-    }
+    fun dictionaryMedia(dictionary: String, path: String): ByteArray? =
+        synchronized(lookupQueryLock) {
+            ensureLookupQueryReady()
+            lookupQueryService.getMediaFile(dictionary, path)
+        }
 
-    private fun rebuildLookupQueryLocked() {
-        val contentLanguageProfile = profileRepository.currentEffectiveContentLanguageProfile
+    private fun rebuildLookupQueryLocked(profile: HoshiProfile) {
+        lookupQueryProfile = null
+        val paths = storage.enabledDictionaryPaths(profile.id)
         lookupQueryService.rebuild(
-            termDictionaries = storage.loadDictionaries(DictionaryType.Term)
-                .filter { it.isEnabled && it.category != DictionaryCategory.Exclude }
-                .map { it.path },
-            frequencyDictionaries = storage.enabledDictionaryPaths(DictionaryType.Frequency),
-            pitchDictionaries = storage.enabledDictionaryPaths(DictionaryType.Pitch),
-            kanjiDictionaries = storage.enabledDictionaryPaths(DictionaryType.Kanji),
-            dictionaryLanguageId = contentLanguageProfile.dictionaryLanguageId
-                .takeIf { ContentLanguageProfile.fromDictionaryLanguageId(it) != null }
-                ?: ContentLanguageProfile.Default.dictionaryLanguageId,
+            termDictionaries = paths.getValue(DictionaryType.Term),
+            frequencyDictionaries = paths.getValue(DictionaryType.Frequency),
+            pitchDictionaries = paths.getValue(DictionaryType.Pitch),
+            kanjiDictionaries = paths.getValue(DictionaryType.Kanji),
+            dictionaryLanguageId = profile.dictionaryLanguageId,
         )
-        lookupQueryReady = true
-        lookupQueryProfileId = profileRepository.currentEffectiveProfileId
-        lookupQueryLanguageId = contentLanguageProfile.dictionaryLanguageId
+        lookupQueryProfile = profile
     }
-
-    private fun typeDirectories(): Map<DictionaryType, File> =
-        DictionaryType.entries.associateWith { type -> storage.typeDirectory(type) }
 }

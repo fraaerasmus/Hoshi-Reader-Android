@@ -9,9 +9,53 @@ import org.junit.Test
 
 class ReaderPaginationScriptsTest {
     @Test
-    fun generatedVisualNovelScriptDoesNotExposeTemplatePlaceholders() {
+    fun freshDocumentsOnlyInstallExplicitNarrationCues() {
+        for (mode in ReaderViewMode.entries) {
+            val settings = ReaderSettings(viewMode = mode)
+            val noCues = ReaderPaginationScripts.shellScript(settings = settings)
+            assertFalse(noCues.contains("window.hoshiReader.applySasayakiCues([]);"))
+            val explicitClear = ReaderPaginationScripts.shellScript(settings = settings, sasayakiCuesJson = "[]")
+            assertTrue(explicitClear.contains("window.hoshiReader.applySasayakiCues([]);"))
+            val cues = "[{\"id\":\"cue\",\"start\":0,\"length\":2}]"
+            val narration = ReaderPaginationScripts.shellScript(settings = settings, sasayakiCuesJson = cues)
+            assertTrue(narration.contains("window.hoshiReader.applySasayakiCues($cues);"))
+        }
+    }
+
+    @Test
+    fun compiledTemplateReusesStaticAssetsWithoutCachingChapterParameters() {
+        val template = ReaderScriptTemplate("start __HOSHI_ASSET__ __HOSHI_TOKEN__ end",
+            mapOf("__HOSHI_ASSET__" to "nested __HOSHI_VALUE__"))
+        assertEquals("start nested first token-one end", template.render(mapOf(
+            "__HOSHI_VALUE__" to "first", "__HOSHI_TOKEN__" to "token-one")))
+        assertEquals("start nested second __HOSHI_VALUE__ end", template.render(mapOf(
+            "__HOSHI_VALUE__" to "second", "__HOSHI_TOKEN__" to "__HOSHI_VALUE__")))
+    }
+
+    @Test
+    fun scriptTemplatesDoNotRetainSettingsRestoreTokensOrMeasurementMode() {
+        for (mode in ReaderViewMode.entries) {
+            val first = ReaderPaginationScripts.shellScriptWithRestoreToken(
+                settings = ReaderSettings(viewMode = mode, blurImages = true),
+                restoreToken = "first-token", measurementOnly = true)
+            val second = ReaderPaginationScripts.shellScriptWithRestoreToken(
+                initialProgress = 0.3, settings = ReaderSettings(viewMode = mode, blurImages = false),
+                restoreToken = "second-token")
+            assertTrue(first.contains("window.hoshiReaderMeasurement = true;"))
+            assertTrue(first.contains("blurImages: true"))
+            assertFalse(second.contains("first-token"))
+            assertFalse(second.contains("window.hoshiReaderMeasurement = true;"))
+            assertTrue(second.contains("blurImages: false"))
+            assertTrue(second.contains("window.hoshiReader.restoreProgress(0.3);"))
+            assertTrue(second.contains("second-token"))
+            assertFalse(second.contains("__HOSHI_"))
+        }
+    }
+
+    @Test
+    fun generatedParagraphScriptDoesNotExposeTemplatePlaceholders() {
         val script = ReaderPaginationScripts.shellScript(
-            settings = ReaderSettings(viewMode = ReaderViewMode.VisualNovel),
+            settings = ReaderSettings(paragraphMode = true),
         )
 
         assertFalse(script.contains("__HOSHI_"))
@@ -64,17 +108,6 @@ class ReaderPaginationScriptsTest {
     }
 
     @Test
-    fun pageInfoInvocationGuardsMissingHelperAndParsesObjectResult() {
-        assertTrue(ReaderPaginationScripts.pageInfoInvocation().contains("getPageInfo"))
-        assertTrue(ReaderPaginationScripts.pageInfoInvocation().contains("typeof"))
-
-        assertEquals(ReaderPageInfo(page = 3, pages = 17), ReaderPaginationScripts.pageInfoResult("""{"page":3,"pages":17}"""))
-        assertEquals(null, ReaderPaginationScripts.pageInfoResult("null"))
-        assertEquals(null, ReaderPaginationScripts.pageInfoResult(null))
-        assertEquals(null, ReaderPaginationScripts.pageInfoResult("not json"))
-    }
-
-    @Test
     fun paginateScriptLeavesChapterChangesToNativeCodeLikeIos() {
         val script = ReaderPaginationScripts.shellScript()
 
@@ -95,12 +128,15 @@ class ReaderPaginationScriptsTest {
 
     @Test
     fun recognizesWebViewNavigationResults() {
+        assertEquals(ReaderNavigationResult.Advanced, ReaderPaginationScripts.navigationResult("0.625"))
+        assertEquals(ReaderNavigationResult.Advanced, ReaderPaginationScripts.navigationResult("0"))
+        assertEquals(ReaderNavigationResult.Advanced, ReaderPaginationScripts.navigationResult("1"))
         assertTrue(ReaderPaginationScripts.didScroll("\"scrolled\""))
         assertFalse(ReaderPaginationScripts.didScroll("\"limit\""))
         assertFalse(ReaderPaginationScripts.didScroll(null))
 
         assertEquals(ReaderNavigationResult.Advanced, ReaderPaginationScripts.navigationResult("\"scrolled\""))
-        assertEquals(ReaderNavigationResult.Revealed, ReaderPaginationScripts.navigationResult("\"revealed\""))
+        assertEquals(ReaderNavigationResult.Blocked, ReaderPaginationScripts.navigationResult("\"blocked\""))
         assertEquals(ReaderNavigationResult.Limit, ReaderPaginationScripts.navigationResult("\"limit\""))
         assertEquals(ReaderNavigationResult.Limit, ReaderPaginationScripts.navigationResult(null))
     }
@@ -191,6 +227,18 @@ class ReaderPaginationScriptsTest {
     }
 
     @Test
+    fun continuousImageBoundsUseTheInsetBodyViewport() {
+        val vertical = readerViewportCssLayout(ReaderSettings(viewMode = ReaderViewMode.Continuous,
+            verticalWriting = true, horizontalPadding = 30, verticalPadding = 0), 480, 800)
+        assertEquals(335, vertical.imageMaxWidthPx)
+        assertEquals(800, vertical.visibleHeightPx)
+        val horizontal = readerViewportCssLayout(ReaderSettings(viewMode = ReaderViewMode.Continuous,
+            verticalWriting = false, horizontalPadding = 0, verticalPadding = 30), 480, 800)
+        assertEquals(560, horizontal.visibleHeightPx)
+        assertEquals(392, horizontal.imageMaxHeightPx)
+    }
+
+    @Test
     fun sasayakiHighlightCommandCarriesCueRangeForLazyWrapping() {
         val command = ReaderPaginationScripts.highlightSasayakiCueInvocation(
             cue = SasayakiCueRange(id = "cue\"1", start = 42, length = 7),
@@ -198,7 +246,7 @@ class ReaderPaginationScriptsTest {
         )
 
         assertEquals(
-            """window.hoshiReader.highlightSasayakiCue({id:"cue\"1",start:42,length:7}, true, false)""",
+            """window.hoshiReader.highlightSasayakiCue({id:"cue\"1",start:42,length:7}, true)""",
             command,
         )
     }

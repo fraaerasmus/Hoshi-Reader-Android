@@ -7,8 +7,8 @@ import android.content.pm.PackageInfo
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.webkit.WebViewCompat
+import moe.antimony.hoshi.BuildCommit
 import java.io.File
-import java.io.IOException
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.time.Instant
@@ -45,6 +45,15 @@ data class CapturedCrashRecord(
     val text: String,
 )
 
+data class NonfatalDiagnosticsLabels(
+    val title: String,
+    val time: (String) -> String,
+    val operation: (String) -> String,
+    val exception: (String) -> String,
+    val details: String,
+    val trace: String,
+)
+
 data class ProcessExitDiagnosticsReport(
     val packageName: String,
     val versionName: String,
@@ -53,12 +62,29 @@ data class ProcessExitDiagnosticsReport(
     val webViewPackageName: String? = null,
     val webViewVersionName: String? = null,
     val capturedCrashes: List<CapturedCrashRecord> = emptyList(),
+    val nonfatalErrors: List<NonfatalDiagnosticRecord> = emptyList(),
     val records: List<ProcessExitRecord>,
+    val buildCommitSha: String? = null,
 ) {
-    fun toShareText(): String = buildString {
+    internal val buildCommit: BuildCommit? get() = BuildCommit.fromSha(buildCommitSha)
+    internal val crashes: List<CrashDiagnosticRecord> get() = buildList {
+        capturedCrashes.forEach { add(CrashDiagnosticRecord.Captured(it)) }
+        records.filter { it.reason.isCrash }.forEach { add(CrashDiagnosticRecord.SystemExit(it)) }
+    }.sortedByDescending { it.timestampMillis }
+    internal val processExits: List<ProcessExitRecord> get() = records.filterNot { it.reason.isCrash }
+
+    fun toShareText(
+        nonfatalLabels: NonfatalDiagnosticsLabels? = null,
+        buildCommitLabel: String? = null,
+    ): String = buildString {
         appendLine("Hoshi Diagnostics")
         appendLine("Package: $packageName")
         appendLine("Version: $versionName ($versionCode)")
+        buildCommit?.let { commit ->
+            buildCommitLabel?.let { append("$it: ") }
+            appendLine(commit.sha)
+            appendLine(commit.snapshotUrl)
+        }
         appendLine("Android SDK: $sdkInt")
         appendLine(
             if (webViewPackageName.isNullOrBlank()) {
@@ -69,44 +95,67 @@ data class ProcessExitDiagnosticsReport(
         )
         appendLine()
 
-        if (capturedCrashes.isNotEmpty()) {
-            appendLine("Captured Crashes")
-            capturedCrashes.forEachIndexed { index, crash ->
-                appendLine("Captured Crash ${index + 1}")
+        if (nonfatalErrors.isNotEmpty()) {
+            nonfatalLabels?.let { appendLine(it.title) }
+            nonfatalErrors.forEach { error ->
+                appendLine(error.toReportText(nonfatalLabels))
+            }
+        }
+
+        val crashHistory = crashes
+        if (crashHistory.isNotEmpty()) {
+            appendLine("Crashes")
+            crashHistory.forEachIndexed { index, crash ->
+                appendLine("Crash ${index + 1}")
                 appendLine("Time: ${Instant.ofEpochMilli(crash.timestampMillis)}")
-                appendLine("Trace:")
-                appendLine(crash.text.takeBoundedTrace())
-                if (index != capturedCrashes.lastIndex) appendLine()
+                val trace = when (crash) {
+                    is CrashDiagnosticRecord.Captured -> {
+                        appendLine("Reason: ${crash.reason.label}")
+                        crash.record.text
+                    }
+                    is CrashDiagnosticRecord.SystemExit -> {
+                        appendExitDetails(crash.record)
+                        crash.record.trace?.readableDiagnosticTextOrNull()
+                    }
+                }
+                if (trace != null) {
+                    appendLine("Trace:")
+                    appendLine(trace.takeBoundedTrace())
+                }
+                if (index != crashHistory.lastIndex) appendLine()
             }
             appendLine()
         }
 
-        if (records.isEmpty()) {
+        val exits = processExits
+        if (exits.isEmpty()) {
             if (sdkInt < Build.VERSION_CODES.R) {
                 appendLine("Process exit history is available on Android 11 and later.")
-            } else {
+            } else if (records.isEmpty()) {
                 appendLine("No recent process exits recorded by Android.")
             }
             return@buildString
         }
 
-        records.forEachIndexed { index, record ->
+        exits.forEachIndexed { index, record ->
             appendLine("Exit ${index + 1}")
             appendLine("Time: ${Instant.ofEpochMilli(record.timestampMillis)}")
-            appendLine("Reason: ${record.reason.label}")
-            appendLine("Status: ${record.status}")
-            appendLine("Importance: ${record.importance}")
-            appendLine("PSS: ${record.pssKb} kB")
-            appendLine("RSS: ${record.rssKb} kB")
-            record.description?.takeIf { it.isNotBlank() }?.let {
-                appendLine("Description: $it")
-            }
+            appendExitDetails(record)
             record.trace?.readableDiagnosticTextOrNull()?.let {
                 appendLine("Trace:")
                 appendLine(it.takeBoundedTrace())
             }
-            if (index != records.lastIndex) appendLine()
+            if (index != exits.lastIndex) appendLine()
         }
+    }
+
+    private fun StringBuilder.appendExitDetails(record: ProcessExitRecord) {
+        appendLine("Reason: ${record.reason.label}")
+        appendLine("Status: ${record.status}")
+        appendLine("Importance: ${record.importance}")
+        appendLine("PSS: ${record.pssKb} kB")
+        appendLine("RSS: ${record.rssKb} kB")
+        record.description?.takeIf { it.isNotBlank() }?.let { appendLine("Description: $it") }
     }
 
     private fun String.takeBoundedTrace(): String =
@@ -130,7 +179,24 @@ data class ProcessExitDiagnosticsReport(
     }
 }
 
-fun loadProcessExitDiagnosticsReport(context: Context, maxRecords: Int = 10): ProcessExitDiagnosticsReport {
+internal fun NonfatalDiagnosticRecord.toReportText(labels: NonfatalDiagnosticsLabels?): String = buildString {
+    val time = Instant.ofEpochMilli(timestampMillis).toString()
+    appendLine(labels?.time?.invoke(time) ?: time)
+    appendLine(labels?.operation?.invoke(operation) ?: operation)
+    if (exceptionType.isNotBlank()) appendLine(labels?.exception?.invoke(exceptionType) ?: exceptionType)
+    labels?.let { appendLine(it.details) }
+    appendLine(message)
+    if (stackTrace.isNotBlank()) {
+        labels?.let { appendLine(it.trace) }
+        appendLine(stackTrace)
+    }
+}
+
+fun loadProcessExitDiagnosticsReport(
+    context: Context,
+    maxRecords: Int = 10,
+    nonfatalErrors: List<NonfatalDiagnosticRecord> = emptyList(),
+): ProcessExitDiagnosticsReport {
     val packageInfo = context.packageManager.getHoshiPackageInfo(context.packageName)
     val webViewPackageInfo = WebViewCompat.getCurrentWebViewPackage(context.applicationContext)
     val records = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -142,10 +208,12 @@ fun loadProcessExitDiagnosticsReport(context: Context, maxRecords: Int = 10): Pr
         packageName = context.packageName,
         versionName = packageInfo.versionName ?: "unknown",
         versionCode = packageInfo.hoshiLongVersionCode(),
+        buildCommitSha = BuildCommit.current?.sha,
         sdkInt = Build.VERSION.SDK_INT,
         webViewPackageName = webViewPackageInfo?.packageName,
         webViewVersionName = webViewPackageInfo?.versionName,
         capturedCrashes = loadCapturedCrashDiagnostics(context.crashDiagnosticsDir()),
+        nonfatalErrors = nonfatalErrors,
         records = records,
     )
 }
@@ -268,16 +336,9 @@ private fun ApplicationExitInfo.toProcessExitRecord(): ProcessExitRecord = Proce
 
 @RequiresApi(Build.VERSION_CODES.R)
 private fun ApplicationExitInfo.readTraceText(): String? =
-    try {
-        traceInputStream
-            ?.use { it.readBytes(ProcessExitDiagnosticsReport.MAX_TRACE_BYTES) }
-            ?.toString(Charsets.UTF_8)
-            ?.readableDiagnosticTextOrNull()
-    } catch (_: IOException) {
-        null
-    }
+    readProcessExitTrace(reason.toProcessExitReason()) { traceInputStream }
 
-private fun String.readableDiagnosticTextOrNull(): String? {
+internal fun String.readableDiagnosticTextOrNull(): String? {
     if (isBlank()) return null
     val badCharacters = count {
         it == '\uFFFD' || (Character.isISOControl(it) && it != '\n' && it != '\r' && it != '\t')
@@ -294,17 +355,6 @@ private fun String.readableDiagnosticTextOrNull(): String? {
             }
     }
     return if (recognizableCharacters.toDouble() / length.toDouble() >= 0.75) this else null
-}
-
-private fun java.io.InputStream.readBytes(maxBytes: Int): ByteArray {
-    val buffer = ByteArray(maxBytes)
-    var offset = 0
-    while (offset < maxBytes) {
-        val read = read(buffer, offset, maxBytes - offset)
-        if (read == -1) break
-        offset += read
-    }
-    return buffer.copyOf(offset)
 }
 
 @RequiresApi(Build.VERSION_CODES.R)

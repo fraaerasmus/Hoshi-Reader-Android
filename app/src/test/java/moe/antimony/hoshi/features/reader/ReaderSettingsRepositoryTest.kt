@@ -4,10 +4,12 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
@@ -19,6 +21,9 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.channels.Channel
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.coroutines.CoroutineContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -36,6 +41,45 @@ import moe.antimony.hoshi.features.display.DisplayPaletteSelection
 class ReaderSettingsRepositoryTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
+
+    @Test fun countPreferenceMigratesOnceAndProfilePagesWinOverLegacyVisibility() = runBlocking {
+        repository().use { handle ->
+            handle.editPreferences {
+                this[booleanPreferencesKey("readerSettingsMigratedFromSharedPreferences")] = true
+                this[booleanPreferencesKey("readerShowCharacters")] = false
+            }
+            assertEquals(ReaderProgressCount.Off, handle.settings.first().progressCount)
+            assertEquals("Off", handle.preferences()[stringPreferencesKey("readerProgressCount")])
+            assertNull(handle.preferences()[booleanPreferencesKey("readerShowCharacters")])
+            handle.repository.update { it.copy(progressCount = ReaderProgressCount.Pages) }
+            assertEquals(ReaderProgressCount.Pages, handle.settings.first().progressCount)
+        }
+        val profiles = ProfileRepository(tempFolder.newFolder("count-profile"))
+        val file = profiles.readerSettingsFile().apply { parentFile!!.mkdirs() }
+        file.writeText("""{"progressCount":"Pages","showCharacters":false}""")
+        repository(profileRepository = profiles, fileName = "count-profile.preferences_pb").use { handle ->
+            assertEquals(ReaderProgressCount.Pages, handle.settings.first().progressCount)
+            val saved = kotlinx.serialization.json.Json.parseToJsonElement(file.readText()).toString()
+            assertFalse(saved.contains("showCharacters"))
+        }
+    }
+
+    @Test fun statisticsReadsGlobalResetTimeWithoutLoadingDisplayOrProfile() = runBlocking {
+        val root = tempFolder.newFolder("statistics-global")
+        val profiles = ProfileRepository(root)
+        val legacy = FakeLegacyReaderSettingsSource(ReaderSettings(statisticsResetMinutes = 105))
+        repository(legacySource = legacy, profileRepository = profiles,
+            displaySettings = flow { error("statistics must not load display settings") }).use { handle ->
+            val statistics = moe.antimony.hoshi.epub.BookStatisticsStore(
+                root, Dispatchers.IO, handle.repository, moe.antimony.hoshi.epub.BookStorageLock(),
+            )
+            assertFalse(statistics.hasLiveSessions("unread"))
+            assertEquals(105, statistics.resetMinutes())
+            handle.editPreferences { this[intPreferencesKey("statisticsResetMinutes")] = 135 }
+            assertEquals(135, statistics.resetMinutes())
+            assertFalse(profiles.readerSettingsFile().exists())
+        }
+    }
 
     @Test
     fun displayMigrationFinishesBeforeCreatingProfileAppearanceFile() = runBlocking {
@@ -188,6 +232,94 @@ class ReaderSettingsRepositoryTest {
     }
 
     @Test
+    fun profileUpdateKeepsItsTargetWhenTheProfileChangesAfterTransform() = runBlocking {
+        val profiles = ProfileRepository(tempFolder.newFolder("profile-save-boundary"))
+        val firstId = profiles.currentEffectiveProfileId
+        val second = profiles.createProfile("English", "en")
+        profiles.readerSettingsFile(firstId).apply { parentFile?.mkdirs() }.writeText("""{"fontSize":30,"furiganaMode":"Hidden"}""")
+        profiles.readerSettingsFile(second.id).apply { parentFile?.mkdirs() }.writeText("""{"fontSize":18,"furiganaMode":"Off"}""")
+        val io = PausingReaderIoDispatcher()
+        repository(profileRepository = profiles, ioDispatcher = io).use { repository ->
+            val update = async {
+                repository.update { current ->
+                    io.pauseNextDispatch()
+                    current.copy(fontSize = 32)
+                }
+            }
+            val resumeSave = io.awaitPausedDispatch()
+            try {
+                profiles.activateGlobal(second.id)
+            } finally {
+                resumeSave.run()
+            }
+            update.await()
+
+            val untouchedSecond = repository.settings.first()
+            assertEquals(18, untouchedSecond.fontSize)
+            assertEquals(FuriganaMode.Off, untouchedSecond.furiganaMode)
+            profiles.activateGlobal(firstId)
+            val updatedFirst = repository.settings.first()
+            assertEquals(32, updatedFirst.fontSize)
+            assertEquals(FuriganaMode.Hidden, updatedFirst.furiganaMode)
+        }
+    }
+
+    @Test
+    fun profileUpdateCapturesItsTargetBeforeTheFirstReadDispatch() = runBlocking {
+        val profiles = ProfileRepository(tempFolder.newFolder("profile-read-boundary"))
+        val firstId = profiles.currentEffectiveProfileId
+        val second = profiles.createProfile("English", "en")
+        profiles.readerSettingsFile(firstId).apply { parentFile?.mkdirs() }.writeText("""{"fontSize":30}""")
+        profiles.readerSettingsFile(second.id).apply { parentFile?.mkdirs() }.writeText("""{"fontSize":18}""")
+        val io = PausingReaderIoDispatcher()
+        repository(profileRepository = profiles, ioDispatcher = io).use { repository ->
+            io.pauseNextDispatch()
+            var transformedSize: Int? = null
+            val update = async {
+                repository.update { current ->
+                    transformedSize = current.fontSize
+                    current.copy(fontSize = current.fontSize + 2)
+                }
+            }
+            val resumeRead = io.awaitPausedDispatch()
+            try {
+                profiles.activateGlobal(second.id)
+            } finally {
+                resumeRead.run()
+            }
+            update.await()
+
+            assertEquals(30, transformedSize)
+            assertEquals(18, repository.settings.first().fontSize)
+            profiles.activateGlobal(firstId)
+            assertEquals(32, repository.settings.first().fontSize)
+        }
+    }
+
+    @Test
+    fun missingProfileAppearanceMigrationKeepsTheProfileCapturedBeforeReadIo() = runBlocking {
+        val profiles = ProfileRepository(tempFolder.newFolder("profile-migration-boundary"))
+        val firstId = profiles.currentEffectiveProfileId
+        val second = profiles.createProfile("English", "en")
+        profiles.readerSettingsFile(second.id).apply { parentFile?.mkdirs() }.writeText("""{"fontSize":18}""")
+        val io = PausingReaderIoDispatcher()
+        repository(profileRepository = profiles, ioDispatcher = io).use { repository ->
+            io.pauseNextDispatch()
+            val reading = async { repository.settings.first() }
+            val resumeRead = io.awaitPausedDispatch()
+            try {
+                profiles.activateGlobal(second.id)
+            } finally {
+                resumeRead.run()
+            }
+
+            assertEquals(22, reading.await().fontSize)
+            assertTrue(profiles.readerSettingsFile(firstId).isFile)
+            assertEquals(18, repository.settings.first().fontSize)
+        }
+    }
+
+    @Test
     fun emitsDefaultSettingsWhenThereIsNoLegacyStore() = runBlocking {
         repository().use { repository ->
             val settings = repository.settings.first()
@@ -209,12 +341,11 @@ class ReaderSettingsRepositoryTest {
             assertEquals(FuriganaMode.Off, settings.furiganaMode)
             assertEquals(ReaderViewMode.Paginated, settings.viewMode)
             assertFalse(settings.continuousMode)
-            assertEquals(45, settings.visualNovelRevealSpeed)
-            assertEquals(VisualNovelScreenMode.Block, settings.visualNovelScreenMode)
-            assertEquals(1, settings.visualNovelSentencesPerScreen)
-            assertFalse(settings.visualNovelPreserveDialogueBubbles)
-            assertFalse(settings.visualNovelClickAdvance)
-            assertFalse(settings.visualNovelMergeCrossScreenSasayakiCues)
+            assertEquals(35, settings.textSpeed)
+            assertEquals(0, settings.maxSentencesPerPage)
+            assertFalse(settings.splitDialogue)
+            assertFalse(settings.paragraphClickAdvance)
+            assertFalse(settings.textAnimation)
             assertFalse(settings.blurImages)
             assertFalse(settings.statisticsAutostartOnBookOpen)
             assertFalse(settings.statisticsAutostartOnPageTurn)
@@ -237,7 +368,7 @@ class ReaderSettingsRepositoryTest {
             assertTrue(settings.showTitle)
             assertTrue(settings.showProgress)
             assertFalse(settings.showChapterProgress)
-            assertTrue(settings.showCharacters)
+            assertEquals(ReaderProgressCount.Characters, settings.progressCount)
             assertTrue(settings.showPercentage)
             assertFalse(settings.showChapter)
             assertTrue(settings.alwaysShowProgress)
@@ -258,6 +389,7 @@ class ReaderSettingsRepositoryTest {
             assertFalse(settings.keepScreenOnWhileReading)
             assertFalse(settings.lockCurrentOrientation)
             assertFalse(settings.openLastReadBookOnLaunch)
+            assertFalse(settings.exitReaderOnFirstBack)
         }
     }
 
@@ -361,6 +493,7 @@ class ReaderSettingsRepositoryTest {
                 keepScreenOnWhileReading = true,
                 lockCurrentOrientation = true,
                 openLastReadBookOnLaunch = true,
+                exitReaderOnFirstBack = true,
             ),
         )
 
@@ -390,6 +523,7 @@ class ReaderSettingsRepositoryTest {
             assertTrue(migrated.keepScreenOnWhileReading)
             assertTrue(migrated.lockCurrentOrientation)
             assertTrue(migrated.openLastReadBookOnLaunch)
+            assertTrue(migrated.exitReaderOnFirstBack)
 
             repository.update { it.copy(fontSize = 31) }
             assertEquals(31, repository.settings.first().fontSize)
@@ -419,13 +553,12 @@ class ReaderSettingsRepositoryTest {
                     ),
                     fontSize = 24,
                     furiganaMode = FuriganaMode.Hidden,
-                    viewMode = ReaderViewMode.VisualNovel,
-                    visualNovelRevealSpeed = 80,
-                    visualNovelScreenMode = VisualNovelScreenMode.Sentences,
-                    visualNovelSentencesPerScreen = 3,
-                    visualNovelPreserveDialogueBubbles = true,
-                    visualNovelClickAdvance = false,
-                    visualNovelMergeCrossScreenSasayakiCues = true,
+                    paragraphMode = true,
+                    textSpeed = 80,
+                    maxSentencesPerPage = 3,
+                    splitDialogue = true,
+                    paragraphClickAdvance = false,
+                    textAnimation = true,
                     blurImages = true,
                     statisticsAutostartOnBookOpen = true,
                     statisticsAutostartOnPageTurn = true,
@@ -448,7 +581,7 @@ class ReaderSettingsRepositoryTest {
                     showTitle = false,
                     showProgress = false,
                     showChapterProgress = true,
-                    showCharacters = false,
+                    progressCount = ReaderProgressCount.Off,
                     showPercentage = false,
                     showChapter = true,
                     alwaysShowProgress = false,
@@ -488,14 +621,13 @@ class ReaderSettingsRepositoryTest {
             assertEquals("wght-400-normal", saved.fontVariantSelections["recommended:kleeone"])
             assertEquals(24, saved.fontSize)
             assertEquals(FuriganaMode.Hidden, saved.furiganaMode)
-            assertEquals(ReaderViewMode.VisualNovel, saved.viewMode)
+            assertEquals(ReaderViewMode.Paginated, saved.viewMode)
             assertFalse(saved.continuousMode)
-            assertEquals(80, saved.visualNovelRevealSpeed)
-            assertEquals(VisualNovelScreenMode.Sentences, saved.visualNovelScreenMode)
-            assertEquals(3, saved.visualNovelSentencesPerScreen)
-            assertTrue(saved.visualNovelPreserveDialogueBubbles)
-            assertFalse(saved.visualNovelClickAdvance)
-            assertTrue(saved.visualNovelMergeCrossScreenSasayakiCues)
+            assertEquals(80, saved.textSpeed)
+            assertEquals(3, saved.maxSentencesPerPage)
+            assertTrue(saved.splitDialogue)
+            assertFalse(saved.paragraphClickAdvance)
+            assertTrue(saved.textAnimation)
             assertTrue(saved.blurImages)
             assertTrue(saved.statisticsAutostartOnBookOpen)
             assertTrue(saved.statisticsAutostartOnPageTurn)
@@ -518,7 +650,7 @@ class ReaderSettingsRepositoryTest {
             assertFalse(saved.showTitle)
             assertFalse(saved.showProgress)
             assertTrue(saved.showChapterProgress)
-            assertFalse(saved.showCharacters)
+            assertEquals(ReaderProgressCount.Off, saved.progressCount)
             assertFalse(saved.showPercentage)
             assertTrue(saved.showChapter)
             assertFalse(saved.alwaysShowProgress)
@@ -563,6 +695,23 @@ class ReaderSettingsRepositoryTest {
     }
 
     @Test
+    fun firstBackPreferenceDefaultsOffForExistingSettingsAndPersistsBothValues() = runBlocking {
+        repository().use { repository ->
+            repository.editPreferences {
+                this[booleanPreferencesKey("readerSettingsMigratedFromSharedPreferences")] = true
+            }
+            assertFalse(repository.settings.first().exitReaderOnFirstBack)
+
+            for (enabled in listOf(true, false)) {
+                repository.update { it.copy(exitReaderOnFirstBack = enabled) }
+
+                assertEquals(enabled, repository.settings.first().exitReaderOnFirstBack)
+                assertEquals(enabled, repository.preferences()[booleanPreferencesKey("exitReaderOnFirstBack")])
+            }
+        }
+    }
+
+    @Test
     fun profileModeScopesAppearanceFieldsButKeepsBehaviorFieldsGlobal() = runBlocking {
         val profileRepository = ProfileRepository(tempFolder.newFolder("files"))
         repository(profileRepository = profileRepository).use { repository ->
@@ -576,11 +725,18 @@ class ReaderSettingsRepositoryTest {
                     topSafeAreaDp = 46,
                     bottomSafeAreaDp = 44,
                     twoPageLandscape = false,
-                    visualNovelMergeCrossScreenSasayakiCues = true,
+                    paragraphMode = true,
+                    maxSentencesPerPage = 4,
+                    splitDialogue = true,
+                    textSpeed = 70,
+                    paragraphClickAdvance = true,
+                    textAnimation = true,
                     volumeKeysTurnPages = true,
                     volumeKeysNavigatePopupTerms = true,
+                    volumeKeysSeekSasayaki = true,
                     lockCurrentOrientation = true,
                     openLastReadBookOnLaunch = true,
+                    exitReaderOnFirstBack = true,
                 )
             }
 
@@ -595,11 +751,18 @@ class ReaderSettingsRepositoryTest {
             assertEquals(46, inherited.topSafeAreaDp)
             assertEquals(44, inherited.bottomSafeAreaDp)
             assertFalse(inherited.twoPageLandscape)
-            assertTrue(inherited.visualNovelMergeCrossScreenSasayakiCues)
+            assertTrue(inherited.paragraphMode)
+            assertEquals(4, inherited.maxSentencesPerPage)
+            assertTrue(inherited.splitDialogue)
+            assertEquals(70, inherited.textSpeed)
+            assertTrue(inherited.paragraphClickAdvance)
+            assertTrue(inherited.textAnimation)
             assertTrue(inherited.volumeKeysTurnPages)
             assertTrue(inherited.volumeKeysNavigatePopupTerms)
+            assertTrue(inherited.volumeKeysSeekSasayaki)
             assertTrue(inherited.lockCurrentOrientation)
             assertTrue(inherited.openLastReadBookOnLaunch)
+            assertTrue(inherited.exitReaderOnFirstBack)
 
             repository.update {
                 it.copy(
@@ -611,11 +774,18 @@ class ReaderSettingsRepositoryTest {
                     topSafeAreaDp = 58,
                     bottomSafeAreaDp = 60,
                     twoPageLandscape = true,
-                    visualNovelMergeCrossScreenSasayakiCues = false,
+                    paragraphMode = false,
+                    maxSentencesPerPage = 2,
+                    splitDialogue = false,
+                    textSpeed = 35,
+                    paragraphClickAdvance = false,
+                    textAnimation = false,
                     volumeKeysTurnPages = false,
                     volumeKeysNavigatePopupTerms = false,
+                    volumeKeysSeekSasayaki = false,
                     lockCurrentOrientation = false,
                     openLastReadBookOnLaunch = false,
+                    exitReaderOnFirstBack = false,
                 )
             }
 
@@ -629,11 +799,18 @@ class ReaderSettingsRepositoryTest {
             assertEquals(46, japanese.topSafeAreaDp)
             assertEquals(44, japanese.bottomSafeAreaDp)
             assertFalse(japanese.twoPageLandscape)
-            assertTrue(japanese.visualNovelMergeCrossScreenSasayakiCues)
+            assertTrue(japanese.paragraphMode)
+            assertEquals(4, japanese.maxSentencesPerPage)
+            assertTrue(japanese.splitDialogue)
+            assertEquals(70, japanese.textSpeed)
+            assertTrue(japanese.paragraphClickAdvance)
+            assertTrue(japanese.textAnimation)
             assertFalse(japanese.volumeKeysTurnPages)
             assertFalse(japanese.volumeKeysNavigatePopupTerms)
+            assertFalse(japanese.volumeKeysSeekSasayaki)
             assertFalse(japanese.lockCurrentOrientation)
             assertFalse(japanese.openLastReadBookOnLaunch)
+            assertFalse(japanese.exitReaderOnFirstBack)
         }
     }
 
@@ -673,6 +850,48 @@ class ReaderSettingsRepositoryTest {
         }
     }
 
+    @Test
+    fun oldDataStoreValuesMigrateOnceAndNewValuesWin() = runBlocking {
+        repository().use { repository ->
+            repository.editPreferences {
+                this[booleanPreferencesKey("readerSettingsMigratedFromSharedPreferences")] = true
+                this[stringPreferencesKey("readerViewMode")] = "visualNovel"
+                this[stringPreferencesKey("visualNovelScreenMode")] = "sentences"
+                this[intPreferencesKey("visualNovelSentencesPerScreen")] = 12
+                this[intPreferencesKey("visualNovelRevealSpeed")] = 0
+                this[booleanPreferencesKey("visualNovelClickAdvance")] = true
+                this[booleanPreferencesKey("paragraphClickAdvance")] = false
+            }
+            val settings = repository.settings.first()
+            assertEquals(ReaderViewMode.Paginated, settings.viewMode)
+            assertTrue(settings.paragraphMode)
+            assertEquals(10, settings.maxSentencesPerPage)
+            assertTrue(settings.splitDialogue)
+            assertFalse(settings.textAnimation)
+            assertEquals(35, settings.textSpeed)
+            assertFalse(settings.paragraphClickAdvance)
+            assertFalse(repository.preferences().asMap().keys.any { it.name.startsWith("visualNovel") })
+            assertEquals(settings, repository.settings.first())
+        }
+    }
+
+    @Test
+    fun restoredLegacyProfileIsDecodedBeforeEnumAndWrittenWithNewKeys() = runBlocking {
+        val profiles = ProfileRepository(tempFolder.newFolder("paragraph-backup"))
+        val file = profiles.readerSettingsFile()
+        file.parentFile?.mkdirs()
+        file.writeText("""{"viewMode":"VisualNovel","fontSize":31,"visualNovelRevealSpeed":0,"visualNovelClickAdvance":false}""")
+        repository(profileRepository = profiles).use { repository ->
+            val migrated = repository.settings.first()
+            assertEquals(31, migrated.fontSize)
+            assertTrue(migrated.paragraphMode)
+            assertFalse(migrated.paragraphClickAdvance)
+            assertFalse(migrated.textAnimation)
+            assertFalse(file.readText().contains("visualNovel"))
+            assertTrue(file.readText().contains("paragraphClickAdvance"))
+        }
+    }
+
     private fun repository(
         legacySource: ReaderSettingsLegacySource? = null,
         profileRepository: ProfileRepository? = null,
@@ -699,7 +918,7 @@ class ReaderSettingsRepositoryTest {
     }
 
     private class RepositoryHandle(
-        private val repository: ReaderSettingsRepository,
+        val repository: ReaderSettingsRepository,
         private val dataStore: DataStore<Preferences>,
         private val scope: CoroutineScope,
     ) : AutoCloseable {
@@ -730,6 +949,25 @@ class ReaderSettingsRepositoryTest {
         override fun load(): ReaderSettings {
             loadCount += 1
             return settings
+        }
+    }
+
+    private class PausingReaderIoDispatcher : CoroutineDispatcher() {
+        private val pauseNext = AtomicBoolean(false)
+        private val pausedDispatches = Channel<Runnable>(Channel.UNLIMITED)
+
+        fun pauseNextDispatch() {
+            check(pauseNext.compareAndSet(false, true))
+        }
+
+        suspend fun awaitPausedDispatch(): Runnable = pausedDispatches.receive()
+
+        override fun dispatch(context: CoroutineContext, block: Runnable) {
+            if (pauseNext.compareAndSet(true, false)) {
+                check(pausedDispatches.trySend(Runnable { Dispatchers.IO.dispatch(context, block) }).isSuccess)
+            } else {
+                Dispatchers.IO.dispatch(context, block)
+            }
         }
     }
 }

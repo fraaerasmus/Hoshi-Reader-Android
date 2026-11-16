@@ -11,15 +11,23 @@ import coil3.memory.MemoryCache
 import dagger.Lazy
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import moe.antimony.hoshi.di.ApplicationScope
+import moe.antimony.hoshi.features.sasayaki.transcription.LegacySasayakiResourceCleanup
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.runBlocking
 import moe.antimony.hoshi.di.IoDispatcher
+import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.features.bookshelf.BookCoverRecoveryDecoderFactory
 import moe.antimony.hoshi.features.bookshelf.BookCoverFetcher
 import moe.antimony.hoshi.features.bookshelf.BookCoverKeyer
 import moe.antimony.hoshi.features.bookshelf.BookCoverThumbnailStore
+import moe.antimony.hoshi.features.sync.GoogleDriveSyncLifecycle
 import moe.antimony.hoshi.features.diagnostics.installCrashDiagnostics
 import moe.antimony.hoshi.features.backup.RemoteBackupScheduler
+import moe.antimony.hoshi.features.diagnostics.NonfatalDiagnosticsLogger
+import moe.antimony.hoshi.features.diagnostics.WebViewDebuggingSettings
 import moe.antimony.hoshi.features.dictionary.DictionaryAutoUpdateScheduler
 import moe.antimony.hoshi.features.update.UpdateApkCleanup
 import moe.antimony.hoshi.features.update.UpdateScheduler
@@ -28,13 +36,19 @@ import moe.antimony.hoshi.features.update.UpdateDownloadStore
 
 @HiltAndroidApp
 class HoshiApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
+    @Inject @ApplicationScope internal lateinit var applicationScope: CoroutineScope
+    @Inject internal lateinit var legacySasayakiResourceCleanup: LegacySasayakiResourceCleanup
+    @Inject internal lateinit var nonfatalDiagnosticsLogger: NonfatalDiagnosticsLogger
+    @Inject internal lateinit var webViewDebuggingSettings: WebViewDebuggingSettings
     @Inject internal lateinit var updateApkCleanup: UpdateApkCleanup
     @Inject internal lateinit var dictionaryAutoUpdateScheduler: Lazy<DictionaryAutoUpdateScheduler>
     @Inject internal lateinit var remoteBackupScheduler: Lazy<RemoteBackupScheduler>
     @Inject internal lateinit var updateDownloadStore: UpdateDownloadStore
     @Inject internal lateinit var updateScheduler: Lazy<UpdateScheduler>
+    @Inject internal lateinit var googleDriveSyncLifecycle: Lazy<GoogleDriveSyncLifecycle>
     @Inject internal lateinit var workerFactory: HiltWorkerFactory
     @Inject @IoDispatcher internal lateinit var ioDispatcher: CoroutineDispatcher
+    @Inject internal lateinit var bookRepository: Lazy<BookRepository>
     @Inject internal lateinit var bookCoverThumbnailStore: Lazy<BookCoverThumbnailStore>
 
     override val workManagerConfiguration: Configuration
@@ -45,10 +59,17 @@ class HoshiApplication : Application(), Configuration.Provider, SingletonImageLo
     override fun onCreate() {
         super.onCreate()
         installCrashDiagnostics(this)
+        nonfatalDiagnosticsLogger.start()
+        applicationScope.launch { webViewDebuggingSettings.initialize() }
+        applicationScope.launch { legacySasayakiResourceCleanup.clean() }
+        applicationScope.launch(ioDispatcher) {
+            bookRepository.get().migrateCacheGroups(cacheDir, noBackupFilesDir.resolve("book-cache-group-v1"))
+        }
         prepareUpdateStartupState()
         updateScheduler.get().sync()
         dictionaryAutoUpdateScheduler.get().registerProcessForegroundChecks()
         remoteBackupScheduler.get().registerProcessBackgroundBackups()
+        googleDriveSyncLifecycle.get().register()
     }
 
     override fun newImageLoader(context: Context): ImageLoader =

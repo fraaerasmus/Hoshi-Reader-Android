@@ -1,6 +1,5 @@
 package moe.antimony.hoshi.features.reader
 
-import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import moe.antimony.hoshi.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -51,22 +50,17 @@ class ReaderAppearanceSasayakiTest {
         )
         assertTrue(
             readerAppearanceShowsAlwaysShowProgress(
-                ReaderSettings(showCharacters = false, showPercentage = false),
+                ReaderSettings(progressCount = ReaderProgressCount.Off, showPercentage = false),
             ),
         )
     }
 
     @Test
-    fun appearanceShowsSasayakiToggleWhenSasayakiIsEnabled() {
+    fun appearanceAlwaysOffersSharedPlaybackToggle() {
         assertEquals(
             listOf(R.string.reader_appearance_show_sasayaki_toggle),
-            readerAppearanceSasayakiRows(SasayakiSettings(enabled = true)),
+            readerAppearancePlaybackRows(),
         )
-    }
-
-    @Test
-    fun appearanceHidesSasayakiToggleWhenSasayakiIsDisabled() {
-        assertTrue(readerAppearanceSasayakiRows(SasayakiSettings(enabled = false)).isEmpty())
     }
 
     @Test
@@ -92,7 +86,6 @@ class ReaderAppearanceSasayakiTest {
     @Test
     fun pageSwipeThresholdIsVisibleOnlyForPagedReaderModes() {
         assertTrue(readerAppearanceShowsPageSwipeThreshold(ReaderViewMode.Paginated))
-        assertTrue(readerAppearanceShowsPageSwipeThreshold(ReaderViewMode.VisualNovel))
         assertTrue(!readerAppearanceShowsPageSwipeThreshold(ReaderViewMode.Continuous))
     }
 

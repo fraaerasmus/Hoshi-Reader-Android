@@ -2,6 +2,7 @@ package moe.antimony.hoshi.dictionary
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -16,8 +17,36 @@ import kotlinx.coroutines.CancellationException
 import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.profiles.ProfileRepository
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertSame
+import moe.antimony.hoshi.R
+import moe.antimony.hoshi.ui.ErrorDiagnosticEvents
+import moe.antimony.hoshi.ui.UiText
 
 class DictionaryRepositoryTest {
+    @Test
+    fun updateFailureRecordsTheOriginalThrowableBeforeConvertingItToBatchText() {
+        val filesDir = temporaryFolder.newFolder("diagnostic-update-files")
+        val storage = DictionaryStorageDataSource(filesDir)
+        val installed = updatableTestDictionaryIndex()
+        writeDictionary(storage.typeDirectory(DictionaryType.Term), installed.title, installed)
+        storage.saveConfigFromStorage()
+        val original = java.io.IOException("dictionary endpoint unavailable", java.io.IOException("HTTP 503"))
+        val remote = object : DictionaryRemoteDataSource {
+            override fun fetchIndex(url: String): DictionaryIndex = throw original
+            override fun downloadArchive(url: String): InputStream = error("No archive expected")
+        }
+        val bridge = ImportingDictionaryNativeBridge()
+        val repository = DictionaryRepository(filesDir, storage, DictionaryImportDataSource(bridge), DictionaryLookupQueryService(bridge), remote)
+        ErrorDiagnosticEvents.buffer.drain()
+
+        val summary = repository.updateDictionaries()
+        val event = ErrorDiagnosticEvents.buffer.drain().firstOrNull { it.error === original }
+
+        assertSame(original, event?.error)
+        assertEquals(UiText.Resource(R.string.dictionary_update_failed), event?.operation)
+        assertEquals("dictionary endpoint unavailable\nHTTP 503", summary.failures.single().message)
+    }
+
     @get:Rule
     val temporaryFolder = TemporaryFolder()
 
@@ -51,7 +80,7 @@ class DictionaryRepositoryTest {
 
         repository.setDictionaryCategory("First", DictionaryCategory.Exclude)
 
-        assertEquals(emptyList<String>(), bridge.termPaths.toList())
+        assertEquals(listOf(filesDir.resolve("Dictionaries/Term/First").absolutePath), bridge.termPaths.toList())
         assertEquals(DictionaryCategory.Exclude, repository.loadDictionaries(DictionaryType.Term).first { it.path.name == "First" }.category)
 
         repository.deleteDictionary(DictionaryType.Frequency, "Freq")
@@ -61,7 +90,7 @@ class DictionaryRepositoryTest {
     }
 
     @Test
-    fun failedCategoryRebuildRollsBackPersistedCategoryAndKeepsCurrentLookupSession() {
+    fun categoryChangesPersistWithoutRebuildingTheLookupSession() {
         val filesDir = temporaryFolder.newFolder("category-rollback-files")
         val storage = DictionaryStorageDataSource(filesDir)
         val bridge = RecordingDictionaryNativeBridge()
@@ -74,20 +103,42 @@ class DictionaryRepositoryTest {
         writeDictionary(storage.typeDirectory(DictionaryType.Term), "First", "First")
         storage.saveConfigFromStorage()
         repository.rebuildLookupQuery()
-        bridge.failNextRebuild = true
-
-        assertThrows(IllegalStateException::class.java) {
-            repository.setDictionaryCategory("First", DictionaryCategory.Exclude)
-        }
+        val rebuildCount = bridge.rebuildCount
+        repository.setDictionaryCategory("First", DictionaryCategory.Exclude)
 
         assertEquals(
-            DictionaryCategory.None,
+            DictionaryCategory.Exclude,
             repository.loadDictionaries(DictionaryType.Term).single().category,
         )
+        assertEquals(rebuildCount, bridge.rebuildCount)
         assertEquals(
             listOf(filesDir.resolve("Dictionaries/Term/First").absolutePath),
             bridge.termPaths.toList(),
         )
+    }
+
+    @Test
+    fun excludedDictionariesRemainInLookupAfterRestartUntilExplicitlyDisabled() {
+        val filesDir = temporaryFolder.newFolder("excluded-files")
+        val profiles = ProfileRepository(filesDir)
+        val storage = DictionaryStorageDataSource(filesDir, profileRepository = profiles)
+        writeDictionary(storage.typeDirectory(DictionaryType.Term), "Excluded", "Excluded")
+        storage.saveConfig(storage.configWithDictionaryCategory("Excluded", DictionaryCategory.Exclude))
+        val bridge = RecordingDictionaryNativeBridge()
+        val repository = DictionaryRepository(
+            filesDir,
+            storage,
+            DictionaryImportDataSource(bridge),
+            DictionaryLookupQueryService(bridge),
+            profileRepository = profiles,
+        )
+
+        repository.ensureLookupQueryReady()
+
+        assertEquals(listOf(filesDir.resolve("Dictionaries/Term/Excluded").absolutePath), bridge.termPaths.toList())
+        repository.setDictionaryEnabled(DictionaryType.Term, "Excluded", enabled = false)
+        assertEquals(emptyList<String>(), bridge.termPaths.toList())
+        assertEquals(DictionaryCategory.Exclude, repository.loadDictionaries(DictionaryType.Term).single().category)
     }
 
     @Test
@@ -612,6 +663,108 @@ class DictionaryRepositoryTest {
         assertEquals(listOf(filesDir.resolve("Dictionaries/Frequency/Mixed").absolutePath), bridge.freqPaths.toList())
         assertEquals(listOf(filesDir.resolve("Dictionaries/Pitch/Mixed").absolutePath), bridge.pitchPaths.toList())
         assertEquals(listOf(filesDir.resolve("Dictionaries/Kanji/Mixed").absolutePath), bridge.kanjiPaths.toList())
+    }
+
+    @Test
+    fun manualReimportReplacesTheSameRevisionInItsDetectedType() {
+        val filesDir = temporaryFolder.newFolder()
+        val storage = DictionaryStorageDataSource(filesDir)
+        val bridge = ImportingDictionaryNativeBridge()
+        val repository = DictionaryRepository(filesDir, storage, DictionaryImportDataSource(bridge), DictionaryLookupQueryService(bridge))
+        val title = "A".repeat(240)
+        val index = DictionaryIndex(title = title, revision = "1")
+        writeDictionary(storage.typeDirectory(DictionaryType.Term), title, index)
+        writeDictionary(storage.typeDirectory(DictionaryType.Frequency), title, index)
+        val oldTerm = storage.typeDirectory(DictionaryType.Term).resolve("$title/.hoshidicts_3").apply { writeText("") }
+        val oldFrequency = storage.typeDirectory(DictionaryType.Frequency).resolve("$title/.hoshidicts_3").apply { writeText("") }
+
+        val imported = repository.importDictionary(ByteArrayInputStream(dictionaryArchive(index)))
+
+        assertEquals(1, imported)
+        assertEquals(listOf(title), repository.loadDictionaries(DictionaryType.Term).map { it.index.title })
+        assertFalse(oldTerm.exists())
+        assertTrue(oldFrequency.isFile)
+    }
+
+    @Test
+    fun manualReimportPreservesProfileSettingsForARestoredDirectoryName() = kotlinx.coroutines.runBlocking {
+        val filesDir = temporaryFolder.newFolder()
+        val profiles = ProfileRepository(filesDir)
+        val storage = DictionaryStorageDataSource(filesDir, profileRepository = profiles)
+        val bridge = ImportingDictionaryNativeBridge()
+        val repository = DictionaryRepository(filesDir, storage, DictionaryImportDataSource(bridge), DictionaryLookupQueryService(bridge), profileRepository = profiles)
+        val terms = storage.typeDirectory(DictionaryType.Term)
+        writeDictionary(terms, "First", "First")
+        writeDictionary(terms, "legacy-folder", "Mixed")
+        storage.saveConfigFromStorage()
+        repository.setDictionaryCategory("legacy-folder", DictionaryCategory.Bilingual)
+        val other = profiles.createProfile("Other", dictionaryLanguageId = ContentLanguageProfile.JapaneseLanguageId)
+        profiles.activateGlobal(other.id)
+        repository.setDictionaryEnabled(DictionaryType.Term, "legacy-folder", false)
+        repository.setDictionaryCategory("legacy-folder", DictionaryCategory.Exclude)
+        val mixedIndex = repository.loadDictionaries(DictionaryType.Term).indexOfFirst { it.path.name == "legacy-folder" }
+        repository.moveDictionary(DictionaryType.Term, mixedIndex, 0)
+        profiles.activateGlobal(ProfileRepository.DefaultProfileId)
+        val originalOrder = repository.loadDictionaries(DictionaryType.Term).map { it.path.name }
+
+        val imported = repository.importDictionary(ByteArrayInputStream(dictionaryArchive(DictionaryIndex("Mixed", revision = "2"))))
+
+        assertEquals(1, imported)
+        val mainDictionaries = repository.loadDictionaries(DictionaryType.Term)
+        assertEquals(originalOrder, mainDictionaries.map { it.path.name })
+        val replaced = mainDictionaries.single { it.index.title == "Mixed" }
+        assertEquals("legacy-folder", replaced.path.name)
+        assertEquals("2", replaced.index.revision)
+        assertTrue(replaced.isEnabled)
+        assertEquals(DictionaryCategory.Bilingual, replaced.category)
+
+        profiles.activateGlobal(other.id)
+        val otherDictionaries = repository.loadDictionaries(DictionaryType.Term)
+        assertEquals(listOf("legacy-folder", "First"), otherDictionaries.map { it.path.name })
+        assertFalse(otherDictionaries.first().isEnabled)
+        assertEquals(DictionaryCategory.Exclude, otherDictionaries.first().category)
+    }
+
+    @Test
+    fun manualReimportRefreshesCommittedTypeAfterLaterTypeFails() {
+        val filesDir = temporaryFolder.newFolder()
+        val storage = DictionaryStorageDataSource(filesDir)
+        val bridge = ImportingDictionaryNativeBridge(
+            NativeDictionaryImportResult(success = true, title = "Mixed", termCount = 1, metaCount = 1, freqCount = 1, pitchCount = 0, mediaCount = 0),
+        )
+        val repository = DictionaryRepository(filesDir, storage, DictionaryImportDataSource(bridge), DictionaryLookupQueryService(bridge))
+        writeDictionary(storage.typeDirectory(DictionaryType.Term), "Mixed", "Mixed")
+        writeDictionary(storage.typeDirectory(DictionaryType.Frequency), "Mixed", "Different dictionary")
+        repository.rebuildLookupQuery()
+        val archive = dictionaryArchive(DictionaryIndex(title = "Mixed", revision = "2"))
+
+        val error = assertThrows(DictionaryImportException::class.java) {
+            repository.importDictionary(ByteArrayInputStream(archive))
+        }
+
+        assertEquals(DictionaryImportFailureKind.WriteFiles, error.kind)
+        assertEquals("2", repository.loadDictionaries(DictionaryType.Term).single().index.revision)
+        assertEquals("Different dictionary", repository.loadDictionaries(DictionaryType.Frequency).single().index.title)
+        assertEquals(2, bridge.rebuildCount)
+    }
+
+    @Test
+    fun manualReimportKeepsTheTargetWhenItsInstalledTitleCannotBeVerified() {
+        val filesDir = temporaryFolder.newFolder()
+        val storage = DictionaryStorageDataSource(filesDir)
+        val bridge = ImportingDictionaryNativeBridge()
+        val repository = DictionaryRepository(filesDir, storage, DictionaryImportDataSource(bridge), DictionaryLookupQueryService(bridge))
+        val installed = storage.typeDirectory(DictionaryType.Term).resolve("Mixed").apply { mkdirs() }
+        val installedIndex = installed.resolve("index.json").apply { writeText("malformed") }
+        val archive = dictionaryArchive(DictionaryIndex(title = "Mixed", revision = "1"))
+
+        val error = assertThrows(DictionaryImportException::class.java) {
+            repository.importDictionary(ByteArrayInputStream(archive))
+        }
+
+        assertEquals(DictionaryImportFailureKind.WriteFiles, error.kind)
+        assertEquals("malformed", installedIndex.readText())
+        assertEquals(0, bridge.rebuildCount)
     }
 
     @Test

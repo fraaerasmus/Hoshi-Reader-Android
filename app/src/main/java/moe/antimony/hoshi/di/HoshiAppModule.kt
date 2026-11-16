@@ -68,6 +68,8 @@ import moe.antimony.hoshi.features.wallpaper.BookCoverWallpaperSettingsRepositor
 import moe.antimony.hoshi.features.wallpaper.DefaultBookCoverPublisher
 import moe.antimony.hoshi.features.wallpaper.IReaderBookCoverCapabilityProvider
 import moe.antimony.hoshi.features.wallpaper.bookCoverWallpaperSettingsRepository
+import moe.antimony.hoshi.features.dictionary.DictionaryLookupHistory
+import moe.antimony.hoshi.features.dictionary.dictionaryLookupHistoryRepository
 import moe.antimony.hoshi.profiles.ProfileRepository
 
 @Module
@@ -138,6 +140,14 @@ internal object HoshiAppModule {
 
     @Provides
     @Singleton
+    fun provideDictionaryLookupHistory(
+        @ApplicationContext context: Context,
+        @ApplicationScope applicationScope: CoroutineScope,
+        @IoDispatcher ioDispatcher: CoroutineDispatcher,
+    ): DictionaryLookupHistory = context.dictionaryLookupHistoryRepository(applicationScope, ioDispatcher)
+
+    @Provides
+    @Singleton
     fun provideDictionarySettingsRepository(
         @ApplicationContext context: Context,
         profileRepository: ProfileRepository,
@@ -189,8 +199,9 @@ internal object HoshiAppModule {
     fun provideSyncSettingsRepository(
         @ApplicationContext context: Context,
         drive: DriveSyncDataSource,
+        ttu: moe.antimony.hoshi.features.sync.DeviceCodeDriveAuthorizer,
     ): SyncSettingsRepository =
-        context.syncSettingsRepository(drive)
+        context.syncSettingsRepository(drive) { ttu.status() == moe.antimony.hoshi.features.sync.DriveAuthStatus.Connected }
 
     @Provides
     @Singleton

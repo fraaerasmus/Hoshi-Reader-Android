@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
@@ -70,6 +71,7 @@ internal fun ReaderSasayakiPlaybackRow(
     onHoldStart: () -> Unit,
     onHoldEnd: () -> Unit,
     doubleTapEnabled: Boolean,
+    onRestartSentence: () -> Unit = {},
 ) {
     if (!controls.visible) return
     val onLongClick = onHoldStart.takeIf { holdEnabled }
@@ -110,6 +112,15 @@ internal fun ReaderSasayakiPlaybackRow(
                 .height(controls.rowHeightDp.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (controls.showRestartSentenceButton) {
+                ReaderSasayakiPlaybackButton(
+                    controls = controls,
+                    colors = colors,
+                    icon = Icons.Rounded.Replay,
+                    contentDescription = stringResource(R.string.reader_restart_sentence),
+                    onClick = onRestartSentence,
+                )
+            }
             ReaderSasayakiPlaybackButton(
                 controls = controls,
                 colors = colors,

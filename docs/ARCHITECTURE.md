@@ -1,763 +1,657 @@
-# Hoshi Android Current Architecture
+# Architecture and Implementation Contracts
 
-Date: 2026-09-18
+Agent entry point for current owners and the constraints their callers must preserve.
+For App changes, read the common contracts, then the relevant domain and its code/tests.
+Local algorithms, UI specifications and individual regression cases belong there.
+Future work belongs in [ARCHITECTURE_REFACTORING.md](ARCHITECTURE_REFACTORING.md);
+execution and measurement guidance lives in [VALIDATION.md](VALIDATION.md).
 
-This document describes the current architecture that exists in the Android
-repo. It is not a future plan and should not track task status. Long-lived
-refactor goals belong in `docs/ARCHITECTURE_REFACTORING.md`.
+## Find the owner
 
-## App Shape
+Kotlin paths below are relative to `app/src/main/java/moe/antimony/hoshi/`.
+Web paths are relative to `app/src/main/assets/hoshi-web/`.
+Names without an extension are searchable types, not necessarily filenames.
 
-- The app is a single Android application module under `app`.
-- UI is Jetpack Compose + Material 3.
-- `HoshiSurfaceRoles` owns native page, navigation, group, nested, and overlay colors derived
-  from Material 3 and the resolved brightness. Shared container helpers provide
-  E-ink outlines (including continuous lazy group edges) while ordinary groups
-  use tonal separation without decorative borders or elevation. Reader content
-  and dictionary HTML retain their existing color/style systems.
-  Bottom/side navigation uses `surfaceContainer`; page and top-bar backgrounds
-  remain continuous through the status-bar inset, including Dictionary search.
-  The search field uses `surfaceContainerHigh` to remain distinct on that page.
-  Reading Settings segments use inset rounded selections with the shared
-  `selected`/`onSelected` colors inside a continuous neutral nested track.
-  The full segment remains clickable; E-ink uses inverse black/white fills and
-  text with explicit outlines around the track and selected capsule.
-- Native accents default to Android 12+ dynamic color with the existing fixed
-  fallback on older Android. Manual opaque seeds use the standalone Material Color
-  Utilities 4.1.1 Tonal Spot algorithm to generate a complete Material 3 scheme;
-  E-ink overrides the result without overwriting the stored seed or palettes.
-  `withHoshiSurfaceColors` caps native surface HCT chroma at 4 while retaining
-  the source hue and tone. It softens `outlineVariant` toward the group fill;
-  accent, text and input `outline` roles retain their source colors. System,
-  manual, fallback and accent-preview schemes share this treatment. E-ink
-  bypasses it to retain pure black/white fills and boundaries.
-- Navigation uses Navigation3 typed route keys, `AppShell`, and `NavDisplay`.
-  Top-level Books, Dictionary, Statistics, and Settings tabs each own an
-  independent Nav3 back stack with its own saveable entry state and per-entry
-  ViewModel stores. The shared main navigation chrome is owned by a Nav3 scene
-  decorator around top-level root scenes, while Reader and Settings detail
-  routes remain full-screen outside that shell. Once visited, the Dictionary
-  NavDisplay stays composed and attached across tab switches to retain its WebView
-  compositor. `RetainedTabContent` leaves it unplaced while inactive and caps its
-  lifecycle at CREATED, disabling hidden back handlers and lifecycle collection.
-- Production dependency injection is Hilt-backed. `HoshiApplication` owns the
-  app component through `@HiltAndroidApp`, and Android entry points receive
-  dependencies from the Hilt graph.
-- Compose still receives a Hilt-created `HoshiUiDependencies` through
-  `LocalHoshiUiDependencies` as a lazy temporary bridge for app-wide
-  dependencies that have not yet moved behind screen ViewModels. The bridge
-  does not build the object graph manually and resolves each dependency from
-  Hilt only when the current UI path reads it.
-- Many screens use Hilt-backed ViewModels with immutable UI state exposed through
-  `StateFlow`.
-- Settings and small persisted preferences are stored behind DataStore-backed
-  repositories.
-- Profiles are Hilt-backed app-wide state. `ProfileRepository` stores profile
-  metadata under app-specific files, exposes active profile state through
-  `StateFlow`, and controls the effective content language for Reader,
-  Dictionary search, Process Text lookup, Anki settings, and dictionary lookup
-  sessions. Profile metadata mutations are main-safe suspend APIs backed by the
-  injected IO dispatcher. Creating a profile copies existing profile-owned files
-  from the current global active profile.
+| Task / search terms | Start here | Responsibility |
+| --- | --- | --- |
+| App startup, dependency injection | `HoshiApplication.kt`, `di/` | Hilt graph, application scope and dispatchers; `HoshiUiDependencies` is a lazy Compose bridge |
+| Tabs, back stacks, opening books | `navigation/AppShell.kt`, `navigation/AppRoute.kt`, `navigation/ReaderRouteStateHolder.kt` | Route lifetime, per-tab state, book loading and profile activation |
+| Settings loading, retry | `features/settings/SettingsDetailScaffold.kt`, `SettingsLoadState` | Readiness gate shared by pages and embedded settings |
+| Settings writes, concurrent edits | `features/reader/ReaderSettings.kt`, `features/sasayaki/SasayakiSettings.kt`, `features/tts/TtsRepository.kt` | Field transformations, persistence transactions and profile write targets |
+| Profiles, content language | `profiles/ProfileRepository.kt`, `profiles/ProfileActivationService.kt` | Profile metadata, activation and effective language |
+| Theme, E-ink, app surfaces | `features/display/`, `ui/theme/HoshiSurfaceRoles.kt`, `webview/HoshiWebView.kt` | Global display policy, native containers and WebView theme integration |
+| Books, import, sidecars | `epub/BookRepository.kt`, `epub/BookStorage.kt`, `importing/` | SAF input, packed EPUB storage and iOS-compatible sidecar I/O |
+| EPUB parsing, search text, counts | `epub/EpubBookParser.kt`, `epub/ReaderTextFilter.kt`, `app/src/main/rust/hoshiepub/` (repo root) | Rust/UniFFI parser boundary and Kotlin reader models |
+| Bookshelf, covers | `features/bookshelf/`, `BookCoverThumbnailStore` | Shelf UI/repository and persistent cover derivatives |
+| Reading statistics | `epub/BookStatisticsStore.kt`, `features/statistics/` | Session transactions, archives, aggregation and dashboard state |
+| Reader lifecycle, progress, restore | `features/reader/ReaderWebView.kt`, `features/reader/ReaderChapterWebView.kt`, `features/reader/ReaderWebViewStateHolder.kt` | WebView attachment, document generations, navigation and accepted position |
+| Reader page counts and position labels | `ReaderPageCounter`, `ReaderPageMeasurementCoordinator`, `ReaderPageMeasurementScheduler`, `ReaderPageMeasurer`, `ReaderPageMeasurementResources`, `ReaderPageIndex`, `ReaderPageCountRepository` in `features/reader/` | Reader-scoped measurement, layout cache and character/page conversion |
+| Reader commands and resources | `ReaderPaginationScripts.kt`, `ReaderScriptTemplate.kt`, `ReaderWebAssets.kt`, `ReaderWebResourceBridge.kt` in `features/reader/` | Typed commands, asset composition and safe resource loading |
+| Reader layout, paragraph mode, highlighting | Web `reader/` (ownership table below) | Mode runtimes and shared text/media semantics |
+| Selection, native handles, lookup context | `features/reader/ReaderSelectionBridge.kt`, Web `shared/selection*.js` | Selection state, source offsets and native menu integration |
+| Popup stack, history, geometry | `features/reader/ReaderLookupPopupBridge.kt`, Web `popup/reader-popup-host.js`, `popup/popup.js` | Shared iframe lookup host and native service bridge |
+| Dictionary import/query | `dictionary/DictionaryRepository.kt`, `dictionary/DictionaryNativeBridge.kt`, `dictionary/DictionaryLookupQueryService.kt` | Native session and repository boundary; algorithms live in the bridge submodule |
+| Dictionary UI, updates | `features/dictionary/`, `DictionaryMutationCoordinator` | Retained search session, profile configuration and serialized mutations |
+| Lookup submission history | `features/dictionary/DictionaryLookupHistoryRepository.kt` | Global persistent original submissions from Dictionary and external lookup entry points |
+| Word audio | `features/audio/LocalAudioRepository.kt`, `LocalAudioSettingsViewModel.kt`, `LocalAudioNativeDatabase.kt`, `features/audio/RemoteWordAudioRepository.kt`, `AudioRequestHandler` | Copy/link binding, reusable read-only SQLite session and ordered candidates shared by playback and Anki |
+| Anki cards and media | `features/anki/AnkiRepository.kt`, `features/anki/AnkiBackend.kt` | Backend selection, formats, duplicate checks and export |
+| Hoshi/TTU Drive sync | `features/sync/GoogleDriveSyncManager.kt`, `features/sync/GoogleDriveSyncHandler.kt`, `features/sync/GoogleDriveFileTransfer.kt`, `features/sync/TtuSyncManager.kt`, `SyncStorage` | Provider protocols, state merge and background synchronization |
+| Backup, cleanup, cover publishing | `features/backup/`, `features/storage/`, `features/wallpaper/` | Repository-owned archive/cleanup operations and platform output targets |
+| Reading media cards | `features/playback/ReadingMediaMetadata.kt`, `ReadingMediaArtworkRepository`, `ReadingMediaArtwork` | Shared title/sentence metadata and playback-owned artwork loading through the book-cover thumbnail store |
+| Audiobook playback | `features/sasayaki/SasayakiPlaybackService.kt`, `SasayakiPlaybackController` | Service-owned Media3 player/session and reader cue callbacks |
+| Transcription, subtitle matching | `features/sasayaki/SasayakiTranscriptionCoordinator.kt`, `features/sasayaki/SasayakiTranscriptionRepository.kt`, `features/sasayaki/transcription/` | Checkpointed recognition, alignment and verified native resources |
+| TTS source text, speech, playback | `features/tts/TtsBookRepository.kt`, `features/tts/TtsAudioRepository.kt`, `TtsEngineRouter`, `TtsPlaybackController`, `TtsPlaybackService` | Source extraction, synthesis/cache, provider adapters and sentence transport |
+| [Errors and diagnostics](#errors-and-diagnostics) | `ui/ErrorDetails.kt`, `ui/ErrorDiagnosticEvents.kt`, `features/diagnostics/NonfatalDiagnostics.kt` | Visible error adaptation, original failure events and application-owned persistence |
+| WebView debugging, release inspection | `features/diagnostics/WebViewDebuggingSettings.kt`, `features/diagnostics/WebViewDebuggingSetting.kt` | App-local persisted debugging policy and the Diagnostics toggle |
+| [Network and credentials](#network-and-credential-boundaries) | `network/PrivateHttpHost.kt`, `features/tts/OnlineTtsTransport.kt`, `TtsCredentialCipher` | Endpoint policy, cancellable transport, secret storage and diagnostic redaction |
+| App updates, About | `features/update/`, `.github/workflows/` and `tools/` (repo root) | Stable releases, manual previews, APK downloads and build provenance |
 
-## Storage And Data
+## Common implementation contracts
 
-- Book storage is rooted in app-specific files and remains compatible with the
-  iOS sidecar JSON layout.
-- EPUB import enters through Android Storage Access Framework and copies content
-  into app-specific storage.
-- Current book folders store the packed EPUB as `<folder>/<folder>.epub` and
-  persist the filename in `BookMetadata.epub`. Sidecar JSON and cached covers
-  remain beside the EPUB; parser and reader paths extract packed EPUBs only into
-  controlled app cache/temp directories when they need the EPUB tree.
-- Android keeps the iOS-sanitized title as the physical book folder when its
-  packed EPUB filename fits the platform limit. Longer multibyte titles retain
-  the full value in `BookMetadata.title` while the physical basename is capped
-  at 250 UTF-8 bytes with a readable prefix and deterministic SHA-256 suffix;
-  TTU import and backup paths use the same byte-safe policy.
-- Bookshelf and Statistics cover rendering uses one process-wide Coil loader.
-  `BookCoverThumbnailStore` owns a versioned, source-fingerprinted 256/512/768 px
-  WebP derivative cache under the app cache directory. Original-cover thumbnail
-  generation is single-flight and serialized; Coil owns measured-size requests,
-  small-thumbnail decode concurrency, lifecycle cancellation, and memory reuse.
-  New local and remote imports prewarm the 768 px derivative, while existing
-  books backfill lazily. Transient derivative-generation or cache failures use
-  the original cover through Coil, and malformed or decoder-rejected
-  derivatives invalidate only their size bucket before the next request
-  rebuilds them.
-- Imported EPUB metadata includes the trimmed first creator when nonblank as
-  an optional iOS-compatible book author. Bookshelf cover cards render
-  deterministic title/author gradient artwork when a declared cover is
-  missing, fails to decode, or is hidden. A global DataStore-backed Bookshelf
-  setting controls
-  Show, Blur, and Hide across local, remote, expanded, and collapsed shelf
-  previews; Hide never submits the cover source to Coil, while Blur uses the
-  platform effect on Android 12+ and safely uses the hidden fallback on older
-  Android versions.
-  A separate DataStore-backed `hideCollapsedShelfThumbnails` preference defaults
-  to false. When enabled, local, Reading, and Google Drive collapsed sections
-  omit their preview rows entirely while retaining their title/count/toggle row;
-  expanded cards continue to follow the cover mode.
-- Book metadata, bookmarks, highlights, reading statistics, and Sasayaki data
-  are persisted through book sidecar repositories and models.
-- Statistics is always available from its top-level tab. Its settings and
-  folder-keyed daily editor use that tab's Navigation3 back stack and
-  entry-scoped Hilt ViewModels. Reader statistics display preferences remain in Reading Settings;
-  the Sync and Statistics settings screens share the global sync preference.
-- `BookStatisticsStore` is the shared Hilt singleton for reader statistics,
-  transactional sync imports, daily edits, archive/restore, and dashboard reads.
-  File operations run on the IO dispatcher behind one mutex and use atomic
-  replacement. Reader saves submit only changed days, merge by modification
-  timestamp, and respect in-process editor deletions so queued writes cannot
-  undo a later edit. No deletion markers are added to the sidecar/sync format.
-- Deleting a book first stores active dates and compatible metadata under
-  `Books/statistics_archive/<folder>/`, with an optional JPEG cover bounded to
-  240 px. Required archive failures preserve the source book. Import restores
-  after external sidecars are written; normalized folder identity joins active
-  and archived records by date without double counting. Equal timestamps keep
-  the first input: existing archive on deletion, current book on restore.
-  The archive directory is excluded from book discovery and TTU exports but is
-  included in Books `.hoshi` backups.
-- Statistics repositories combine local and archived sidecars for the dashboard
-  and all-date book editors. The daily goal card combines a semicircular gauge,
-  history metrics with shared text baselines, and a display-only reading-intensity
-  heatmap. Sparse active dates back a lazy week grid with viewport-only drawing;
-  heatmap scrolling and data are independent of chart selection. The fixed
-  dashboard sections share a regular scrolling column, retaining their
-  compositions and draw caches when they move offscreen. Book distribution
-  still expands in five-row increments. Target editing
-  uses an anchored popup with a snapping value wheel, independent remembered
-  character/time goals, immediate tap selection and persistence when scrolling
-  settles.
-  There is no separate calendar picker or weekly goal.
-- The reading-time card owns Week/Month/Year/All selection, initially showing
-  the current Week. A horizontal pager browses natural periods from first activity to
-  today, preparing chart data only for the selected and adjacent pages. Changing
-  mode returns to the current period. The chart uses a shared continuous calendar
-  scale for bar geometry and hit testing, locale week-aligned month ticks, and
-  cached draw geometry/text. Bars drill into a day for week/month or a
-  month for year/all; paging or changing mode clears that selection. The headline,
-  summary and time-ranked books follow the selected bucket, or the whole period
-  when none is selected. Calculations zero-fill buckets, use elapsed-period
-  averages and recompute historical goals across the entire history.
-  Heatmap and week periods follow the locale's first weekday. Reader tracking
-  and the dashboard share the reset-time local-date provider; historical date
-  keys are not rewritten.
-- Book metadata sidecars may include a forced profile id and parsed EPUB
-  language. Reader opening resolves the effective profile from forced profile,
-  then EPUB language primary profile, then the global active profile.
-- Dictionary import, term/Kanji lookup, media, style extraction, deinflection,
-  frequency, and complete pitch data are owned by
-  `third_party/hoshidicts-kotlin-bridge`. The parent Kotlin ABI copy must remain
-  constructor- and method-compatible with the bridge submodule.
-- `DictionaryLookupQueryService` owns the active native lookup session. Rebuilds
-  construct a new native query session for the active profile's dictionary
-  language and enabled Term/Frequency/Pitch/Kanji paths before swapping it into
-  service; term lookup, Kanji query, style, and dictionary-media reads use the
-  currently published session and return empty results when no session is
-  ready. Enabled term dictionaries categorized as `exclude` remain stored and
-  manageable but are omitted from the replacement session.
-- Dictionary imports preserve typed native failures through the repository;
-  batch results pair each failed file with a `UiText` reason. Error-dialog text
-  resolves joined resource fragments in the UI locale, retaining native details
-  without exposing arbitrary exception messages. Cancellation propagates while
-  completed imports still publish the mutation change version.
-- Lookup frequency order and selected dictionary are profile-scoped settings.
-  Every lookup entry point passes typed options to the native query; sorting
-  remains native-owned and does not require rebuilding the query session.
-  Frequency-dictionary update renames migrate selected titles across profiles.
-- Dictionary data directories remain global under `Dictionaries/`, while each
-  profile owns `dictionary_config.json` and `dictionary_settings.json` under
-  `Profiles/<profileId>/`. The config preserves per-type order and enable state,
-  the optional Kanji list, and iOS-compatible term categories `none`,
-  `monolingual`, `bilingual`, and `exclude`; missing newer fields use legacy-safe
-  defaults.
-- Dictionary `.hoshi` backups keep the legacy root archive shape for iOS/older
-  Android compatibility and include profile-scoped dictionary metadata under the
-  reserved `.hoshi-profiles/` payload. The root `config.json` projects the
-  default Japanese profile for single-profile restore targets; newer Android
-  restores merge the profile index and profile dictionary config/settings while
-  preserving profile-owned Anki and Reader settings that are outside the
-  dictionary payload.
-- Reading Settings (font, layout, reading information, and lookup panel options)
-  are stored per active/effective profile in `Profiles/<profileId>/reader_settings.json`.
-  Reader Behavior and statistics sync settings remain global DataStore settings.
-- `AppDisplaySettingsRepository` owns global Theme settings in a separate
-  DataStore: system-driven switching, independent light/dark reading palettes
-  with remembered custom colors, the manually selected slot, accent source/seed,
-  E-ink mode and its independent manual brightness, and migration version.
-  `resolveDisplaySettings(settings, systemDark)` is the pure source for active
-  reading colors and native interface brightness. Both switching modes share the
-  same six choices in two groups: automatic mode selects one per group, manual
-  mode selects one across both. Disabling automatic switching keeps the active
-  slot; re-enabling retains both stored selections. Custom colors preserve alpha;
-  interface and popup brightness come from the selected group, never the custom
-  background's luminance. E-ink follows system brightness when automatic switching
-  is enabled; otherwise its remembered
-  manual brightness takes precedence, defaulting to the palette's brightness until
-  chosen. This override never changes stored palette or accent colors. Disabling
-  automatic switching in E-ink keeps the currently displayed brightness.
-  Display settings block repeated interactions while saving without removing
-  previews, dimming the page, or changing list geometry; colors come from confirmed
-  settings. The full settings page and Reader panel share this content. The Reader
-  panel title is inside its scrollable content; the drag handle remains outside.
-- Display migration targets the settings format shipped in Android v1.3.3. It reads
-  the global active profile before Reader profile initialization or book-specific
-  profile activation. If that profile's settings file is missing or unreadable,
-  it falls back to Reader DataStore, then legacy SharedPreferences, then defaults.
-  Other profiles are not read, and source settings are not rewritten by migration.
-  The new global display schema starts at migration version 1; only a successful
-  write marks migration complete. Completed migration never reapplies old profile
-  settings. Unreleased development schemas have no dedicated migration paths.
-  Background luminance is used only to assign v1.3.3 custom colors to a light/dark
-  group. Legacy Profile JSON color fields remain readable and are preserved on
-  writes, but no longer control runtime
-  display. Book sidecars, sync, and backup formats are unchanged.
-- `ReaderSettingsRepository` combines global display state with profile reading
-  preferences. Both MainActivity and Process Text use `ReaderSettingsHostViewModel`
-  and wait for its first confirmed value before rendering content. ViewModels expose
-  immutable state and localized load/save errors; profile changes never overwrite
-  global display settings. Reading setting events submit transformations against
-  the latest stored value, preserving successive edits during delayed persistence.
-  Display updates use the existing WebView appearance
-  bridge without rebuilding Reader content or lookup state. Both Activity hosts
-  handle `uiMode` changes in place; Compose observes the updated system
-  configuration and the existing WebViews receive the resolved appearance update.
-- Reader font selections retain the legacy display-name field and additionally
-  persist stable family/variant IDs plus each profile's last variant per family.
-- Statistics daily target settings are global DataStore settings behind a
-  repository.
-- Profile-scoped Reading Settings, Dictionary, and Anki settings JSON reads and
-  writes use injected IO dispatchers and repository-owned serialization locks.
-- Frequency and pitch dictionaries are type-specific and are not treated as term
-  fallback dictionaries.
-- Dictionary storage/config mutations share a Hilt singleton mutation
-  coordinator. Dictionary UI, manual updates, imports, and WorkManager automatic
-  updates observe the same in-process busy/progress state and completed-change
-  version; operational dictionary settings such as update interval, last update,
-  and low-memory import remain in DataStore. Automatic updates force low-memory
-  import at the update service boundary without modifying that preference;
-  manual imports and updates continue to honor it.
+### App and settings boundaries
 
-## Reader
+- One Android `app` module; Compose/Material 3 UI, Hilt DI, coroutine/Flow state.
+  Remaining Compose orchestration is tracked in ARCHITECTURE_REFACTORING.
+- New dependencies use constructor injection and Hilt modules/qualifiers;
+  ViewModels use `@HiltViewModel`, immutable `StateFlow` state and state down /
+  events up. `HoshiUiDependencies` resolves the Hilt graph lazily for Compose.
+- Repositories own file/database/native/network operations and blocking-work
+  dispatcher boundaries. Small global preferences use DataStore behind a
+  repository. Persistent scheduled/retryable jobs use WorkManager with Hilt worker injection;
+  current workers cover app updates, dictionary updates and Drive sync.
+- Books, Dictionary, Statistics and Settings own independent Navigation3 back
+  stacks and per-entry ViewModel/saveable stores. Reader and detail routes sit
+  outside the shared root chrome. Dictionary's retained WebView stays attached
+  but inactive at CREATED lifecycle.
+  Each stack uses `rememberSaveableStateHolderNavEntryDecorator()` and
+  `rememberViewModelStoreNavEntryDecorator()` with typed route keys.
+- Sync settings and its transfer queue are separate Settings-stack routes.
+  The queue observes application-owned transfer state and uses the regular page
+  scaffold; leaving it does not stop synchronization.
+- Persisted controls require a confirmed `SettingsLoadState.Loaded`; pages use
+  `SettingsDetailScaffold`, embedded controls use `SettingsContent`. Profile
+  switches reset readiness and reject late results from the previous profile.
+  All required sources must load; show Loading or a retryable error beforehand.
+  Actual values confirmed by an upstream owner may be wrapped as Loaded directly.
+  `StaticSettingsDetailScaffold` serves static menus/actions.
+- `ProfileRepository` owns profile identity. A book resolves forced profile,
+  then EPUB-language primary profile, then global active profile.
+  `ContentLanguageProfile` supports `ja`, `en`, `zh` and `ko`; Chinese region/script
+  tags resolve to the single `zh` profile. Content language controls dictionary
+  sessions, input locale, typography and shared selection policies independently
+  of the app UI language. Chinese and Korean scan from the tapped codepoint,
+  while English rewinds to the word start. The legacy `scanNonJapaneseText` key
+  controls scanning outside the current Japanese/Chinese/Korean character ranges;
+  explicit dictionary searches remain unrestricted. Reader and popup asset loaders
+  must supply the same language policy, including externally loaded iframe scripts.
+  Load language policies before calling selection `configure`, which binds the
+  boundary functions using the profile's canonical language ID. Character scanning
+  extracts each codepoint once and reuses its UTF-16 width; it does not normalize
+  language tags or reselect boundary implementations. `SelectionLanguageAssets`
+  shares lazy language-script reads between reader documents and popup resource routes.
+- Reading appearance, dictionary and Anki settings are profile-owned JSON.
+  Reader behavior, theme/E-ink, statistics goals and TTS preferences are global;
+  TTS voice routes are partitioned by content language and source, shared by profiles of the same language.
+  `ReaderSettingsRepository` combines display and profile reading state;
+  `ReaderSettingsHostViewModel` gates both Activity hosts on confirmed settings.
+  Statistics reads the repository's dedicated global reset-time flow, without
+  loading profile appearance or display settings for each book/session operation.
+- Controls submit field transformations against the latest repository state.
+  TTS/Sasayaki repositories apply them to the latest state inside DataStore edits.
+  Reader profile writes capture the target profile before suspension and keep
+  that target through initialization/read/write under the profile settings lock.
+  Shared TTS reading controls preserve audiobook-specific preferences.
+- `AppDisplaySettingsRepository` owns display persistence; `resolveDisplaySettings`
+  resolves it with `SystemThemeObserver`'s Application-level system brightness.
+  Activity `uiMode` contains the resolved app theme.
+  `HoshiSurfaceRoles` owns native container colors/outlines; reader content and
+  dictionary HTML keep their separate styling paths.
 
-- `ReaderFontManager` owns the app-private font library under `Fonts/`, exposes
-  an immutable revisioned family/variant state, groups user TTF/OTF files by
-  bounded SFNT metadata, and keeps legacy basename-only WOFF/WOFF2 and malformed
-  pre-existing imports readable. Managed recommended files live under
-  `Fonts/System/` and cannot be deleted from the UI. A private atomic alias
-  sidecar preserves legacy basename selections and dictionary CSS references
-  when a parsed family/weight/style slot is replaced by a new internal file.
-- Dictionary settings exposes a stroke-order font download after the active
-  profile has at least one Kanji dictionary. The screen-scoped installer pins
-  the source file size and SHA-256, downloads through a private temporary file,
-  and enters the verified result through `ReaderFontManager`'s normal user-font
-  import path. An already installed `KanjiStrokeOrders` family keeps the action
-  visible but disabled.
-- `ReaderAppearanceViewModel` owns visible font import/download/delete state.
-  Recommended files come only from the pinned internal Google Fonts catalog,
-  are streamed to a same-directory temporary file, and become visible only
-  after exact size and SHA-256 verification followed by an atomic move. These
-  short user-visible transfers use cancellable in-process coroutines rather
-  than WorkManager.
-- Reader and lookup WebViews consume stable per-family CSS aliases and render
-  specs containing installed faces, real weight/style values, variable axes,
-  and the font-library revision. Generic system serif/sans-serif choices remain
-  CSS-matched platform families because OEM builds may not include Noto; legacy
-  Noto display-name values remain compatibility keys only. Publisher leaves EPUB
-  family, style, and weight declarations intact.
-- Reader rendering and lookup remain WebView-based to preserve iOS-aligned
-  visible behavior. Renderer termination advances `ReaderWebViewStateHolder`'s
-  WebView generation, preserving the latest accepted display position or pending
-  navigation target. The host clears the dead view reference, popup state and
-  auto-page work; the chapter view removes/destroys the old WebView and Compose
-  creates a replacement. Existing restore setup replays settings, highlights
-  and cues, then releases queued Sasayaki presentation. Released WebViews reject
-  late JS results and popup/selection bridge events.
-- Reader layout modes are WebView-backed assets for paginated, continuous, and
-  VN reading. Kotlin selects the asset, injects typed settings, and keeps
-  persisted progress as chapter progress mapped to whole-book character count.
-  Paginated page height and page steps use the visible WebView viewport height;
-  vertical padding and column gaps contain only configured user spacing, with
-  no extra font-size overlap strip.
-- Reader `bookinfo.json` sidecars persist whole-book/spine character counts plus
-  optional iOS-compatible TOC fragment offsets and a first-appearance raster
-  image inventory. A reader-facts schema version invalidates stale derived
-  fields when their indexing semantics change. Contents rows, chapter progress,
-  and chapter time remaining derive from one Kotlin-owned TOC range model;
-  Gallery thumbnails and the fullscreen viewer reuse the existing safe EPUB
-  resource path.
-- Reader highlights keep plain text/raw offsets for positioning and optional
-  iOS-compatible `textFurigana` for Contents display. The shared highlight asset
-  owns exact-range identity and returns explicit create/recolor/remove results;
-  Kotlin preserves record identity and creation time on edits through the
-  existing sidecar repository. VN extracts highlight text/readings from its
-  content stream and uses the range map only for screen projection. Batch
-  wrapping refreshes node offsets after each highlight so overlapping ranges
-  remain projectable after a screen rebuild.
-- Book search keeps literal paragraph display text with a UTF-16 boundary map
-  to normalized code-point positions. Result jumps queue a chapter-local range
-  through the existing restore epoch; temporary search marks use shared raw
-  range projection (VN source stream to current clone), without sidecar writes.
-  Node-offset rebuilds refresh active search ranges after persistent-highlight
-  or Sasayaki wrapping moves text nodes; live DOM Ranges do not follow those moves.
-- Reader furigana mode is profile-scoped, with legacy hide-furigana booleans
-  migrated to Hidden or Off. Shared selection consumes Toggle reveal taps and
-  reveals whitespace-adjacent ruby groups; VN uses its existing source/clone
-  projection to retain reveals when a screen is rendered again.
-- Reader text semantics live in `reader-text-semantics.js` and are consumed by
-  paginated, continuous, and VN assets for normalization, matchable character
-  counting, raw character counting, and matchable-character checks. It also owns
-  Sasayaki boundary-punctuation ownership and the matchable-to-raw display index;
-  cue matching offsets remain unchanged.
-- Paginated and continuous share live DOM ruby/text normalization through
-  `reader-dom-text.js`; the mode assets keep thin public wrapper methods so
-  existing reader commands and tests continue to call the same surface. Its
-  Sasayaki DOM adapter reads paragraph, line-break, and media boundaries for all
-  three modes. VN captures CSS boundaries before detaching the chapter DOM,
-  builds and caches this index from the complete source stream
-  and projects expanded raw ranges through its existing screen range map.
-- Reader image setup semantics live in `reader-media-semantics.js` and are
-  consumed by paginated, continuous, and VN assets for shared gaiji class
-  recognition, transparent monochrome inline-image tinting, SVG image
-  aspect-ratio correction, large image block marking, blur wrappers, native
-  image tap bridging, and scoped setup. Paginated and continuous apply it to
-  the chapter document and wait for image load/failure before restore; VN
-  applies it to the current rendered screen without blocking screen rendering
-  on image load.
-- Reader publisher-layout sanitation lives in `reader-layout-semantics.js` and
-  is consumed by paginated, continuous, and VN assets after fonts and source
-  images settle but before offsets, restore, or VN screen construction. It
-  converts oversized paragraph-bearing inline blocks into pageable blocks and
-  removes or clamps empty inline-block struts that exceed the logical viewport.
-- VN reading uses VN-specific reader-web runtime primitives for chapter content
-  streams and rendered range mapping. `reader-vn-content-stream.js` owns source
-  text/raw offsets, matchable offsets, ruby-aware text entries, structural IDs,
-  and standalone media units. `reader-vn-range-map.js` maps VN rendered screens
-  back to raw highlight ranges, matchable Sasayaki ranges, and source positions.
-  `reader-vn-selection-projection.js` maps current-screen selection hits into
-  the source stream for lookup text, complete sentence context, and normalized
-  offsets, then projects semantic ranges back to the visible clone for popup
-  anchors and underlines. VN keeps its mode-specific block/sentence boundaries,
-  reveal behavior, cross-screen Sasayaki merge, viewport fitting, and
-  current-screen rendering.
-- Paginated and continuous production page/scroll runtime paths remain
-  unchanged and are not wired to VN content stream instances or the VN range-map
-  module.
-- Reader fixes compare against the iOS `ReaderWebView` and matching JS/CSS
-  before adding Android-specific behavior.
-- Reader resource loading must stay on the repository's safe loading path and
-  must not broaden file URL access.
-- Durable reader JavaScript and CSS live under
-  `app/src/main/assets/hoshi-web`; Kotlin owns typed commands, escaped
-  parameters, asset loading, dynamic configuration fill-in, and WebView bridge
-  invocation.
-- Reader and lookup popup text selection use shared selection plumbing. Language
-  utilities live in language-named assets such as `language-ja.js`, while
-  selection scan policies live in `selection-ja.js` and `selection-en.js`;
-  Kotlin loads the utility plus policy selected from `ContentLanguageProfile`,
-  and the Japanese policy owns `scanNonJapaneseText` filtering. Shared selection
-  accepts an optional semantic projection; paginated, continuous, and popup use
-  the identity live-DOM path, while VN supplies its source/clone projection and
-  fails closed when a clone hit cannot be mapped.
-- Reader, Dictionary search, and Process Text lookup popups render through the
-  shared `reader-popup-host.js` iframe stack and `ReaderLookupPopupWebBridge`.
-  Kotlin owns popup payloads, resource handling, and native service bridges for
-  audio, dictionary media, Anki, and external links; do not reintroduce Android
-  native overlay popup fallback paths for these flows.
-- Dictionary's `DictionarySearchSession` is owned by the AppShell composition.
-  It retains the WebView's current DOM, scroll position and JS history across tab
-  removal, with root scroll state, child history counts and the bridge callback
-  holder. Reattachment rebinds touch callbacks; the WebView pauses outside its
-  resumed lifecycle, and the shell disposes it. Nonempty iframe sync waits for
-  measured viewport/header dimensions; empty search/profile resets clear the
-  stack immediately. Inactive search fields cannot request focus or show the
-  keyboard. Do not put Activity-backed WebViews in ViewModels.
-- Built-in remote word audio uses Yomitan's Japanese source order:
-  JapanesePod101, LanguagePod101, and Jisho. `BuiltInAudioSource` owns stable
-  internal source URLs and resource-backed names. `AudioSettingsRepository`
-  migrates the old built-in proxy source in place, preserving its enabled state
-  and all custom sources. `RemoteWordAudioRepository` owns HTTP requests on the
-  IO dispatcher, HTML parsing, and JapanesePod101 placeholder-audio validation.
-  The Hilt-provided `AudioRequestHandler` adapts these sources to the existing
-  audio-list JSON protocol at the WebView interception boundary; all popup
-  hosts share it. Candidate URLs are actual remote media URLs, so playback and
-  Anki continue through their existing bridges and backends.
-- Popup audio sources cross the iframe boundary as ordered name/URL pairs.
-  `LocalAudioRepository` returns every enabled, ranked local candidate and
-  `AudioRequestHandler` exposes their descriptive labels and deduplicated URLs.
-  Popup JS owns the entry-scoped candidate cache and selected URL, so playback
-  and Anki mining use the same choice; replacing or restoring popup results
-  clears that state. Source requests are cached separately: default playback
-  and mining stop at the first matching source in configured order, while the
-  recording menu opens immediately and resolves all sources concurrently.
-  Source groups update in configured order, and available rows select by URL
-  without waiting for other sources; closed/reset menus ignore late results.
-- Shared iframe frame payloads accept optional root `sourceText` for Dictionary
-  search and Process Text; Reader and recursive child frames omit it. Shared
-  popup assets render character spans, look up exact suffixes on tap, mark the
-  match, and preserve scroll on successful source redirects. Popup geometry
-  converts the source-enabled entries minimum height to one visual viewport
-  under HTML zoom; keep that reserve while replacement entries load, and clear
-  it for ordinary/reset payloads. Profile-scoped
-  `DictionarySettings.searchTextSize` defaults to 22 and is normalized to 12–48.
-- Dictionary and Process Text root lookup state retain the complete original
-  query as the mining sentence. Successful redirects use the UTF-16 length
-  difference only when the requested query is an exact suffix, otherwise the
-  mining offset is null. Dictionary clears that offset on a new search; Process
-  Text initializes it to zero and also updates its root selection text/offset
-  after successful redirects. Failed redirects preserve native results,
-  selection/mining context, and history.
-  Shared popup history snapshots retain source match ranges and UTF-16 mining
-  offsets. Restoring a snapshot sends `sourceHistoryRestored` to update only the
-  Dictionary or Process Text root mining context; Reader and child popups ignore
-  this message. Source payloads also carry the initial `sourceSentenceOffset`
-  so restoring the initial Process Text snapshot preserves its zero offset.
-  Process Text creates its root even with no initial match, so source taps can
-  recover a lookup; recursive popup creation still requires results.
-- The shared popup term payload carries pitch entries as a numeric downstep or
-  explicit H/L pattern plus 1-based nasal/devoice mora positions. Popup JS owns
-  effective-pattern deduplication and visual rendering. A single Kanji in a term
-  header routes through the same iframe bridge to the native Kanji query and is
-  rendered in place with the popup's existing back/forward history.
-- Lookup popup CSS `zoom` coordinate conversion and scrolling are owned by
-  `popup.js` through `hoshiPopupGeometry`. Popup term alignment, reduced-motion
-  viewport scrolling, history/reset positions, tap selection coordinates, and
-  selection bridge rect scaling use that shared visual-coordinate boundary
-  instead of mixing unscaled layout offsets with scaled scroll coordinates.
-- Lookup opens from a single tap on reader text. Long press is reserved for
-  native selection/highlight flows.
+### UI and localization contracts
 
-## Integrations
+- The edge-to-edge `MainActivity` requests `adjustResize` for keyboard insets.
+  Settings content that resizes for the keyboard applies `imePadding()` after
+  consuming any scaffold padding it already applied.
+- App-authored visible text uses resources in both `values/strings.xml` and
+  `values-zh-rCN/strings.xml`, following [TRANSLATING.md](TRANSLATING.md).
+  Compose uses `stringResource`/`pluralStringResource`;
+  non-UI messages use `UiText` or an equivalent resource reference, without
+  retaining a `Context`. Original external diagnostics retain their actual text.
+- `AppLanguage` uses `AppCompatDelegate` for the global app language on API 26+;
+  AndroidX auto-storage owns pre-33 persistence and framework migration. Keep
+  language preferences out of DataStore and Profiles. Locale changes use normal
+  Activity recreation; consumed launch requests must not replay after restore.
+  `ui/AppLanguageResources.kt` supplies locale-aware resources outside AppCompat
+  Activities; `UiText.resolve(context)` uses it too. Resolve background text at
+  generation time instead of caching a localized Context. Media notifications
+  adopt the language on normal generation/update without restarting playback;
+  cached session buttons refresh when regenerated. Existing download requests
+  and historical diagnostics retain their original text.
+- New/replacement icons use Material Icons, Material vector assets or established
+  brand assets.
+- Accessibility-only work (TalkBack, screen-reader semantics, announcements and
+  focus/traversal adaptations) requires an explicit user request.
+  Existing accessibility-only code may be removed after checking ordinary input
+  and UI behavior are unaffected.
 
-- Current-book cover publishing is an opt-in global platform integration backed
-  by DataStore. After a Reader route finishes loading, a Hilt-backed publisher
-  reuses the extracted book cover and renders it once onto a screen-sized PNG
-  using the persisted Fit, Fill, or Stretch mode. The publisher independently
-  updates the Android lock-screen wallpaper and/or a persisted Storage Access
-  Framework document URI. On compatible iReader firmware, a third target
-  atomically copies the rendered PNG into `/data/zhangyue/logo/book` under a
-  unique name and explicitly notifies iReader SystemUI’s `BOOK` screen-saver
-  backend.
-  The target only publishes while the system `wallpaper_lock_screen_info`
-  setting selects type `2`; it does not write that system setting or impersonate
-  the built-in reader provider. Publishing failures do not block Reader
-  loading, and the integration does not request broad storage access.
-- Anki work stays behind the Anki backend/repository boundary.
-- Anki settings are stored per active profile in
-  `Profiles/<profileId>/anki_config.json`. Schema version 2 owns one to three
-  stable-ID `AnkiCardFormat` values, each with its own icon, deck, note type,
-  field mappings, and tags; legacy single-format JSON is migrated and persisted
-  as one default format. Popup mining, per-format duplicate checks, and opening
-  existing notes all carry the stable format ID through the reader bridge and
-  still go through the Anki repository/backend boundary. AnkiConnect opens
-  notes with `guiBrowse`; AnkiDroid opens its browser with `search_query` and `all_decks=true` Intent
-  extras so the previous browser deck selection cannot narrow the requested
-  duplicate scope. At mining time,
-  glossary-first and monolingual/bilingual definition handlebars resolve from
-  the current profile's persisted term-dictionary order and categories without
-  extending the popup mining payload.
-- Google Drive sync uses Android/Google OAuth and Drive APIs through the
-  repository/sync boundary. The Drive data source owns paginated folder listing,
-  grouped sync-file discovery, bookdata upload/download, trash, cache clearing,
-  and network preflight; Books keeps remote-only Google Drive books as
-  `RemoteBookEntry` models rather than local `BookEntry` placeholders. OAuth
-  and Drive HTTP connections use 10-second connect/read timeouts. Sync-layer
-  network failure classification lets automatic bookshelf refresh ignore
-  offline, timeout and socket connection failures; manual operations still
-  report errors, as do HTTP, TLS and non-network failures.
-- Audio playback uses Media3/ExoPlayer with controller/repository boundaries.
-- Sasayaki accepts MP3, M4B/M4A, and Ogg Opus audiobook sources. One repository
-  inspection returns format, metadata, chapters, and static duration for
-  seekable sources before playback starts. M4B inspection reads MP4 metadata, `moov/udta/chpl`, and
-  `mvhd`; Opus inspection reads OpusTags and derives duration from the final
-  Ogg granule position after pre-skip without invoking Android's platform
-  metadata reader. MP3 keeps the platform metadata/duration path and has no
-  app-level chapter parser. A provider that exposes only a non-seekable stream
-  may leave static duration or container-only metadata unknown until playback
-  preparation. Displayed artist normalization remains `ARTIST`, then
-  `ALBUMARTIST`, then `AUTHOR`.
-- Sasayaki Japanese transcription uses the repository-owned sherpa-onnx backend
-  with ReazonSpeech k2-v2 INT8 on CPU and adaptive energy segmentation for clean
-  audiobook recordings. A bounded 30-second RMS histogram estimates the noise
-  floor; its 10th percentile plus 12 dB is clamped to -55..-30 dBFS. Quiet
-  prehistory protects low-volume openings. Short pauses stay inside a candidate
-  utterance; the 250 ms minimum applies after the segment ends, except for
-  continuations after a hard cut. Silero is not loaded or downloaded.
-  SHA-256 verified models
-  download on demand to `noBackupFilesDir/SasayakiModels`; they are not bundled
-  into the APK or included in Android backup. ONNX Runtime, sherpa JNI and the FFmpeg decoder also
-  download on demand to `noBackupFilesDir/SasayakiRuntime/<abi>`, using filenames
-  addressed by content hash so app upgrades reuse unchanged files. The installed
-  APK pins URLs, sizes and SHA-256 hashes; both resource groups share one consent
-  and byte-weighted progress flow. Native files become read-only before writing
-  and are atomically published after verification. The backend loads ONNX then
-  sherpa JNI by absolute path only after preparation. This is the GitHub APK
-  distribution path; a Play distribution would require Play Feature Delivery.
-  A minimal FFmpeg 9.0.2 JNI decoder
-  reads existing SAF/private-file descriptors, respecting offset/length and
-  source timestamps, and downmixes/resamples to 16 kHz float PCM. CMake verifies
-  the upstream source archive SHA-256 and builds only local audio components;
-  no CLI, network protocols, encoders, or video decoders are bundled. Its license
-  and source link are available in Settings > About.
-  DataStore-backed Sasayaki settings persist Lightweight/Balanced/Fast transcription
-  presets, mapping to 1/2/3 concurrent ASR segments, with Balanced as the default.
-  Each start/resume snapshots its preset; the selector is locked while running.
-  ASR uses one internal model thread per inference. One shared recognizer owns
-  independent streams; energy scoring and segmentation remain sequential. A bounded queue
-  publishes completed segments in audio order, including silence, so checkpoints
-  never skip unfinished speech. Cancellation joins all streams before model release.
-  Decoding/resampling on the IO dispatcher overlaps segmentation/ASR through a bounded
-  channel (at most 4 MiB of decoded PCM queued, plus bounded speech segment copies).
-  Native reads
-  return at most 4096 samples; seek preroll preserves codec history, and the
-  resampler phase stays on the absolute sample clock. Structured cancellation
-  closes the native decoder and SAF descriptors before recognition resources
-  are released. Speech segments have a 20-second hard limit;
-  checkpoints commit only fully processed audio. ASR supplies token start
-  timestamps; token ends are bounded estimates from the next token/segment.
-  Transcription duration prefers the platform's first audio-track duration,
-  falling back to the parsed M4B/Opus container duration when the platform
-  extractor exposes no audio track, then to media metadata.
-  Separate utterances retain up to one second of leading ASR context and trim
-  already committed silence so early prefix timestamps cannot discard new words;
-  hard cuts and resume within speech retain half a second of leading context.
-  Ordered token stitching compares a recent suffix with the next recognized prefix,
-  retaining new words whose timestamps fall in overlapping context. Single-token
-  duplicates require close timestamps; multi-token phrases can tolerate drift within
-  the phrase. Only overlapping leading tokens are redistributed after already emitted
-  text. Core checkpoints remain independent of recognized trailing padding; resume
-  passes the saved one-second token tail by interval overlap to the same stitcher.
-- A process-wide `SasayakiTranscriptionCoordinator` serializes transcription,
-  checkpoints `sasayaki_transcript.json` approximately every 15 seconds, and
-  runs one conflated matching worker alongside recognition. The first text batch
-  requests a match immediately; subsequent updates are throttled to 15 seconds
-  and consume the latest immutable token snapshot. Pausing flushes unmatched
-  batches; completion and explicit realignment perform a full calibration.
-  Match publication has its own revision and does not enter the blocking
-  `Aligning` stage during recognition. Match sidecars use atomic replacement. The sidecar keeps iOS's
-  `through`, `duration`, and timed-token schema with an optional audio-source
-  identity to avoid resuming a different file of the same duration. Atomic
-  replacement retains the previous checkpoint on interruption. `BookWorkRegistry`
-  joins active work before book deletion. Clearing transcription preserves
-  existing matches; completed transcripts can be realigned without ASR.
-  Typed failures distinguish audio access, model/runtime resource preparation,
-  speech recognition, book matching, and transcript storage; the UI maps each
-  category to a localized message. Unknown failures show the original exception
-  and cause chain in the UI, and Logcat records the full stack with its operation
-  stage and category.
-- Match sidecars record `source` as `subtitles` or `transcription`. Legacy Android
-  transcription matches are recognized by their chapter-offset cue IDs; this
-  provenance selects the default matching tab without overriding a manual tab
-  choice in the current Reader session. Transcript presence alone is not used.
-  A Reader-scoped subtitle export ViewModel snapshots either source through an
-  injected repository, which owns UTF-8 SRT cache files and SAF output I/O.
-  A Reader-owned launcher stays registered when the sheet closes, saving via
-  CreateDocument or sharing a temporary read-only FileProvider URI; a pending save retains its snapshot path in SavedStateHandle.
-  Exports contain matched text and original audio timestamps, without playback delay/rate
-  adjustments. Shared snapshots use separate cache paths and expire after seven days on next export.
-- The Reader-route Hilt ViewModel exposes transcription state and delivers
-  match revisions during transcription even after the sheet closes. Reader coalesces
-  match snapshots until lookup, image holds, and restoration finish. Data refreshes
-  preserve playback/hold state and repaint changed cues without navigation; reader
-  reattachment explicitly restores the current cue. Live VN cue updates defer
-  pagination changes until the next navigation and preserve the current reveal.
-  Reader owns audio-source
-  binding and the combined keep-screen-on flag. Closing the sheet or backgrounding
-  the app does not actively pause inference. Removing the Reader route clears
-  its ViewModel, which pauses and saves the task; configuration recreation keeps
-  that ViewModel. This remains process-bound work without a foreground service or
-  WorkManager guarantee: Android may freeze or reclaim the background process,
-  and a later start resumes its saved checkpoint. Transcription reuses the
-  audiobook card's imported source;
-  verified cached models do not emit download progress. The model store requests
-  confirmation only after verifying the cache and before opening a download;
-  the coordinator suspends until the Reader confirms or cancels. Cancelling
-  before any new transcription leaves existing sidecars unchanged.
-  `SasayakiSource` shares chapter exclusions with SRT matching. The transcript
-  aligner uses normalized/ruby-aware exact anchors, monotonic ordering, bounded
-  gap repair, and sentence boundaries in Reader code-point coordinates; it does
-  not invent anchors at unspoken book/audio edges. Bounded gaps between real anchors
-  can cross EPUB files, retaining chapter/cue boundaries and original chapter offsets;
-  these repairs use the same length/evidence limits and are cached until the anchors change.
-  A run-scoped alignment session
-  caches book normalization, the distinctive-text index, normalized speech, and
-  existing anchor candidates. Only new speech and an overlapping exact tail are
-  searched; bounded gaps are repaired again only when their neighboring anchors
-  change. The global monotonic chain is still reconsidered so new evidence can
-  correct an earlier position. After chain selection, a one- or two-character
-  cross-sentence anchor prefix may return to an earlier recognized sentence's short
-  ending when that remainder aligns, the intervening sentence has no equally strong
-  competing tail (including ruby readings), and the following distinctive anchor stays intact.
-  Transfers preserve whole token and ruby-base boundaries; the intervening omitted
-  sentence receives no independently borrowed token time. Resolved anchors also key the gap cache.
-  CPU matching runs on the Default dispatcher;
-  parsing and persistence remain repository-owned I/O. Bounded gap alignment includes
-  neighboring confirmed text through sentence edges when available, pinning the
-  existing text/token boundaries. Similarity is scored per sentence with that context;
-  omitted neighboring sentences cannot lower the score of a recognized sentence.
-  Commas still split display cues but retain shared sentence context for scoring.
-  Short kana/kanji rewrites spanning one comma can use that sentence's confidence when both
-  cues have recognized text and no whole omitted cue lies between them; proportional
-  token allocation gives the two cues disjoint time ranges at the comma. Cross-cue
-  error blocks compare each cue separately, retaining unique reading candidates before
-  attempting proportional allocation. Two supported cue edges may proportionally split
-  a short rewrite at a non-overlapping original token boundary; a whole neighboring cue
-  additionally requires a two-kana cue with all-kana written and spoken gaps. Other cross-cue reading
-  repairs require a unique compatible split, with competing readings left unresolved.
-  Entire cues recovered from cross-cue gaps require complete original token ranges
-  and more than a single ambiguous character.
-  One edge may be a whole reading cue, but a kana reading cannot be split between
-  two kanji words solely by script lengths. A weak omitted cue cannot take one kana
-  from a continuous reading of the next anchored kanji word when no other cue has
-  a competing reading.
-  Plain/ruby track selection weighs the affected text, not the length of surrounding
-  anchors. Symbol variants of the chosen seed track remain available until exact
-  extension; selection and cache deduplication prefer wider source coverage, then longer
-  spoken coverage. Existing plain/ruby seed precedence remains unchanged; a spoken
-  percent variant cannot let a different ruby track consume an adjacent omitted reply.
-  Gap edit alignment prefers exact letters when edit costs tie and distinguishes
-  token insertions from text deletions. Both axes remain bounded to 384 characters;
-  a length imbalance does not discard distinctive recognized islands. Unique one-kanji
-  cues or two-character cue endings immediately beside a real anchor can pin the local
-  alignment, preventing a long omission from moving them into a later repeated word.
-  Short gaps with a substantial exact run allow
-  more spelling differences; each uncertain block uses only its own tokens and requires
-  minimum evidence from its sentence before inferring changed or omitted fragments. Compatible
-  kana/kanji recovery requires existing kana to occur in order in the candidate reading
-  and uses bounded lengths, not an automatic pronunciation dictionary. When two real
-  anchors enclose exactly one short cue and complete speech tokens, its book text can
-  use that interval despite entirely different ASR wording or numeric values, subject
-  to length-ratio and token-boundary limits. Within a larger repair window, an isolated short
-  reply can likewise use a complete token range separated from both neighbors by pauses;
-  an extra spoken suffix cannot supply
-  an omitted reply. Supported phrases allow length ratios of 1:4 through 4:1, retaining
-  contracted names and wording differences without requiring the ASR to repeat each letter.
-  The internal speech projection expands `%`/`％` to `パーセント` before punctuation
-  filtering, preserving the original token's interval and boundary without changing stored ASR text.
-  Source projections retain plain/ruby tracks and offer the spoken percent spelling as
-  another track; its timing attaches to the preceding counted character so Reader offsets
-  and symbol-only spellings continue to work.
-  Bounded edit alignment treats individual Arabic/kanji digits and small/full kana
-  vowels as equivalent without changing exact anchor seeds, stored text, or cue offsets.
-  Small tsu and contracted ya/yu/yo remain distinct. A partial sentence
-  edge can be recovered beside an omitted cue only when that cue cannot plausibly
-  claim the same tokens. Recognized text and evidence-supported explicit-token repairs
-  are not rejected solely for long estimated durations: a token end can include silence
-  or omitted speech before the next token starts. Invalid/nonpositive token intervals
-  remain excluded. Ruby syllables sharing a source character merge their timings;
-  supported cues retain their token intervals without applying a duration cap or inventing
-  word endpoints. Text density still determines whether to keep a cue or its supported spans.
-  Short omitted word fragments can use the time between real neighboring anchors
-  or an adjacent token within their cue when no silence exists. Cue assembly applies the same
-  gap-duration limit before joining supported spans across intervals with no recognized
-  speech, even when text density is high; unassigned ASR wording is not treated as silence.
-  Sparse sentences keep
-  their contiguous supported spans instead of discarding all matches.
-  After precise cue assembly, short entirely omitted interior cues can share a neighboring
-  highlight: audiobook body text bounded by real matches is assumed narrated. Grouping stays
-  within one chapter, with at most 48 missing characters, a 12-second inter-cue gap
-  and 96 characters in each expanded cue. Mixed gaps first return up to two missing
-  edge characters to their own display cue, requiring at least twice as many recognized
-  characters in that cue; the remaining omission must contain whole display cues and
-  at most two sentence boundaries (commas excluded). Pure word holes still use the
-  earlier repair. Each side needs four recognized context characters and sixteen combined:
-  short cues can include consecutive original matches outward from the gap, stopping at
-  text holes or audio gaps exceeding one second. Characters added by grouping never contribute.
-  The side with more excess boundary-token time relative to its nearby cadence
-  is preferred; otherwise sentence continuity across commas, then the lower combined
-  character rate decide. The selected cue includes the intervening audio gap; the opposite
-  cue's timing and all original recognized text remain intact; edge characters added on
-  either side retain their own cue's interval. Decisions use original matches only,
-  never inferred text as new evidence. No separate timing is invented for the omission,
-  no ASR inference is run, and book/chapter ends remain unextended. Grouped text participates
-  in coverage, unmatched counts and SRT export through the existing match model.
-  Match coverage is summed
-  matched character lengths divided by the parsed book character count.
-- Sasayaki audiobook playback is owned by a Hilt-backed Media3
-  `MediaSessionService`. The service `onCreate` lifecycle creates the active
-  ExoPlayer and MediaSession, but Reader load paths do not connect to the
-  service or restore media into the player. The first explicit audio control
-  request connects to the `MediaSessionService`, restores the active audio
-  source into the service player, and then runs the requested command so Reader
-  restoration cannot leave a paused system media notification. The service
-  runtime owns the active Sasayaki playback controller and active book id.
-  Reader UI attaches/detaches
-  cue sinks and sends explicit stop on reader exit; Android media controls and
-  notification return actions route through the same service-owned session.
-  Until Reader UI is fully MediaController-based, the runtime keeps one
-  process-local controller connection after entering the MediaSessionService
-  lifecycle, uses Sasayaki's foreground playback request state to distinguish
-  user-paused task removal from ongoing background playback, clears the active
-  service player before stopping paused playback on task removal, and otherwise
-  follows Media3's ongoing-playback service semantics. Playback persistence
-  uses the application scope with the
-  injected IO dispatcher rather than Reader's Compose scope, and saves are
-  serialized with latest-snapshot conflation.
-  Background playback uses Android's `mediaPlayback` foreground-service path
-  inside the Media3 `MediaSessionService`; Media3 owns foreground-service
-  start/stop and Sasayaki does not call `startForegroundService()`,
-  `startForeground()`, `stopForeground()`, `stopSelf()`, or `stopService()`
-  directly for this lifecycle. Sasayaki customizes notification rendering
-  through a Media3 `MediaNotification.Provider` using the service MediaSession
-  token and Media3 player-command PendingIntents for transport controls, and
-  the ExoPlayer uses local wake mode for long-running playback. Explicit
-  Reader exit requests stop playback and clear the service player so a stopped
-  session or notification cannot outlive the user-visible Reader playback
-  session.
-  If Android reports `ActivityManager.isBackgroundRestricted()` for the app,
-  the platform treats background work as user-restricted; this can prevent
-  media foreground-service startup after the Reader activity leaves the
-  foreground, so the app must treat long-running background playback in that
-  state as a device/user restriction rather than an in-process lifecycle
-  guarantee.
-- Update checks use WorkManager unique work, with worker dependencies supplied
-  by Hilt's WorkManager integration.
+### Errors and diagnostics
 
-## Native And Rust Build
+This contract applies across repositories, backends, controllers, workers and UI.
+Typed categories select recovery alongside the original failure.
 
-The Android app currently has three native stacks:
+| Boundary | Required behavior / owner |
+| --- | --- |
+| Failure → visible state | `ui/ErrorDetails.kt`: localized operation/category plus original nonempty messages and cause chain; missing messages fall back to the original type or actual platform/service code. Dialogs, Snackbar and retry states retain these details for terminal/manual failures. Batch results retain each object's name and reason. |
+| Throwable → runtime history | `withErrorDetails` formats and enqueues the original Throwable. If a boundary converts it to a string/enum/batch result first, call `ErrorDiagnosticEvents.buffer.record(operation, originalError)` there. Background failure/retry paths also record the original failure. |
+| Service response → runtime history | With no Throwable, `recordServiceFailure` records the actual platform/service response details. |
+| Event → persistent history | `NonfatalDiagnosticsLogger`, started by `HoshiApplication`, drains `ErrorDiagnosticBuffer` on the injected IO dispatcher in application scope. `NonfatalDiagnosticsStore` serializes and atomically replaces bounded `diagnostics/handled-errors.json` history. UI error formatting does no disk I/O. |
 
-- `app/src/main/cpp/CMakeLists.txt` builds the hoshidicts JNI bridge from the
-  `third_party/hoshidicts-kotlin-bridge` submodule.
-- `app/src/main/rust/hoshiepub` builds the Rust EPUB parser through UniFFI.
-- The pinned, checksum-verified sherpa-onnx AAR supplies local speech inference
-  and its ONNX Runtime libraries. `buildSrc` extracts a bindings-only JAR and
-  redirects its native-load calls to the verified app-private loader. The unused
-  sherpa C/C++ API libraries are neither bundled nor downloaded. Release CI
-  publishes the exact hash-named inference files in a separate, pinned component
-  prerelease (excluded from app updates), with notices
-  also accessible under Settings > About. FFmpeg builds independently through
-  `tools/build-transcription-audio.py` and has a checked-in, content-addressed
-  catalog. Publish its binaries before shipping APKs that reference a new catalog;
-  app release CI verifies their deployed hashes. Neither inference nor FFmpeg
-  native code is bundled in the base APK.
-  Native JNI entry points are retained under R8.
+- `CancellationException` propagates to the caller. Runtime history records
+  operational failures; live form validation uses pure `diagnosticMessage()`
+  formatting with `UiText`. Successful optional/cache fallbacks and explicitly
+  defined automatic offline suppression may stay quiet.
+- The buffer deduplicates the same Throwable by weak identity; separate retry
+  failures remain separate. Snapshots flush pending events. A drained batch
+  finishes its bounded writes even if the requesting screen is cancelled.
+- Logger failures are isolated from the business error and event buffer.
+  Corrupt history JSON keeps a damaged-file backup and its parse failure in the
+  rebuilt log; other read failures must not overwrite the source history.
+- Error dialogs/details expose diagnostics to the user. The producing boundary
+  removes credentials/auth headers before display or recording; `ErrorDetails`
+  formats the supplied failure.
+  Diagnostics reports combine handled errors with crash/process-exit history;
+  sharing uses FileProvider-backed files.
+- `ProcessExitDiagnosticsReport` supplies mutually exclusive crash and other-exit
+  categories to the screen and exports. Local captures and Android Java/native
+  crash entries belong to crash history, preserving each original source record;
+  all other exit reasons stay in process-exit history. `NativeCrashTrace` decodes
+  API 31+ tombstone protobuf into the original signal, abort message, causes and
+  crashing-thread frames. Trace reads
+  are bounded; missing or malformed traces never remove the crash event.
 
-Current build wiring lives in `app/build.gradle.kts`:
+- `WebViewDebuggingSettings` owns the app-local Diagnostics toggle and applies
+  `WebView.setWebContentsDebuggingEnabled` on the main thread, including to existing
+  WebViews without reloading documents. Release defaults off; debug builds retain
+  automatic debugging until explicitly disabled. Application startup restores the
+  saved choice without initializing WebView for a disabled release setting.
+  The switch only shows confirmed state; failed writes restore the previous
+  runtime choice and report the error. This setting is independent of profiles.
 
-- Registers generated UniFFI Kotlin output under
-  `build/generated/source/uniffi/main/kotlin`.
-- Registers generated Rust JNI libraries under debug and release `jniLibs`
-  directories.
-- Builds the Rust host library for JVM tests and UniFFI Kotlin generation.
-- Runs UniFFI bindgen from the host Rust build.
-- Builds Android Rust libraries with `cargo-ndk` for debug and release ABIs.
-- Wires generated sources into Kotlin compilation and Rust host libraries into
-  JVM tests.
-- Uses JNA AAR for Android packaging and JNA jar for JVM unit tests.
-- Uses Java 17 targets and KSP-backed Hilt code generation for the app graph.
-- Pins CMake 3.31.6 for local Android builds and both CI/release workflows,
-  matching the minimum required by the tracked Glaze dependency.
+Validation guidance and failure injection methods are in
+[VALIDATION.md](VALIDATION.md#test-and-fixture-pitfalls).
 
-Hard constraints:
+## Storage and native boundaries
 
-- `app/src/main/rust/hoshiepub/uniffi.toml` must keep
-  `[bindings.kotlin] android = true`.
-- `cargo-ndk` should build library targets only and must not cross-compile
-  UniFFI bindgen or other host binaries.
+- Books live in app-specific `Books/` folders with a packed EPUB and sidecar JSON.
+  SAF supplies imports. `BookRepository` owns import/extraction/I/O; parsing
+  extracts only into controlled cache/temp locations. Metadata keeps the full
+  title independently of its byte-bounded physical filename.
+- App startup calls `BookRepository.migrateCacheGroups` on IO independently
+  of sync configuration. The scan shares the book storage and reserved-name
+  migration locks. It repairs the group of app-owned regular files under
+  `Books/` (including archived books) that retain the cache directory's
+  group, without following symlinks or rewriting content. A local no-backup
+  marker is written after a successful pass so interrupted work can retry.
+- `EpubBookParser` resolves unsupported spine items through cycle-checked manifest
+  fallbacks to HTML. Chapter resources, reader facts and media use the resolved
+  href; the original href remains a navigation alias. Rebuilt reader facts restore
+  bookmarks from character counts. Rust exposes explicit cover candidates in
+  EPUB 3 `cover-image` then EPUB 2 `meta name="cover"` order; Kotlin validates
+  local resources and bitmap dimensions, trying later declarations when a
+  preferred cover is unusable. The existing cover-ID heuristic applies only
+  without explicit candidates; body illustrations are never promoted to covers.
+  Parsing unwraps only lossless single-raster SVG covers and preserves complex
+  SVGs when no declared bitmap is usable.
+  On opening, `BookRepository.restoreCoverIfNeeded` reuses the parsed EPUB
+  to replace missing/SVG covers with a local bitmap and marks only the cover for
+  sync. Publication finishes across cancellation; repair failures stay nonfatal
+  and retry on the next opening. Normal covers, books without a usable bitmap
+  cover and Sasayaki matches remain unchanged; there is no library-wide migration or remote orphan cleanup.
+- `BookStorageLock` serializes atomic sidecar/statistics transactions.
+  Book backup restore holds it while replacing or rolling back the library.
+  `BookWorkRegistry` joins active book work before deletion or generation
+  replacement, before acquiring that lock.
+  Book discovery rechecks each directory and completes its legacy metadata/EPUB
+  migration under the same storage lock; an earlier directory snapshot must not
+  recreate or return a book that has since been deleted.
+  Directory ordering snapshots modification times before sorting; comparators
+  must not reread timestamps that concurrent sidecar writes can change.
+- Bookshelf loading reuses the migrated `BookEntry` snapshot for shelf membership
+  instead of rereading every book's metadata. `SyncStorage.prepareLibrary` prepares
+  only missing live bookkeeping and checks empty archives; live-book sessions are loaded/migrated
+  when needed by sync/statistics, not eagerly under the startup storage lock.
+  A live directory with a deleted sync record is marked pending during preparation
+  so the next sync reapplies its state even when the remote version is cached.
+  Sync directory lookup checks the normalized exact path first, enumerating the
+  library only for legacy Unicode-equivalent names that need fallback resolution.
+- Shelf identity uses NFC (`syncKey`): trim new name input, then use the canonical
+  name for duplicate checks, creation, rename, move targets and published UI state.
+  Existing identity lookups normalize without trimming stored names.
+  `BookRepository.saveShelves` rejects canonical-name collisions before sidecar
+  writes, preserving shelf order and book memberships when validation fails.
+- `BookshelfViewModel` owns import progress from folder scanning through the final
+  shelf load. Background reloads cannot clear or replace that progress; local/sync
+  notifications during import are coalesced into the final refresh, with changes
+  arriving during that load refreshed afterward. Cloud transfers continue normally.
+  A final shelf-load failure is reported as a shelf refresh error independently
+  of per-book import results.
+- Bookshelf progress and read/unread capabilities come from `BookRepository`'s
+  persisted reading state, including cached bookinfo on cloud placeholders.
+  Corrupt statistics leave other shelf state available with diagnostics; resets
+  fail without replacing unreadable statistics. Read/unread actions join the
+  reader route's registered pending saves before acquiring the storage lock.
+  Mark Unread resets the bookmark and tombstones live/coalesced archived sessions
+  through `BookStatisticsStore` under the shared storage lock; once writes begin,
+  both sidecars finish across caller cancellation. Shelf reloads and progress
+  refreshes publish updated action availability together with progress.
+  Opening updates cached recency immediately. Returning refreshes only that
+  book's metadata, reading state and cover after joining registered Reader saves;
+  return results are versioned per book, so opening another book does not discard
+  a pending update. Reopening the same book rejects its older snapshot, and
+  concurrent full loads wait for all pending return reads before superseding them.
+  Sync changes received during Reader remain dirty and trigger a full load after the single
+  book is published. Local and remote load generations are independent, so a
+  Reader round trip does not discard pending remote results. Stored sort
+  preferences reorder the loaded snapshot without another library read.
+- `BookStatisticsStore` is the shared owner for reader sessions, edits, sync and
+  archive/restore. UUID-keyed nullable records retain deletions; daily totals
+  derive from sessions and reset time. `Books/statistics_archive/` participates
+  in Books backups but not ordinary book discovery or TTU exports.
+  `ReaderStatisticsTracker` rolls sessions at the configured statistics-day
+  boundary and queues completed segments through the reader's serialized saves.
+  Pending segments remain in totals and save snapshots until store readback
+  confirms their values or deletions; late readback must not drop unsaved segments.
+- Sidecars preserve iOS contracts. Bookmark dates use the Apple reference epoch;
+  sync/session timestamps use Unix milliseconds. Provider conversion belongs
+  at the sync boundary. JSON uses Kotlin Serialization or Moshi. Compatibility
+  migrations protect released user data; unreleased features use current formats
+  and interactions.
+- Dictionaries are global under `Dictionaries/`; profile config/settings live
+  under `Profiles/<profileId>/`. Enabled dictionary membership is independent
+  of Anki categories: `exclude` removes aggregate Anki definitions, not lookup.
+  Manual ZIP imports replace the installed directory matching the detected type
+  and title in place, retaining its directory name for profile bindings.
+- `DictionaryLookupQueryService` atomically replaces the active native session.
+  Import, term/Kanji query, deinflection, frequency, pitch, styles and media are
+  owned by `third_party/hoshidicts-kotlin-bridge`; keep the parent's Kotlin ABI
+  copy compatible. UI accesses them through `DictionaryNativeBridge`/repository APIs.
+- New dictionary imports use native format 5. Opening an older dictionary can
+  write a new `phf.table` and remove its legacy index files. Keep the dictionary
+  directory writable during session creation. Builds that require the legacy
+  index files cannot open a migrated dictionary without restoring those files.
+- Dictionary backup retains the legacy root shape and profile metadata in
+  `.hoshi-profiles/`, preserving unrelated profile settings.
+- `LocalAudioRepository` owns both private-copy and external-link imports, source
+  settings and one serialized reusable session on the injected IO dispatcher.
+  `LocalAudioSettingsViewModel` owns loading, progress, mutations and recoverable
+  errors; Compose owns the mode chooser and document launchers. Copy uses ordinary
+  content selection; Link uses `ACTION_OPEN_DOCUMENT` and a persisted read grant.
+  A failed replacement preserves the prior binding; unlink never deletes a provider
+  document. Switching Copy to Link retains the private copy until explicit cleanup.
+- Audio binding/source metadata publishes atomically in `filesDir/local-audio/`;
+  private copies use generation-specific `Audio/android-<UUID>.db` names. Legacy
+  `Audio/android.db` and its source config are adopted without copying. Startup
+  reclaims only abandoned generated files, preserving active/retained references.
+  Candidate URLs carry a binding generation so stale popups cannot read a newly
+  selected database. External bindings restored without URI grants need reselection.
+  The source scan records which sources have no non-NULL readings among supported
+  audio entries. The repository persists that set with the binding and fills it
+  on first lookup for older bindings. Only those sources can rank a spelling-only
+  match alongside an exact spelling and reading match.
+- `LocalAudioNativeDatabase`/`app/src/main/cpp/localaudio` own bundled SQLite and a
+  read-only FD VFS: duplicate the provider FD, honor its offset/length, use 64-bit
+  positioned reads, retain four prepared queries and an approximately 4 MiB page
+  cache, and close everything on replacement/read failure. It never creates
+  database/journal/temp files, opens paths, or loads extensions on Android. Link
+  requires a seekable, static standalone SQLite database; pipes and WAL databases
+  are rejected. A single document grant cannot inspect sibling WAL/journal files,
+  so select a completed export, not a database being edited by another app. File
+  metadata/header identity checks detect common replacements and mutations;
+  providers may still cache data internally. Other storage engines remain separate.
+- `app/build.gradle.kts` wires independent bundled native stacks: CMake/JNI
+  hoshidicts and local-audio SQLite, and Rust/UniFFI EPUB parsing. UniFFI keeps `android = true`;
+  `cargo-ndk` builds library targets, while bindgen runs on the host. Android
+  uses the JNA AAR, JVM tests the JNA jar. SDK/NDK/CMake/ABI values come from the
+  build file and workflows.
+- Nakuru and the FFmpeg decoder are separately downloaded, hash-verified native
+  resources under `noBackupFilesDir`. Catalogs
+  live in assets, component build/publication tools in `tools/`. Native files
+  are marked read-only before writing and atomically published after verification.
 
-## Validation
+## Network and credential boundaries
 
-Durable validation commands, emulator data-safety rules, test data, and manual
-QA matrices live in `docs/VALIDATION.md`.
+- `network/PrivateHttpHost.kt` is shared by AnkiConnect URL validation and
+  `TtsCustomSource`: internet hosts require HTTPS; HTTP is limited to the accepted
+  private/local hosts. Custom TTS retains proxy path prefixes and rejects embedded
+  credentials/query/fragment in its base URL.
+- `OnlineTtsTransport` disables redirects, uses normal TLS verification and
+  cancels the active HTTP call/socket with coroutine cancellation. It redacts
+  request credentials from service/transport diagnostics before errors leave
+  the transport. Only complete synthesis responses enter the audio pipeline.
+- `TtsCredentialCipher` binds Keystore ciphertext to a source/profile ID. Stored
+  keys remain ciphertext in settings; UI drafts expose keep/remove/replace actions.
+  `TtsEngineRouter` uses the selected provider consistently
+  for Reader, preview and Anki, including failure recovery.
+
+## Reader web ownership
+
+Reading and lookup remain WebView-based. The three reading modes share semantics
+while retaining their navigation and rendering mechanics. Kotlin composes assets
+and sends typed commands; durable JavaScript/CSS stays in assets. Local resources
+use the existing safe loader.
+`allowUniversalAccessFromFileURLs` stays disabled.
+Kotlin retains only small typed commands, parameter escaping, asset loading,
+dynamic configuration and bridge calls.
+`ReaderWebAssets` owns immutable asset snapshots and their lazily compiled
+`ReaderScriptTemplate` parts. Static components are expanded once per snapshot;
+chapter setup appends literals and escaped parameters without rescanning the full
+runtime. Templates never retain chapter tokens, settings or restore commands,
+and copying an asset snapshot creates independent template caches.
+
+| Web asset under `reader/` | Owns | Consumers |
+| --- | --- | --- |
+| `reader-text-semantics.js` | Normalization, raw/matchable counts and character predicate, Sasayaki punctuation ownership and search range semantics | Paginated (including paragraph) and continuous |
+| `reader-dom-text.js` | Live DOM ruby normalization, selected body-text slices and Sasayaki structural boundaries | Paginated/continuous normalization; selection and Sasayaki adapters across modes |
+| `reader-media-semantics.js` | Image/gaiji setup, SVG ratio, blur/tint, tap bridge, scoped loading, asynchronous image-reference counts and image-hold eligibility | Paginated (including paragraph) and continuous |
+| `reader-document-preparation.js` | Defer initial publisher layout until reader viewport/styles and ruby/paragraph DOM are prepared | Chapter WebView document-start hook; all modes resume before content geometry, with explicit paginated font preloading before resume |
+| `reader-paginated.js` | Columns, snapping, page metrics, page-start measurement, current page and restore | Paginated |
+| `reader-continuous.js` | Inset body scrolling, viewport bounds and scroll restore | Continuous |
+| `reader-paragraph.js` | iOS paragraph splitting/centering, cross-column fragments, Range reveal and current-page cue IDs | Paginated when paragraph mode is enabled |
+| `reader-sasayaki.js`, `highlights.js` | Live-DOM cue presentation and persistent/search highlight operations | Both modes |
+
+### Prohibited narration-highlighting changes
+
+- **Do not change the TTS/Sasayaki highlighting implementation without explicit
+  user approval.** Permission to fix animation, migrate paragraph mode or refactor
+  Reader does not authorize replacing its highlighting renderer. Preserve the
+  established inline cue wrappers for normal text/background coloring and the
+  existing E-ink geometry overlay.
+- **Do not replace TTS/Sasayaki coloring with CSS Custom Highlights
+  (`CSS.highlights` / `::highlight`), including in paragraph mode.** Android
+  WebView can clip the painted edges of vertical Japanese glyphs through this
+  path. The regression was reproduced with complete cue text, unchanged DOM,
+  unchanged Range rectangles and unchanged page position: removing the Custom
+  Highlight restored the missing strokes; reapplying it clipped them again.
+  Correct ranges, stable layout and visible highlight pixels therefore do not
+  establish rendering correctness. See the
+  [glyph comparison procedure](VALIDATION.md#narration-highlight-glyph-integrity).
+- Range objects used for offsets/geometry and the existing paragraph reveal
+  mechanism do not authorize reusing Custom Highlights for narration coloring.
+  Fix animation conflicts at the animation/DOM-mutation boundary; do not trade
+  away intact glyphs or silently introduce another renderer as a workaround.
+
+### Reader runtime contracts
+
+- `ReaderContentStyles` owns root viewport sizing in both modes, clearing
+  publisher `max-width`/`max-height` on `html` and `body` while retaining
+  descendant size limits and the continuous body's reader-configured insets.
+- Raw code-point offsets, normalized matchable offsets and DOM UTF-16 positions
+  are different coordinate systems. Convert through the live DOM text index.
+- Reader initialization starts image-reference counts alongside image setup and
+  DOM preparation. Ruby normalization and paragraph sentence/block preparation run
+  before document preparation resumes display, avoiding layout of the unprepared
+  chapter. Paginated documents preload only the explicit reader-owned font face
+  while hidden, overlapping DOM preparation; publisher/fallback font lists are
+  not proactively loaded. Then await fonts/images before measuring cross-column fragments and
+  building character indexes; image counts must settle before cues/highlights and
+  position restore so media holds use the correct counts. Unknown counts preserve
+  ordinary holds. No counts request blocks structural DOM preparation.
+  A fresh document installs narration cues only when an explicit cue payload is
+  supplied; an absent payload already has empty runtime state and must not trigger
+  a second text-index build. Explicit empty payloads still perform cue clearing.
+  `ReaderChapterWebView` records the setup's document token, cue payload (empty
+  when absent) and segmentation version. Cue delivery after accepted restore
+  reuses that snapshot; changed content or versions still install normally, and
+  document replacement/close invalidates pending installation callbacks.
+- Paragraph mode extends the ordinary paginated DOM: split only inside paragraphs,
+  center blocks and mark cross-column fragments. Vertical
+  Android pagination uses Y/page-height; horizontal pagination uses X/page-width.
+  Paragraphs and continuation fragments use the same page-sized CSS block box,
+  `align-content`, intrinsic inline sizing and automatic inline margins to center
+  content in both axes, retaining the common starting edge of explicit lines.
+  Fragment detection indexes text/element nodes in a virtual UTF-16 coordinate
+  space and binary-searches only page boundaries, keeping surrogate pairs intact.
+  Hidden positions are skipped without discarding visible candidates to their left.
+  Fragment wrappers provide per-page layout containers; Android does not require
+  the iOS selection workaround that originally motivated them. Spacing-only
+  paragraphs keep their anchors in flow without occupying page space.
+  Continuous/ordinary pagination do not run paragraph preprocessing.
+- Paginated `paginationMetrics` retains text-node bounds in content coordinates
+  and document order. Progress and paragraph reveal reuse that same layout pass;
+  progress measures individual characters only for nodes crossing the viewport
+  boundary. Punctuation-only nodes participate in reveal, while ruby annotations
+  stay outside the body-text index. `buildNodeOffsets()` invalidates the metrics
+  and replaces the ordered node/text/count snapshot after cue/highlight wrapping
+  or unwrapping; content reflow replaces the document. Position restoration and
+  geometry scans reuse that snapshot instead of traversing/filtering/counting the
+  same DOM again. Geometry scans reuse one Range
+  and batch adjacent single-BMP Japanese text nodes only when their rectangles
+  map unambiguously within one page, falling back to individual reads otherwise.
+  Page boundaries binary-search UTF-16 code-point boundaries and count intervening
+  prefixes once in bounded, yieldable chunks; ruby stabilization remains intact.
+  An overflowing suffix containing
+  only uncounted punctuation/whitespace must not claim the next page's text start.
+- Inline narration cue spans reserve their paint boxes with a transparent outline
+  during initial layout. Blink otherwise creates a box on the first background
+  highlight and invalidates the containing layout, making each new cue reflow a
+  long chapter (see Blink's [inline box creation](https://chromium.googlesource.com/chromium/src.git/+/de2d3a5fc72ebf0c3f84c8c5aff4088112812165/third_party/blink/renderer/core/layout/layout_inline.cc)).
+  The outline takes no layout space; active foreground/background
+  coloring still uses the existing span classes, and E-ink still uses its overlay.
+- Paragraph reveal uses a Custom Highlight Range and elapsed-time animation frames;
+  its clock starts at the first frame timestamp. Native page-turn commands return
+  the new character progress in the same JS task, before reveal frames paint;
+  a delayed second progress query must not interrupt the reveal.
+  Gaiji images and generated fallback spans toggle visibility at the same text
+  boundary; their layout space and character offsets stay unchanged. Completing
+  or cancelling reveal restores all pending gaiji. Frames never split nodes or
+  change text. Restore (including previous chapter) and forward page turns animate;
+  same-chapter backward turns show complete text.
+  Like iOS, same-document narration following neither starts nor finishes an
+  existing reveal: its Range remains on the original page, so following to another
+  page shows that destination's text in full. Automatic cross-chapter restores
+  still animate. Paragraph Sasayaki cues must be
+  loaded before document setup. TTS chapter cues are prepared only after this
+  reading session has actually started TTS, then installed before following or
+  restoring the next document; enabling the TTS preference alone adds no work.
+  Both reuse the existing inline highlighter with chapter targets installed before
+  reveal. Paragraph following never lazily wraps missing cues. Cue-source changes
+  finish the old reveal before replacing nodes; ordinary cue changes do not.
+  Explicit Reader exit flushes progress/statistics, then marks its WebView closing
+  before cancelling presentation and stopping playback. A closing WebView rejects
+  scripts, cue installation (including cached readiness), and late bridge/restore
+  callbacks. Its cue wrappers are discarded with the document by the existing
+  detach/destroy path, never bulk-unwrapped in response to the stopped TTS state.
+  This boundary is per WebView and does not apply to backgrounding or stopping TTS
+  while staying in Reader.
+  Paragraph E-ink changes reload the chapter at the displayed character position
+  through the existing restore gate. Do not convert the chapter's cue DOM during
+  appearance refresh: saved highlights can invalidate cached text segments, and
+  bulk wrapping with existing live geometry ranges can stall WebView. Restore
+  persistent highlights before building narration cues so their node splitting
+  cannot distort the initial E-ink ranges.
+  The first tap during reveal only completes it. Native and DOM callbacks share
+  one decision per tap, so a delayed click cannot finish a new page's reveal.
+  Afterwards lookup/media/link/popup operations retain priority; optional blank tap
+  calls the same native navigation entry as swipe/keys. Native selection and restore
+  locks apply to every entry.
+- `ReaderProgressCount` is profile appearance state: Off, Characters or Pages.
+  Legacy visibility migrates before decoding in preferences, profile JSON and
+  backup reads; new fields win and only new fields are written. English retains
+  estimated words, other languages characters, including continuous mode.
+  `ReaderPageIndex` supplies one-based book/TOC chapter progress and row labels;
+  percentages, statistics, contents summaries, jump input and durable positions
+  remain character-based. Pending counts show an ellipsis in progress and use
+  language counts for rows; measurement failure records its original diagnostic
+  and falls back until the next enable, open or layout change.
+  Known indexes remain visible during chapter restore. `ReaderWebViewStateHolder`
+  derives provisional progress from the navigation target (first/last physical page
+  at chapter boundaries); actual page callbacks are scoped to the restore epoch.
+  `ReaderPageBridge` checks both the loaded and expected document tokens, including
+  while chapter cues delay the next load and the old document remains attached.
+- `ReaderPageCounter` reads the layout cache as soon as the viewport and layout
+  are known, only in Pages and paginated modes; cache hits publish page progress
+  before visible document restore. Only a cache miss waits for reader readiness
+  and the activity gate before creating a measurement WebView. Readiness changes
+  alone do not restart fingerprint/cache reads; the synchronous restore cancellation
+  hook is installed only for active measurement. Physical viewport changes restart
+  publication to match Reader's count-state reset, even if CSS rounding leaves the
+  persisted layout key unchanged. Its lifecycle cancels work on background, exit, book/profile
+  or layout replacement. `ReaderPageMeasurementCoordinator` retains completed
+  spines for the same layout; generations reject superseded results. One attached,
+  transparent `ReaderPageMeasurer` runs on Main, sequentially reusing document
+  preparation, styles, fonts and safe resources without interaction, playback,
+  statistics, bookmark writes or reveal. Cancellation destroys that instance;
+  never use process-wide WebView
+  [`pauseTimers()`](https://developer.android.com/reference/android/webkit/WebView#pauseTimers())
+  for measurement. `ReaderPageMeasurementScheduler` pauses hidden work during
+  visible restore, touch/navigation and playback reveal. Restore completion alone
+  permits immediate measurement; actual foreground input requires one quiet second,
+  and a restore does not restart that deadline. The token-checked bridge reads a thread-safe activity snapshot;
+  intentional pauses reset the idle measurement timeout. Page turns and gestures
+  retain the in-flight document. Visible restore synchronously cancels and destroys
+  that document before loading foreground content, because a JS gate cannot stop
+  already queued native layout. Completed spines and known counts survive this
+  cancellation; a restore generation also restarts work after a same-frame readiness
+  transition. Cache hits bypass the scheduler and measuring WebView.
+- `ReaderPageMeasurementResources` gives each immutable measurement instance a
+  unique `/reader-pages/<uuid>/` URL namespace. Font, CSS and image responses in
+  that namespace allow Blink resource-cache reuse across spines; HTML and errors
+  receive no cache headers. Font URLs and relative EPUB resources share the namespace.
+  Another measurement instance cannot resolve those URLs, so book/font replacement
+  cannot reuse stale decoded resources. Ordinary root-absolute publisher URLs and
+  remote-resource fallback retain `ReaderWebResourceBridge` behavior without added
+  cache headers. This renderer cache is separate from the persisted page index.
+  Hidden initialization waits for image setup and font readiness, but skips the
+  visible image-settle timer and playback-only image-reference fetch.
+- Page starts reuse `paginationMetrics` and normalized body-text offsets, querying
+  individual character geometry only at page boundaries. Hidden pagination-metric and page-boundary
+  scans yield between node batches (a 4 ms budget checked between batches) and consult
+  the native foreground gate. Continuations use background-priority `scheduler.postTask`,
+  with a closed-after-delivery `MessageChannel` fallback (timers only if neither API
+  exists). Do not wait for a new idle period for every batch: it dominates total
+  counting time even with an untouched foreground page. Visible pagination drains
+  the same steps synchronously. DOM preparation and
+  native layout remain synchronous, with activity gates between preparation phases. Page reporting derives
+  the ordinal directly from the actual scroll offset, without forcing the deferred
+  chapter-geometry scan before restore. The paginated scroll context caps turns,
+  restores and jumps at the last whole-page boundary. Count reachable whole-page
+  stops, including image-only pages and excluding the synthetic tail spacer.
+  Duplicate offsets are retained; visible document-token
+  callbacks report the actual page because characters cannot distinguish image
+  pages. Known spine identities take precedence for row locations. TOC chapters
+  retain existing character-boundary grouping, including shared image offsets.
+  Text locations select the last matching page start, including offset zero after
+  leading images; TOC spine entries explicitly prefer the first physical page.
+- Injected `ReaderPageCountRepository` hashes book content/spine order and stable
+  font contents on IO, and atomically stores only complete results under `cacheDir`.
+  The key also includes viewport/density, layout settings, content language,
+  WebView/system version and algorithm version; font-library revision invalidates
+  only the session. `readerPageCountKey` uses the stable content-language ID rather
+  than a runtime object's identity. Keep one latest layout per book, treat corrupt data as a miss,
+  and exclude this rebuildable cache from backup/sync. Cache hits create no
+  measurement WebView.
+- `ReaderParagraphSettingsMigration` converts legacy VN preferences and profile JSON
+  before enum decoding, including display migration/backup reads. New fields win,
+  only new fields are written, and blank-tap false is preserved. Paragraph layout
+  fields reload content; animation/speed/blank-tap updates do not. Character-based
+  bookmarks, highlights and sync formats are unchanged.
+- `EpubBook.tocChapterStarts` lazily caches sorted directory boundaries for that
+  book snapshot. `EpubBookFacts` owns href/fragment resolution; `ReaderTocRange`
+  queries the cached boundaries so page turns and statistics ticks do not rebuild
+  the directory index. `EpubTocHrefIndex` indexes full paths and slash-delimited
+  suffixes once, retaining the first spine match in either suffix direction.
+  A copied or reparsed book owns fresh caches.
+- `EpubBook.imageReferenceCounts` lazily caches original image references across
+  distinct linear, non-navigation spine documents for that book snapshot; first
+  access runs on a resource/loading worker. `ReaderWebResourceBridge` serves the
+  counts at `/reader-media/image-references.json`. Shared media semantics start
+  loading them during Reader initialization and wait for completion before
+  cues/highlights and position restore. They suppress holds at three references
+  without changing layout. TTS source extraction consumes the same counts,
+  including background and cross-chapter barriers. Unknown counts preserve holds.
+- `ReaderWebViewStateHolder` owns document/restore generations. Stale bridge
+  callbacks cannot alter a replacement document. Renderer recovery preserves
+  the latest accepted position and rebuilds WebView-local state.
+- Reader navigation callbacks passed through Compose use lambdas when invoking
+  local functions that capture changing values. Local function references can
+  compare equal despite different captures, leaving `rememberUpdatedState` with
+  a pre-load null statistics tracker or outdated settings.
+- `HoshiReaderWebView` installs one document-start preparation script when supported
+  and removes it on release. It only defers top-level `/epub/` documents at the
+  appassets origin, preserving the publisher's inline display property. Mode
+  initialization resumes layout before measuring content geometry;
+  the existing restore/visual-state gate still controls visibility. Unsupported
+  WebViews retain the ordinary initialization path.
+- DOM selection state owns the navigation lock. `blocked` is distinct from a
+  chapter-boundary `limit` result.
+- Reader, Dictionary and Process Text use the same iframe popup host and native
+  service bridge. `popup.js`'s `hoshiPopupGeometry` owns CSS-zoom coordinates.
+  It converts between unscaled layout coordinates and visual scroll/viewport
+  coordinates. `popup-gestures.js` recognizes gestures through per-pointer events,
+  including non-primary popup pointers when another document retains a touch.
+  Reduced-motion scrolling sets `touch-action: none` on the popup root and its
+  embedding iframe; ordinary scrolling keeps `pan-y`. Theme-only changes preserve
+  popup DOM/history.
+- Reader popup mining resolves word audio in the popup and starts in the reader
+  scope once Android receives the request. Dismissal drops its reply without
+  cancelling the job. Sentence audio is prepared independently for each request.
+  Sasayaki clips use request-owned temporary files released after mining.
+- Anki word audio is loaded before the repository's write lock. HTTP downloads
+  have four-second connection and read timeouts, a 15-second total timeout,
+  and follow the caller's cancellation. The lock covers shared media writes,
+  uploads and note creation. Optional synchronization runs after release.
+- `DictionarySearchSession` retains search/popup navigation history across tabs.
+  Successful book opening resets it before book-profile activation; failed opening
+  leaves it. Clearing the Dictionary input preserves displayed lookup content and
+  popup navigation; it does not reset the search session. Dictionary and external
+  lookup retain tappable source text even when a successful query has no matches.
+- Ordinary Dictionary/Process Text queries ensure the existing native session is
+  ready; dictionary mutations rebuild it and profile identity changes invalidate it.
+  `DictionaryRepository` captures one profile and its dictionary configuration for
+  each rebuild, publishes that same identity with the ready session, and retries if
+  the active profile changes during initialization. Committed manual and recommended
+  imports invalidate readiness and notify the mutation coordinator, including after
+  a later import step or configuration write fails. Manual directory commits share
+  the repository's lock with lookup rebuilds and media reads, which reopen the
+  installed media path. Rebuild failures leave readiness
+  invalid so the next query retries; unchanged queries reuse the existing session.
+  `DictionaryLookupQueryService` caches dictionary styles with the committed session
+  under the same query lock. Failed rebuilds preserve the previous session and styles.
+- `DictionaryLookupHistoryRepository` separately owns global original-submission
+  history in `dictionary-lookup-history` DataStore. Only explicit Dictionary
+  submissions and fresh external lookup requests write it; Reader lookup, popup
+  selection/redirects and recreation/profile refreshes do not. Application-scoped
+  serialized operations retain the latest 100 exact, trimmed texts and publish
+  only persisted changes. Resetting a search or opening a book preserves this
+  history; only the empty Dictionary page displays it. Storage failures retain
+  confirmed entries and report original diagnostics without blocking lookup.
+
+## Integration boundaries
+
+| Area | Contract to preserve |
+| --- | --- |
+| Anki | All mining/media/duplicates go through `AnkiRepository` and its backend. `AnkiDroidBackendFactory` binds each operation to the profile-selected AnkiDroid or kuma3 client; its package, provider authority, database permission, media grants and intents must agree. Provider-returned note URIs contribute only their ID; rebuild subsequent URIs for the bound client. Changing clients invalidates deck/model bindings and cached lists; fetch writes and permission callbacks reject stale profile/connection identities (including client revisions). Stable format IDs cross popup bridges. Render active note fields before reading their dictionary media. AnkiConnect uses the repository's content-hashed cover names to check the remote collection and falls back to upload if lookup cannot confirm a match. `{sasayaki-audio}` is audiobook-only; `{sentence-audio}` uses an associated audiobook cue or, without an audiobook, enabled TTS. A missing audiobook cue must not silently fall back to TTS. |
+| Sync | Hoshi and TTU retain distinct provider protocols behind the shared transport/settings. `SyncStorage` applies atomic sidecar merges; Android-only profile/language/audio URI fields stay local. |
+| Hoshi Drive state | State documents reference immutable generation files. Deletion wins within a generation; session deletions survive generations. Unknown versions block cursor advancement. Background work completes only after uploaded references are published. |
+| Hoshi metadata failures | `GoogleDriveClient` retries replay-safe Hoshi metadata requests after I/O failures with at most four exponential backoffs (1/2/4/8 seconds plus jitter), releasing the HTTP slot before waiting. Ambiguous POST creates are reconciled by the next sync pass, never blindly replayed. Exhausted metadata and payload network failures stay on the affected book/pass and preserve pending state/cursors without cancelling healthy payloads; authentication failures stop the transfer run, as do explicit stop/reset and format failures. TTU and payload retry policies are separate. |
+| Hoshi automatic retries | `GoogleDriveSyncManager.requestSync` gates new automatic requests through `DriveSyncRetry`; the first fresh network or native authorization-recovery failure per admitted request advances a monotonic deadline from 30 seconds exponentially to one hour. State checks, in-flight transfers and publication continue without consulting that deadline, so healthy uploaded references publish immediately. Failed book checks rejoin later state passes; failed payloads are not replayed within the same file pass. Manual requests and recovered network capabilities release the deadline immediately; successful idle completion resets outage history. Automatic diagnostics retain the first network failure and first authorization-recovery transition separately per outage. WorkManager owns persistent background retries and shares diagnostic suppression. |
+| Hoshi reconnection | `GoogleDriveSyncManager.reauthorize` stops transport and persists root verification before accepting credentials, blocking lifecycle restarts until acceptance finishes. Before consuming an old cursor or starting payloads, verify the new authorization's root: the same root retains generations, file references and cloud placeholders; a different root follows the existing reset/attach flow. Priority reader downloads require a completed state pass and verified connection too; a superseded check cancels that download before looking up old references. Native recovery stays persisted until the manager saves a successful root check; entry points reconstruct verification from that auth marker before requesting tokens, including after process death. Recovery failures stop queued and priority payloads; same-root silent recovery needs no attach choice. Verification survives process death, offline failures and cache clearing. |
+| Hoshi file transport | `GoogleDriveFileTransfer` owns cancellable OkHttp payload I/O and resumable uploads; metadata and TTU stay on `GoogleDriveClient`. Socket and response I/O retain `DrivePayloadNetworkIOException` classification through credential redaction; upload source and download destination failures remain local errors. `GoogleDriveSyncManager` stages downloads under `files/.drive-downloads/` (excluded from Android backup and device transfer), removes abandoned parts before the first transfer of a process, and atomically moves validated downloads into the book directory with regular app ownership. `DriveUploadSessions` atomically persists local-only session capabilities in `noBackupFilesDir`, never diagnostics or backups. Resume queries the server offset; completed responses survive until local file references are saved. Payload requests start at 4 MiB and adapt from confirmed bytes / full request duration toward 30 seconds, aligned to 256 KiB within 256 KiB–8 MiB; network failures reduce the next chunk. Source versions, connection resets and removed books invalidate sessions. |
+| Hoshi transfer queue | `BookTransferScheduler` shares the configured 1–8 book slots across uploads, queued downloads and priority reader downloads; the default is 8 and saved choices take precedence. Reductions drain existing work. `SyncTransferTracker` accepts identity-checked byte callbacks, uses a monotonic clock, and the manager publishes every 500 ms only while active. UI progress and effective speed are per file: useful progress since this attempt’s starting offset / elapsed payload time, including confirmation and retry waits, excluding preparation and duplicate retransmitted bytes. In-flight progress is provisional and can roll back on recovery; 60 seconds without payload or acknowledgement progress yields zero. `SyncQueueAccounting` combines each file pass’s completed payloads with planned sizes and live bytes by file version, deduplicating priority downloads against queued work. Archive covers with reading sessions contribute while waiting through a read-only session check. Queue planning rechecks file-task ownership after storage reads and starts a new pass if the previous owner drained. Each direction sums active effective rates and estimates remaining time as soon as total bytes and a positive rate are known and work can proceed. Interrupted rows retain confirmed upload offsets or received download bytes in memory, outside aggregate progress, until retry, invalidation or stop/reset. A failed priority EPUB download retains its error on the interrupted payload for display, independent of background retry state and reader diagnostics. Sync settings and the grouped queue share this state. The manager exposes ownership of the state pass separately from overall sync activity. The settings entry and empty queue distinguish checking (including state publication) from other sync work. When transfers are present their progress stays visible, and an empty queue only claims completion after a successful state check and idle sync. |
+| Authentication | Hoshi uses native Google authorization or browser PKCE; TTU keeps device-code auth. Native `hasResolution` preserves the connected flag as `RecoveryRequired`, allowing automatic and manual retries plus explicit recovery/sign-out actions; only explicit sign-out/provider replacement clears that native link. Browser tokens stay under `noBackupFilesDir`; credentials and token bodies must not enter diagnostics. `NativeDriveAuthorization` preserves SDK error codes/causes and safe consent, token-presence, Play Services and network flags when authorization fails or requires resolution; HTTP 401 token invalidation is recorded without its token. Never dump authorization results, Intents, accounts or scope contents. Build configuration is in VALIDATION. |
+| Reader sync | Flush pending local saves before reconciliation; suppress write-back during remote restore. `SyncStorage` reports audiobook changes against the persisted position/delay/rate under the storage lock; local snapshot echoes and timestamp-only updates must not seek live playback. Reader highlights refresh only when visible records change; reading back local snapshots or timestamps must not overwrite pending highlight edits in the UI. Remote deletion/replacement closes the reader after statistics/audio cleanup. |
+| Backup restore | `BackupSettingsView` coordinates `HoshiBackupRepository` with sync: stop sync before Books replacement, reset bookkeeping on success, disable sync on failure before restarting the manager. |
+| Playback | Sasayaki and TTS services own their Media3 player/session. Media3 manages foreground-service and notification lifecycle; controls use that session. Reader supplies presentation callbacks and explicit exit/stop. Playback and its notification start on explicit audio interaction. The Sasayaki process-local connection remains a documented refactor target. |
+| Audiobook playback sliders | Delay, speed, and gain apply live as their sliders move. Delay and speed previews stay out of progress saves until the gesture ends, then use the existing playback save path. Playback starts through Media3, and the enhancement binds when Media3 reports a valid audio session. Completing the gain gesture saves the device-local gain to the book playback sidecar under the book storage lock. Progress saves and cloud reconciliation preserve that field without putting it on the sync wire. |
+| Media metadata | TTS and Sasayaki publish book titles, 512 px book-cover thumbnails and up to 160 characters of the current sentence. Cover source inspection and thumbnail reads run on IO, with file fingerprints, per-playback reuse and generation checks rejecting late artwork after book switches. Sasayaki resolves media sentences from audio position minus subtitle delay independently of Reader cue presentation, including paused seeks, match refreshes and detached Reader callbacks; gaps clear the sentence. Metadata-only Media3 item replacements preserve the audio source and transport state. |
+| Reader presentation | `ReaderPlaybackPresentation` owns chapter/media traversal shared by Sasayaki/TTS. Reader interaction cancels pending presentation for both; TTS presentation is a child of playback, so abandoning an image/restore resumes speech while pausing playback cancels both. Late Reader callbacks require the presentation to remain active. TTS document restoration only highlights without navigating or revealing; playback and foreground resume may follow the sentence. Image holds require auto-scroll, including TTS background fallback. `ReaderLookupPauseState` owns lookup interruption/resume across popup replacement. |
+| Paragraph audio | `ReaderParagraphPlaybackState` rejects stale page queries by request/document/restore generation and retains manual cross-chapter direction. `SasayakiPlaybackController` owns the transient `SasayakiPageRange`, independent of audition stops. Every accepted page-cue query replaces the range, including chapter jumps, restore and reflow; passive updates neither seek nor change transport. Forward turns seek/play, backward turns seek paused, and empty pages pause without seeking. As on iOS, page range only defines a stop boundary: crossing its end pauses before cue dispatch; it must never filter cue display or following by membership or current time. Resuming after a page-end stop can follow into the next page. The boundary persists in the service when Reader detaches. Disabling page advance, leaving paragraph mode, changing books, clearing matches or seeking outside the range clears it. When Sasayaki following moves to another page, Reader refreshes that page's range without seeking or changing the playing/paused state; following within the same page adds no query. |
+| Transcription | `SasayakiTranscriptionCoordinator` serializes recognition, checkpoints and matching. Live matches stay in memory and take precedence over synced matches in the active reader. Completion, pause and failure finalize the latest successful match under the storage lock; only changed persisted matches notify sync. Deletion/replacement joins the task and suppresses final writes. Its work is process-bound; the reader-route VM pauses/saves on disposal. Process death retains the previous persisted match and transcript checkpoints for resumption and realignment. |
+| TTS text | `TtsBookRepository` extracts full chapter source. `TtsText`/dialogue/replacement transforms preserve source offsets and original Anki text. Block boundaries delimit quote pairing; inline nodes, line breaks and images retain the current paragraph context. Paragraph-local paired outer Japanese, curly and ASCII double quotes create separate playback units alongside existing sentence/block boundaries; nested quotes and ruby spans remain intact, unmatched openers are discarded at paragraph boundaries and cannot leak dialogue roles, and Latin-word apostrophes do not close dialogue. Optional clause splitting handles commas, semicolons, ellipses and clause dashes with short-fragment protection in TTS only; Sasayaki transcription and stored matches are independent. The immutable segmentation setting travels through chapter/selection/navigation reads and chapter cache keys. All units share navigation, prefetch and sentence-pause behavior. Replacements operate per playback unit; full selections/Anki exports retain their selected text across units. Synthesis/cache is owned by `TtsAudioRepository`; distinct playback requests share a two-slot budget, identical audio identities serialize through reference-counted key locks, and cache clearing drains writers while a generation/barrier rejects obsolete work. |
+| TTS transport | `TtsPlaybackController` queues ready units through `TtsPlaybackOutput` into the service-owned Media3 playlist, including ordinary chapter boundaries. Actual media transitions select the current unit; asynchronous Reader highlighting/following does not gate ordinary audio. Explicit sentence pauses and image holds remain barriers; `TtsBookRepository` retains trailing images and detects image-only intervening chapters. Queue exhaustion appends to the prepared player; manual navigation resets playback. Settings changes discard future units after reconciling the actual current token; segmentation changes capture the pending or reconciled source offset, pause, replace old position work and resolve the new cues without resuming. Reader cue preparation and WebView installation carry a generation to reject obsolete results, including a rapid switch back to identical cues; chapter extraction remains lazy until TTS starts. Other settings changes discard future units, and suspended prefetch rechecks its epoch and live queue tail before appending. Prefetch uses a bounded two-request pipeline within the configured sentence horizon, publishes results in source order without waiting for farther chapter discovery, and continues caching later units after a failed unit without skipping it in playback. |
+| TTS providers | `TtsRepository` combines persisted global settings with the effective profile content language (including book activation), independent of UI locale; writes capture the displayed language before suspension and transform the latest DataStore value. Legacy source routes migrate to Japanese, and source deletion/protocol replacement removes routes in all languages. `TtsEngineRouter` dispatches installed, online and custom engines from that snapshot. Raw online/custom catalogs retain locale metadata and use a versioned source/connection cache; device catalogs and automatic engine selection are language-specific. Filtering matches catalog languages (Microsoft's primary locale), normalizes regional/script tags and ISO aliases including zh/cmn/yue, and uses the selected matching locale for synthesis. Microsoft secondary locales are retained as capability metadata. Microsoft catalogs prefer LocalName, DisplayName and FriendlyName in that order for display, shorten the standard Edge FriendlyName format, and use ShortName as the selection and synthesis ID. OpenAI-compatible services permit unknown/manual voices; unavailable UI placeholders cannot become VITS speakers. Language participates in synthesis identity, cancels preview/discovery and pauses playback; unsupported style/role controls are normalized per request. Voice discovery is separate from synthesis; playback speed/prefetch/delay are separate from synthesis identity. Online/custom synthesis permits two concurrent calls; device TTS retains its engine serialization. Playback synthesis retries transient network/timeout/rate-limit failures at most twice with 500/1000 ms backoff and any longer server `Retry-After`, releasing request permits during waits; cancellation and permanent errors are not retried. A fully read HTTP 200 synthesis response with zero audio bytes contributes no file across playback, preview and export; Google envelopes must parse successfully before this check. Partial nonempty audio, malformed payloads, empty authorization/catalog responses and empty responses with other status codes remain errors; Edge and device TTS retain their existing completion rules. Empty file lists use the existing silent-unit playback traversal, while all-empty preview/export fails with `EmptyText`. Background failures retain diagnostic history. Disabling TTS cancels work without deleting configuration. |
+| Updates | Stable releases and manual previews have separate records/downloads. Each automatic stable check tries the primary API and mirror fallback before deciding whether to retry. Only transient API failures get one WorkManager retry per startup job or daily run. A rate limit from any failed source ends the round when no source succeeds. Diagnostics retain the original terminal failure once per round. Manual About checks run immediately and show full error details in a dialog. Preview build identity is the full commit SHA. Only the foreground About session that confirmed a preview download may turn its stored completion result into a failure dialog or automatic installer launch, matched by download ID. Component publication is independent of APK releases. |
+
+## Maintaining this map
+
+Document ownership and update rules live in [AGENTS.md](../AGENTS.md#文档维护规则).

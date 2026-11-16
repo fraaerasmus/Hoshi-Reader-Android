@@ -1,6 +1,29 @@
 (function(global) {
   'use strict';
 
+  // Native handles may end in annotations or element boundaries. Read the body
+  // slices without changing the Range or its native selection handles.
+  function selectedTextSegments(range) {
+    if (!range || range.collapsed) return [];
+    var isAnnotation = function(node) { return !!node.parentElement?.closest('rt, rp'); };
+    var walker = document.createTreeWalker(range.commonAncestorContainer, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(node) { return isAnnotation(node) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; }
+    });
+    walker.currentNode = range.startContainer;
+    var node = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer : walker.nextNode();
+    var segments = [];
+    while (node) {
+      if (range.comparePoint(node, 0) > 0) break;
+      if (!isAnnotation(node) && range.intersectsNode(node)) {
+        var start = node === range.startContainer ? range.startOffset : 0;
+        var end = node === range.endContainer ? range.endOffset : node.textContent.length;
+        if (end > start) segments.push({ node: node, start: start, end: end });
+      }
+      node = walker.nextNode();
+    }
+    return segments;
+  }
+
   function normalizeReaderText(context, parent) {
     if (!parent) return;
     normalizeRubyTextNodes(parent);
@@ -100,20 +123,9 @@
     return /^(block|flow-root|flex|grid|list-item|table.*)$/.test(display);
   }
 
-  // VN must capture computed CSS boundaries while the source is still attached.
-  function captureSasayakiBoundaries(root) {
-    var boundaries = new WeakSet();
-    function visit(node) {
-      if (isSasayakiBoundary(node)) boundaries.add(node);
-      Array.from(node.childNodes || []).forEach(visit);
-    }
-    visit(root);
-    return boundaries;
-  }
-
   // Read structure independently of the text walker, which cannot see empty
   // paragraphs, br elements or images between two accepted text nodes.
-  function createSasayakiTextIndex(root, entries, boundaries) {
+  function createSasayakiTextIndex(root, entries) {
     // The caller owns text filtering and character counts; never drop accepted entries.
     var accepted = new Map(entries.map(function(entry) { return [entry.node, entry]; }));
     var epoch = 0;
@@ -131,7 +143,7 @@
       // Ruby annotations are outside the logical base-text flow, including their layout.
       var tag = String(node.tagName || '').toLowerCase();
       if (tag === 'rt' || tag === 'rp') return;
-      var boundary = boundaries ? boundaries.has(node) : isSasayakiBoundary(node);
+      var boundary = isSasayakiBoundary(node);
       if (boundary) epoch += 1;
       Array.from(node.childNodes || []).forEach(visit);
       if (boundary) epoch += 1;
@@ -161,7 +173,7 @@
   }
 
   global.hoshiReaderDomText = {
-    captureSasayakiBoundaries: captureSasayakiBoundaries,
+    selectedTextSegments: selectedTextSegments,
     createSasayakiTextIndex: createSasayakiTextIndex,
     sasayakiSegments: sasayakiSegments,
     normalizeReaderText: normalizeReaderText,

@@ -144,7 +144,7 @@ class ProgressSyncCoordinatorTest {
         recordStatus: suspend (SyncBackend, String?) -> Unit = { _, _ -> },
     ) = ProgressSyncCoordinator(
         bookRepository = repository,
-        syncManager = SyncManager(repository, drive, nowUnixMillis = { 9_999 }),
+        syncManager = TtuSyncManager(repository, drive, nowUnixMillis = { 9_999 }),
         kosyncManager = KosyncManager(
             bookRepository = repository,
             api = api,

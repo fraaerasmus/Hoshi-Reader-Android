@@ -4,15 +4,16 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.isSystemInDarkTheme
+import moe.antimony.hoshi.ui.theme.LocalSystemDarkTheme
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,10 +32,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.ui.ErrorDetailsText
+import moe.antimony.hoshi.ui.HoshiAlertDialog
+import androidx.compose.material3.TextButton
+import moe.antimony.hoshi.ui.withErrorDetails
 import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.features.reader.ReaderLoadingPage
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.reader.ReaderWebView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -45,7 +52,9 @@ import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.features.reader.ReaderChapterPosition
-import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
+import moe.antimony.hoshi.features.settings.SettingsLoadState
+import moe.antimony.hoshi.features.settings.collectAsSettingsLoadState
+import moe.antimony.hoshi.features.sync.SyncProvider
 import moe.antimony.hoshi.features.sync.BackendOutcome
 import moe.antimony.hoshi.features.sync.ProgressSyncReport
 import moe.antimony.hoshi.features.sync.SyncBackend
@@ -58,25 +67,39 @@ import moe.antimony.hoshi.ui.resolve
 @Composable
 internal fun ReaderRouteDestination(
     bookId: String,
+    skipSyncOnOpen: Boolean = false,
     stateHolder: ReaderRouteStateHolder,
     readerSettings: ReaderSettings,
     onReaderSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
     onReaderKeyEventHandlerChange: (((KeyEvent) -> Boolean)?) -> Unit,
     onReaderGenericMotionHandlerChange: (((MotionEvent) -> Boolean)?) -> Unit,
     onBookmarkSaved: () -> Unit,
+    onBookLoaded: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val appContainer = LocalHoshiUiDependencies.current
     val bookCoverWallpaperViewModel: BookCoverWallpaperViewModel = hiltViewModel()
-    val readerSnackbarHostState = remember { SnackbarHostState() }
+    var operationError by remember { mutableStateOf<String?>(null) }
+    operationError?.let { message ->
+        HoshiAlertDialog(
+            onDismissRequest = { operationError = null },
+            text = { ErrorDetailsText(message) },
+            confirmButton = {
+                TextButton(onClick = { operationError = null }) { Text(stringResource(R.string.action_ok)) }
+            },
+        )
+    }
     val statisticsSaveFailedMessage = stringResource(R.string.statistics_operation_failed)
     val bookCoverPublishFailedMessage = stringResource(R.string.book_cover_wallpaper_publish_failed)
     val iReaderNotSelectedMessage =
         stringResource(R.string.book_cover_wallpaper_ireader_not_selected_error)
-    val syncSettings = appContainer.syncSettingsRepository.settings.collectAsLoadedSettings()
-    val sasayakiSettings = appContainer.sasayakiSettingsRepository.settings.collectAsLoadedSettings()
-    val kosyncSettings = appContainer.kosyncSettingsRepository.settings.collectAsLoadedSettings()
+    val syncSettings = (appContainer.syncSettingsRepository.settings.collectAsSettingsLoadState()
+        as? SettingsLoadState.Loaded)?.value
+    val sasayakiSettings = (appContainer.sasayakiSettingsRepository.settings.collectAsSettingsLoadState()
+        as? SettingsLoadState.Loaded)?.value
+    val kosyncSettings = (appContainer.kosyncSettingsRepository.settings.collectAsSettingsLoadState()
+        as? SettingsLoadState.Loaded)?.value
     val kosyncAutoSync = kosyncSettings?.let { it.enabled && it.autoSyncEnabled } == true
     val autoSyncState = ReaderRouteAutoSyncState(
         syncSettings = syncSettings,
@@ -92,7 +115,7 @@ internal fun ReaderRouteDestination(
     val autoSyncExportController = remember(bookId, appContainer) {
         ReaderAutoSyncExportController(appContainer.appScope)
     }
-    val systemDarkTheme = isSystemInDarkTheme()
+    val systemDarkTheme = LocalSystemDarkTheme.current
     val routeState by produceState<ReaderRouteRenderState>(
         ReaderRouteRenderState.Loading,
         bookId,
@@ -110,7 +133,13 @@ internal fun ReaderRouteDestination(
                 syncAudioBook = initialAutoSyncState.shouldSyncAudioBook,
             )
             // Drive import stays on the open path: it can replace the whole book folder, and its preflight fails fast.
-            if (initialAutoSyncState.shouldSyncOnOpen) {
+            if (initialAutoSyncState.syncSettings?.let { it.enabled && it.provider == SyncProvider.Gdrive } == true) {
+                if (!skipSyncOnOpen) appContainer.googleDriveSyncManager.syncAutomatically(entry.metadata)
+                if (appContainer.bookRepository.loadMetadata(entry.root)?.epub == null) {
+                    withContext(Dispatchers.Main.immediate) { onClose() }
+                    error("Book was deleted.")
+                }
+            } else if (initialAutoSyncState.shouldSyncOnOpen) {
                 runCatching {
                     appContainer.progressSyncCoordinator.pull(entry, options = options, manual = false, backends = setOf(SyncBackend.Ttu))
                 }
@@ -129,6 +158,7 @@ internal fun ReaderRouteDestination(
             }
         }
         value = loaded.activateProfileAndPrepareRender(
+            beforeProfileActivation = onBookLoaded,
             activateForBook = { metadata ->
                 appContainer.profileActivationService.activateForBook(metadata).let { profile ->
                     ContentLanguageProfile.fromDictionaryLanguageId(profile.dictionaryLanguageId)
@@ -143,7 +173,7 @@ internal fun ReaderRouteDestination(
     val bookCoverPublicationCoordinator = remember { ReaderBookCoverPublicationCoordinator() }
     val bookCoverPublicationEvent = when (val state = routeState) {
         ReaderRouteRenderState.Loading,
-        ReaderRouteRenderState.Error,
+        is ReaderRouteRenderState.Error,
         -> ReaderBookCoverPublicationEvent.NotReady
         is ReaderRouteRenderState.Ready -> ReaderBookCoverPublicationEvent.Ready(
             bookId = state.loadState.entry.metadata.id,
@@ -161,7 +191,7 @@ internal fun ReaderRouteDestination(
                         iReaderNotSelectedMessage
                     else -> bookCoverPublishFailedMessage
                 }
-                readerSnackbarHostState.showSnackbar(message)
+                operationError = bookCoverPublishFailureMessage(result, message)
             }
         } else if (readyState == null) {
             bookCoverPublicationCoordinator.shouldPublish(ReaderBookCoverPublicationEvent.NotReady)
@@ -194,6 +224,12 @@ internal fun ReaderRouteDestination(
     }
 
     fun flushExport() {
+        if (syncSettings?.provider == SyncProvider.Gdrive) {
+            appContainer.appScope.launch {
+                autoSyncExportController.flushSaves()
+                appContainer.googleDriveSyncManager.syncAutomatically()
+            }
+        }
         autoSyncExportController.flushExport(anyAutoSyncEnabled)
     }
 
@@ -245,6 +281,9 @@ internal fun ReaderRouteDestination(
     }
 
     fun importOnForeground(entry: BookEntry, position: ReaderChapterPosition) {
+        if (syncSettings?.provider == SyncProvider.Gdrive) {
+            bookmarkScope.launch { appContainer.googleDriveSyncManager.syncAutomatically(entry.metadata) }
+        }
         if (!anyAutoSyncEnabled) return
         pendingSyncRequest = ReaderSyncRequest(
             positionAtStart = position,
@@ -259,7 +298,8 @@ internal fun ReaderRouteDestination(
             backgroundColor = Color(readerSettings.backgroundColor(systemDarkTheme)),
             modifier = modifier.fillMaxSize(),
         )
-        ReaderRouteRenderState.Error -> ReaderOpenFailurePage(
+        is ReaderRouteRenderState.Error -> ReaderOpenFailurePage(
+            error = state.cause,
             onClose = onClose,
             modifier = modifier,
         )
@@ -321,12 +361,26 @@ internal fun ReaderRouteDestination(
                                 )
                             } catch (cancelled: CancellationException) {
                                 throw cancelled
-                            } catch (_: Exception) {
-                                bookmarkScope.launch { readerSnackbarHostState.showSnackbar(statisticsSaveFailedMessage) }
+                            } catch (error: Exception) {
+                                bookmarkScope.launch { operationError = statisticsSaveFailedMessage.withErrorDetails(error) }
                             }
-                        }
+                        }.also { appContainer.bookRepository.trackReaderSave(readyState.bookRoot, it) }
                         scheduleExport(readyState.entry, readyState.book)
                     },
+                    onSaveStatistics = { statistics ->
+                        autoSyncExportController.launchSave {
+                            try {
+                                appContainer.bookRepository.saveTrackedSessions(readyState.bookRoot, statistics)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (error: Exception) {
+                                bookmarkScope.launch { operationError = statisticsSaveFailedMessage.withErrorDetails(error) }
+                            }
+                        }.also { appContainer.bookRepository.trackReaderSave(readyState.bookRoot, it) }
+                        if (readerSettings.statisticsSyncEnabled) scheduleExport(readyState.entry, readyState.book)
+                    },
+                    onFlushBookmarkSaves = autoSyncExportController::flushSaves,
+                    syncProvider = syncSettings?.provider ?: SyncProvider.Gdrive,
                     onFlushAutoSyncExport = ::flushExport,
                     onForegroundAutoSyncImport = { importOnForeground(readyState.entry, lastReaderSave ?: openPosition) },
                     pendingSyncJump = pendingSyncJump,
@@ -350,10 +404,6 @@ internal fun ReaderRouteDestination(
                     onClose = onClose,
                     modifier = Modifier.fillMaxSize(),
                 )
-                SnackbarHost(
-                    hostState = readerSnackbarHostState,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
             }
         }
     }
@@ -369,11 +419,12 @@ internal sealed interface ReaderRouteRenderState {
         val loadGeneration: Int = 0,
     ) : ReaderRouteRenderState
 
-    data object Error : ReaderRouteRenderState
+    data class Error(val cause: Throwable) : ReaderRouteRenderState
 }
 
 @Composable
 internal fun ReaderOpenFailurePage(
+    error: Throwable,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -385,7 +436,8 @@ internal fun ReaderOpenFailurePage(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
-            text = stringResource(R.string.reader_open_failed),
+            text = stringResource(R.string.reader_open_failed).withErrorDetails(error),
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Button(onClick = onClose) {
@@ -399,20 +451,29 @@ internal suspend fun ReaderRouteLoadState.activateProfileAndPrepareRender(
     clearLoadedProfile: () -> Unit,
     loadReaderSettings: suspend () -> ReaderSettings,
     loadGeneration: Int = 0,
+    beforeProfileActivation: () -> Unit = {},
 ): ReaderRouteRenderState =
     when (this) {
         is ReaderRouteLoadState.Ready -> {
-            val contentLanguageProfile = activateForBook(entry.metadata)
-            ReaderRouteRenderState.Ready(
-                loadState = this,
-                readerSettings = loadReaderSettings(),
-                contentLanguageProfile = contentLanguageProfile,
-                loadGeneration = loadGeneration,
-            )
+            try {
+                beforeProfileActivation()
+                val contentLanguageProfile = activateForBook(entry.metadata)
+                ReaderRouteRenderState.Ready(
+                    loadState = this,
+                    readerSettings = loadReaderSettings(),
+                    contentLanguageProfile = contentLanguageProfile,
+                    loadGeneration = loadGeneration,
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                clearLoadedProfile()
+                ReaderRouteRenderState.Error(error)
+            }
         }
-        ReaderRouteLoadState.Error -> {
+        is ReaderRouteLoadState.Error -> {
             clearLoadedProfile()
-            ReaderRouteRenderState.Error
+            ReaderRouteRenderState.Error(cause)
         }
         ReaderRouteLoadState.Loading -> ReaderRouteRenderState.Loading
     }

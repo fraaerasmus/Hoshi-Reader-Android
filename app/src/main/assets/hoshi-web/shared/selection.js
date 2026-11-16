@@ -189,15 +189,35 @@ window.hoshiSelection = {
         imageTapResult: null,
         rubyAwareRects: false,
         scaleRects: true,
-        textProjection: null,
     },
-    scanDelimiters: '。、！？…‥「」『』（）()【】〈〉《》〔〕｛｝{}［］[]・：；:;，,.─\n\r',
+    scanDelimiters: '。、！？…‥「」『』（）()【】〈〉《》〔〕｛｝{}［］[]：；:;，,.─\n\r',
     sentenceDelimiters: '。！？.!?\n\r',
     trailingSentenceChars: '。、！？」』）)】〉》〕｝}］]',
     brackets: {'「':'」', '『': '』', '（':'）', '(':')', '【':'】', '〈':'〉', '《':'》', '〔':'〕', '｛':'｝', '{':'}', '［':'］', '[':']'},
 
     configure(options = {}) {
         this.options = { ...this.options, ...options };
+        const policies = window.hoshiSelectionLanguagePolicies;
+        const policy = policies?.[this.options.language] || policies?.default;
+        this.languagePolicy = policy;
+        const bindCharacterBoundary = fn => fn
+            ? char => fn.call(policy, char, this)
+            : () => true;
+        const bindTextBoundary = (fn, characterBoundary) => {
+            if (fn) return (text, offset, char) => fn.call(policy, text, offset, this, char);
+            if (characterBoundary) return (text, offset, char = this.codePointAt(text, offset)) =>
+                characterBoundary.call(policy, char, this);
+            return () => true;
+        };
+        const scan = policy?.isScanBoundary;
+        const hit = policy?.isHitBoundary || scan;
+        const wordStart = policy?.isWordStartBoundary || hit;
+        this.isScanBoundary = bindCharacterBoundary(scan);
+        this.isHitBoundary = bindCharacterBoundary(hit);
+        this.isWordStartBoundary = bindCharacterBoundary(wordStart);
+        this.isScanBoundaryAt = bindTextBoundary(policy?.isScanBoundaryAt, scan);
+        this.isHitBoundaryAt = bindTextBoundary(policy?.isHitBoundaryAt, hit);
+        this.isWordStartBoundaryAt = bindTextBoundary(policy?.isWordStartBoundaryAt, wordStart);
     },
 
     postTextSelected(selection) {
@@ -222,62 +242,23 @@ window.hoshiSelection = {
             (window.getComputedStyle(document.body).writingMode === "vertical-rl");
     },
 
-    languagePolicy() {
-        const configured = String(
-            this.options.language ||
-            document.documentElement?.dataset?.hoshiContentLanguage ||
-            'ja'
-        );
-        const normalized = configured.toLowerCase().split('-')[0];
-        const policies = window.hoshiSelectionLanguagePolicies || {};
-        return policies[normalized] || policies[configured] || policies.default;
+    contentViewport() {
+        return window.hoshiReader?.contentViewport?.() ??
+            { left: 0, top: 0, right: innerWidth, bottom: innerHeight };
     },
 
-    isScanBoundary(char) {
-        const policy = this.languagePolicy();
-        if (!policy) return true;
-        return policy.isScanBoundary.call(policy, char, this);
-    },
-
-    isScanBoundaryAt(text, offset) {
-        const policy = this.languagePolicy();
-        if (!policy) return true;
-        if (policy.isScanBoundaryAt) return policy.isScanBoundaryAt.call(policy, text, offset, this);
-        return policy.isScanBoundary.call(policy, this.codePointAt(text, offset), this);
-    },
-
-    isHitBoundary(char) {
-        const policy = this.languagePolicy();
-        if (!policy) return true;
-        const isBoundary = policy.isHitBoundary || policy.isScanBoundary;
-        return isBoundary.call(policy, char, this);
-    },
-
-    isHitBoundaryAt(text, offset) {
-        const policy = this.languagePolicy();
-        if (!policy) return true;
-        if (policy.isHitBoundaryAt) return policy.isHitBoundaryAt.call(policy, text, offset, this);
-        const isBoundary = policy.isHitBoundary || policy.isScanBoundary;
-        return isBoundary.call(policy, this.codePointAt(text, offset), this);
-    },
-
-    isWordStartBoundary(char) {
-        const policy = this.languagePolicy();
-        if (!policy) return true;
-        const isBoundary = policy.isWordStartBoundary || policy.isHitBoundary || policy.isScanBoundary;
-        return isBoundary.call(policy, char, this);
-    },
-
-    isWordStartBoundaryAt(text, offset) {
-        const policy = this.languagePolicy();
-        if (!policy) return true;
-        if (policy.isWordStartBoundaryAt) return policy.isWordStartBoundaryAt.call(policy, text, offset, this);
-        const isBoundary = policy.isWordStartBoundary || policy.isHitBoundary || policy.isScanBoundary;
-        return isBoundary.call(policy, this.codePointAt(text, offset), this);
+    clipToContentViewport(rect) {
+        const viewport = window.hoshiReader?.contentViewport?.();
+        if (!viewport) return rect;
+        const left = Math.max(viewport.left, rect.x);
+        const top = Math.max(viewport.top, rect.y);
+        const right = Math.min(viewport.right, rect.x + rect.width);
+        const bottom = Math.min(viewport.bottom, rect.y + rect.height);
+        return right > left && bottom > top ? { x: left, y: top, width: right - left, height: bottom - top } : null;
     },
 
     selectionStartForHit(hit) {
-        const policy = this.languagePolicy();
+        const policy = this.languagePolicy;
         if (!policy) return hit;
         const normalizedHit = {
             ...hit,
@@ -316,7 +297,7 @@ window.hoshiSelection = {
         if (start >= text.length) return text.length;
         const codePoint = text.codePointAt(start);
         if (codePoint === undefined) return text.length;
-        return start + String.fromCodePoint(codePoint).length;
+        return start + (codePoint > 0xffff ? 2 : 1);
     },
 
     previousCodePointStartOffset(text, offset) {
@@ -358,7 +339,7 @@ window.hoshiSelection = {
 
     findParagraph(node) {
         let el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
-        return el?.closest('p, .glossary-content, .expr-tag') || null;
+        return el?.closest('p, li, .glossary-content, .expr-tag') || null;
     },
 
     createWalker(rootNode) {
@@ -579,6 +560,12 @@ window.hoshiSelection = {
     },
 
     selectText(x, y, maxLength, rectX = x, rectY = y) {
+        this.lastTapWasText = false;
+        const viewport = window.hoshiReader?.contentViewport?.();
+        if (viewport && (x < viewport.left || x >= viewport.right || y < viewport.top || y >= viewport.bottom)) {
+            this.clearSelection();
+            return null;
+        }
         const hitElement = document.elementFromPoint(x, y);
         if (hitElement?.closest('a')) {
             return this.linkTapResult();
@@ -588,12 +575,7 @@ window.hoshiSelection = {
         }
         const furigana = hitElement?.closest('ruby.furigana-hidden');
         if (furigana) {
-            const group = this.revealFurigana(furigana);
-            const projection = this.options.textProjection;
-            group.forEach(ruby => {
-                const sourceRuby = projection?.sourceRubyForRenderedRuby?.(ruby);
-                if (sourceRuby) this.revealFurigana(sourceRuby);
-            });
+            this.revealFurigana(furigana);
             this.clearSelection();
             return 'furigana';
         }
@@ -603,15 +585,8 @@ window.hoshiSelection = {
             this.clearSelection();
             return null;
         }
-        const projection = this.options.textProjection;
-        const semanticHit = projection
-            ? projection.toSemanticHit?.(rawHit)
-            : rawHit;
-        if (!semanticHit) {
-            this.clearSelection();
-            return null;
-        }
-        const hit = this.selectionStartForHit(semanticHit);
+        this.lastTapWasText = true;
+        const hit = this.selectionStartForHit(rawHit);
 
         if (this.selection &&
             hit.node === this.selection.startNode &&
@@ -648,13 +623,14 @@ window.hoshiSelection = {
                 const char = this.codePointAt(content, offset);
                 // Plain spaces are collected so multi-word entries (e.g. "coup de main")
                 // reach the lookup engine, which keeps the longest matching substring.
-                // Gated by the scanMultiWordPhrases setting so it can be disabled.
-                const crossSpace = char === ' ' && window.scanMultiWordPhrases !== false;
-                if (!crossSpace && this.isScanBoundaryAt(content, offset)) {
+                // Gated by the scanMultiWordPhrases setting; the zh/ko policies keep their own space rules.
+                const crossSpace = char === ' ' && window.scanMultiWordPhrases !== false &&
+                    !['zh', 'ko'].includes(this.options.language);
+                if (!crossSpace && this.isScanBoundaryAt(content, offset, char)) {
                     break;
                 }
                 text += char;
-                offset = this.nextCodePointOffset(content, offset);
+                offset += char.length;
             }
 
             if (offset > start) {
@@ -672,9 +648,7 @@ window.hoshiSelection = {
         if (!text) {
             return null;
         }
-        const visibleRanges = projection
-            ? projection.visibleRangesForSemanticRanges?.(ranges)
-            : ranges;
+        const visibleRanges = ranges;
         if (!visibleRanges?.length) {
             return null;
         }
@@ -688,9 +662,7 @@ window.hoshiSelection = {
         };
 
         const sentenceContext = this.getSentenceContext(hit.node, hit.offset);
-        const normalizedOffset = projection
-            ? projection.normalizedOffsetForHit?.(hit) ?? null
-            : window.hoshiReader
+        const normalizedOffset = window.hoshiReader
                 ? this.getNormalizedOffset(hit.node, hit.offset)
                 : null;
         this.postTextSelected({
@@ -719,7 +691,7 @@ window.hoshiSelection = {
         const rect = rects.find(rect => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height) ??
             rects[0] ??
             window.hoshiRubyGeometry.rectObject(range.getBoundingClientRect());
-        return this.selectionRectForBridge(rect);
+        return this.selectionRectForBridge(this.clipToContentViewport(rect) ?? rect);
     },
 
     selectionRects(charCount) {
@@ -733,7 +705,8 @@ window.hoshiSelection = {
         }
 
         const merged = this.mergeSelectionRects(rects);
-        return this.options.rubyAwareRects ? this.unifyVerticalColumnRects(merged) : merged;
+        const visible = this.options.rubyAwareRects ? this.unifyVerticalColumnRects(merged) : merged;
+        return visible.map(rect => this.clipToContentViewport(rect)).filter(Boolean);
     },
 
     rectsForRange(range) {
@@ -891,6 +864,160 @@ window.hoshiSelection = {
             i += char.length;
         }
         return count;
+    },
+
+    nativeMenuAnchorRequest: null,
+    nativeMenuRecovery: null,
+    nativeMenuRecoveryReplay: null,
+    nativeMenuRecoverySequence: 0,
+
+    recoverNativeSelectionMenu(event) {
+        const bridge = window.HoshiNativeSelection;
+        // Chromium's handle adjustments report pointerType "mouse", button -1.
+        // A touch/pen contextmenu belongs to a long press still in progress:
+        // injecting another DOWN would interrupt it before the user's release.
+        if (this.options.bridge !== 'android-reader' || !bridge?.recoverMenu ||
+            !event.isTrusted || event.pointerType !== 'mouse' || event.button === 2) return;
+        // Chromium can repeat the same bad anchor for the recovery long press.
+        // Let that gesture open its menu instead of recursively replacing it.
+        if (this.nativeMenuRecoveryReplay !== null) return;
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || !selection.rangeCount || !selection.toString()) return;
+        const range = selection.getRangeAt(0);
+        const selectedCaretAt = (x, y) => {
+            const caret = document.caretRangeFromPoint(x, y);
+            return caret && !caret.startContainer.parentElement?.closest('rt, rp') &&
+                range.comparePoint(caret.startContainer, caret.startOffset) === 0;
+        };
+        const viewport = this.contentViewport();
+        if (event.clientX >= viewport.left && event.clientX < viewport.right &&
+            event.clientY >= viewport.top && event.clientY < viewport.bottom &&
+            selectedCaretAt(event.clientX, event.clientY)) return;
+        // Chromium can use a previous column's caret coordinates after a handle
+        // drag. Recover only at a visible point verified to belong to this range.
+        const endpoints = [true, false].map(start => {
+            const caret = range.cloneRange();
+            caret.collapse(start);
+            const rect = caret.getBoundingClientRect();
+            return { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 };
+        });
+        let point = null, clearance = -1;
+        const vertical = this.isVertical();
+        for (const rect of range.getClientRects()) {
+            const left = Math.max(viewport.left, rect.left), top = Math.max(viewport.top, rect.top);
+            const right = Math.min(viewport.right, rect.right), bottom = Math.min(viewport.bottom, rect.bottom);
+            if (right <= left || bottom <= top) continue;
+            // A vertical start handle extends into a short selected glyph from
+            // the right. Its left interior stays above the end handle instead.
+            const x = vertical ? Math.min(left + 1, (left + right) / 2) : (left + right) / 2;
+            const y = (top + bottom) / 2;
+            // A fragmented range's first glyph can overlap the native start
+            // handle. Pressing it re-enters handle dragging and keeps the menu
+            // hidden. Prefer the selected fragment furthest from both carets.
+            const distance = Math.min(...endpoints.map(p => (x - p.x) ** 2 + (y - p.y) ** 2));
+            if (distance <= clearance || !selectedCaretAt(x, y)) continue;
+            point = { x, y, viewportWidth: innerWidth };
+            clearance = distance;
+        }
+        if (!point) return;
+        const id = ++this.nativeMenuRecoverySequence;
+        this.nativeMenuRecovery = { id, point,
+            endpoints: [selection.anchorNode, selection.anchorOffset, selection.focusNode, selection.focusOffset] };
+        event.preventDefault();
+        bridge.recoverMenu(id, this.options.nativeSelectionToken);
+    },
+
+    takeNativeMenuRecovery(id, anchorRequest) {
+        if (this.nativeMenuRecovery?.id !== id) return null;
+        this.nativeMenuAnchorRequest = anchorRequest;
+        const recovery = this.nativeMenuRecovery;
+        this.nativeMenuRecovery = null;
+        this.nativeMenuRecoveryReplay = recovery;
+        return recovery.point;
+    },
+
+    cancelNativeMenuRecoveryReplay(id, documentToken) {
+        if (this.options.nativeSelectionToken !== documentToken) return;
+        if (this.nativeMenuRecoveryReplay?.id === id) this.nativeMenuRecoveryReplay = null;
+        if (this.nativeMenuRecovery?.id === id) this.nativeMenuRecovery = null;
+    },
+
+    invalidateNativeMenuAnchor(selectionChanged = false) {
+        const recovery = this.nativeMenuRecovery || this.nativeMenuRecoveryReplay;
+        const selection = selectionChanged && recovery ? window.getSelection() : null;
+        if (recovery && selection && !selection.isCollapsed) {
+            const endpoints = [selection.anchorNode, selection.anchorOffset, selection.focusNode, selection.focusOffset];
+            // A handle's contextmenu can precede its final duplicate selectionchange.
+            // Keep the queued point/replay until the endpoints actually change.
+            if (recovery.endpoints.every((value, index) => value === endpoints[index])) return;
+        }
+        this.nativeMenuRecovery = null;
+        this.nativeMenuRecoveryReplay = null;
+        const request = this.nativeMenuAnchorRequest;
+        if (request == null) return;
+        this.nativeMenuAnchorRequest = null;
+        window.HoshiNativeSelection?.invalidateMenuAnchor(request, this.options.nativeSelectionToken);
+    },
+
+    nativeSelectionMenuRect(request) {
+        this.nativeMenuAnchorRequest = request ?? null;
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || !selection.rangeCount || !selection.toString()) return null;
+        // Read only when Android receives an unusable native menu anchor, never
+        // while tracking selection handles. Match its endpoint-based placement:
+        // the intervening columns can fill the screen while both handles are
+        // near the top, especially when the end includes a paragraph's period.
+        const range = selection.getRangeAt(0);
+        let bounds = null;
+        const viewport = this.contentViewport();
+        const includeRect = rect => {
+            const left = Math.max(viewport.left, rect.left), top = Math.max(viewport.top, rect.top);
+            const right = Math.min(viewport.right, rect.right), bottom = Math.min(viewport.bottom, rect.bottom);
+            if (right <= left || bottom <= top) return;
+            if (!bounds) bounds = { left, top, right, bottom, viewportWidth: innerWidth };
+            else {
+                bounds.left = Math.min(bounds.left, left);
+                bounds.top = Math.min(bounds.top, top);
+                bounds.right = Math.max(bounds.right, right);
+                bounds.bottom = Math.max(bounds.bottom, bottom);
+            }
+        };
+        for (const start of [true, false]) {
+            const caret = range.cloneRange();
+            caret.collapse(start);
+            const rect = caret.getBoundingClientRect();
+            if (rect.right <= rect.left && rect.bottom <= rect.top) continue;
+            // A caret has zero extent in the writing direction. Keep its anchor
+            // nonempty so Android can position the floating menu.
+            includeRect({ left: rect.left, top: rect.top,
+                right: Math.max(rect.right, rect.left + 1), bottom: Math.max(rect.bottom, rect.top + 1) });
+        }
+        if (bounds) return bounds;
+        // Both endpoints may be offscreen or have no geometry at element
+        // boundaries. In that case use the remaining visible selected fragments.
+        for (const rect of range.getClientRects()) includeRect(rect);
+        return bounds;
+    },
+
+    nativeSelectionContext() {
+        const selection = window.getSelection();
+        if (!selection || !selection.rangeCount) return null;
+        const range = selection.getRangeAt(0);
+        if (range.collapsed) return null;
+        const segments = window.hoshiReaderDomText.selectedTextSegments(range);
+        if (!segments.length) return null;
+        const first = { node: segments[0].node, offset: segments[0].start };
+        const hit = first;
+        if (!hit) return null;
+        const context = this.getSentenceContext(hit.node, hit.offset);
+        const rect = range.getBoundingClientRect();
+        return {
+            text: segments.map(({ node, start, end }) => node.textContent.slice(start, end)).join(''),
+            sentence: context.sentence,
+            sentenceOffset: context.sentenceOffset,
+            normalizedOffset: this.getNormalizedOffset(hit.node, hit.offset),
+            rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+        };
     },
 
     clearSelection() {
@@ -1282,11 +1409,23 @@ window.hoshiWordCursor = {
     },
 };
 
+window.hoshiSelection.configure();
+
 let lastHasSelection = false;
+document.addEventListener('contextmenu', event => window.hoshiSelection.recoverNativeSelectionMenu(event));
+document.addEventListener('scroll', () => window.hoshiSelection.invalidateNativeMenuAnchor(), true);
+window.addEventListener?.('resize', () => window.hoshiSelection.invalidateNativeMenuAnchor());
 document.addEventListener('selectionchange', () => {
+    window.hoshiSelection.invalidateNativeMenuAnchor(true);
     const s = getSelection();
     const hasSelection = !!s && !s.isCollapsed;
     if (hasSelection === lastHasSelection) return;
     lastHasSelection = hasSelection;
+    if (window.hoshiSelection.options.bridge === 'android-reader') {
+        // Selection survives native menu dismissal/recreation. Lock locally before
+        // notifying Android so handle autoscroll cannot race the bridge callback.
+        window.hoshiReader?.setNativeSelectionActive?.(hasSelection);
+        window.HoshiNativeSelection?.postMessage(hasSelection, window.hoshiSelection.options.nativeSelectionToken);
+    }
     try { window.webkit?.messageHandlers?.selectionState?.postMessage(hasSelection); } catch {}
 });

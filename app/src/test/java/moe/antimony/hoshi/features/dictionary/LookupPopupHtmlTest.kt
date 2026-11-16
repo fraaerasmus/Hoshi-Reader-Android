@@ -14,6 +14,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import moe.antimony.hoshi.content.ContentLanguageProfile
+import moe.antimony.hoshi.webview.SelectionLanguageAssets
 import moe.antimony.hoshi.features.anki.AnkiPopupSettings
 import moe.antimony.hoshi.features.anki.AnkiPopupFormat
 import moe.antimony.hoshi.features.anki.AnkiFormatIcon
@@ -25,6 +26,47 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LookupPopupHtmlTest {
+    @Test
+    fun chineseAndKoreanPopupsLoadTheirOwnSelectionPolicyAndTypography() {
+        listOf("zh" to "SC", "ko" to "KR").forEach { (language, region) ->
+            val profile = requireNotNull(ContentLanguageProfile.fromDictionaryLanguageId(language))
+            val html = LookupPopupHtml.renderIframeDocument(contentLanguageProfile = profile)
+            assertScriptOrder(html, "language-ja.js", "language-cjk.js", "selection-$language.js", "selection.js")
+            assertFalse(html.contains("selection-ja.js"))
+            assertTrue(html.contains("<html lang=\"$language\""))
+            assertTrue(html.contains("Noto Sans CJK $region"))
+            assertTrue(html.contains("configure?.({ language: \"$language\" })"))
+        }
+    }
+
+    @Test
+    fun inlinePopupsUseCjkPoliciesInsteadOfJapaneseFallback() {
+        val assets = LookupPopupAssets(
+            popupJs = "", popupCss = "", selectionJs = "window.selectionLoaded = true;",
+            languageAssets = SelectionLanguageAssets { name ->
+                mapOf("language-ja.js" to "window.jaUtilitiesLoaded = true;",
+                    "language-cjk.js" to "window.cjkLoaded = true;", "selection-ja.js" to "window.jaLoaded = true;",
+                    "selection-zh.js" to "window.zhLoaded = true;", "selection-ko.js" to "window.koLoaded = true;").getValue(name)
+            },
+        )
+        listOf(ContentLanguageProfile.Chinese, ContentLanguageProfile.Korean).forEach { profile ->
+            val html = LookupPopupHtml.renderIframeDocument(assets = assets, contentLanguageProfile = profile)
+            assertScriptOrder(html, "window.jaUtilitiesLoaded", "window.cjkLoaded", "window.${profile.id}Loaded", "window.selectionLoaded")
+            assertFalse(html.contains("window.jaLoaded"))
+        }
+    }
+
+    @Test
+    fun popupExclusionPayloadPreservesExactDictionaryTitles() {
+        val html = LookupPopupHtml.renderIframeDocument(
+            ankiSettings = AnkiPopupSettings(excludedDictionaries = listOf("Dict [2026]", "辞典\"特殊")),
+        )
+        val payload = Json.parseToJsonElement(
+            html.substringAfter("window.excludedDictionaries = ").substringBefore(';'),
+        )
+        assertEquals(Json.parseToJsonElement("""["Dict [2026]","辞典\"特殊"]"""), payload)
+    }
+
     @Test
     fun popupAudioPayloadKeepsEnabledBuiltInsInConfiguredOrder() {
         val sources = AudioSettings.DefaultAudioSources.reversed().mapIndexed { index, source ->
@@ -276,15 +318,6 @@ class LookupPopupHtmlTest {
 
         assertTrue(html.contains("message.type === 'navigateTerm'"))
         assertTrue(html.contains("window.navigatePopupTerm?.(message.direction)"))
-    }
-
-    @Test
-    fun eInkPopupCssTargetsPopupControlsAndStructuredRows() {
-        val html = LookupPopupHtml.renderIframeDocument(eInkMode = true)
-
-        assertTrue(html.contains("""html[data-hoshi-eink-mode="true"] .button-slot"""))
-        assertTrue(html.contains("""html[data-hoshi-eink-mode="true"] .frequency-group"""))
-        assertTrue(html.contains("""html[data-hoshi-eink-mode="true"] .overlay"""))
     }
 
     @Test

@@ -142,6 +142,7 @@ class ReaderSettingsTest {
         assertTrue(settings.popupSwipeToDismiss)
         assertEquals(30, settings.popupSwipeThreshold)
         assertFalse(settings.openLastReadBookOnLaunch)
+        assertFalse(settings.exitReaderOnFirstBack)
     }
 
     @Test
@@ -418,12 +419,15 @@ class ReaderSettingsTest {
     fun continuousReaderCssUsesScrollableIosLayoutInsteadOfPagedColumns() {
         val css = ReaderContentStyles.styleTag(ReaderSettings(viewMode = ReaderViewMode.Continuous))
 
-        assertTrue(css.contains("overflow-y: hidden !important;"))
-        assertTrue(css.lines().any { it.trim() == "height: var(--hoshi-continuous-height, 100vh) !important;" })
-        assertFalse(css.contains("overflow: hidden !important;"))
-        assertFalse(css.contains("height: var(--page-height, 100vh) !important;"))
-        assertFalse(css.contains("column-width: var(--page-width, 100vw) !important;"))
-        assertFalse(css.contains("column-gap:"))
+        val body = cssDeclarationsForSelector(css, "body")
+        val root = cssDeclarationsForSelector(css, "html")
+        assertEquals("fixed !important", body["position"])
+        assertEquals("auto !important", body["overflow-x"])
+        assertEquals("hidden !important", body["overflow-y"])
+        assertEquals("var(--hoshi-continuous-height, 100.0vh) !important", body["height"])
+        assertEquals("hidden !important", root["overflow"])
+        assertFalse(body.containsKey("column-width"))
+        assertFalse(body.containsKey("column-gap"))
     }
 
     @Test
@@ -498,7 +502,7 @@ class ReaderSettingsTest {
             eligible.copy(viewMode = ReaderViewMode.Continuous).paginatedTwoPageActive(800, 480),
         )
         assertFalse(
-            eligible.copy(viewMode = ReaderViewMode.VisualNovel).paginatedTwoPageActive(800, 480),
+            eligible.copy(paragraphMode = true).paginatedTwoPageActive(800, 480),
         )
         assertFalse(eligible.copy(twoPageLandscape = false).paginatedTwoPageActive(800, 480))
     }
@@ -815,6 +819,18 @@ class ReaderSettingsTest {
     }
 
     @Test
+    fun readerRootSizeLimitsAreClearedInEveryMode() {
+        for (mode in ReaderViewMode.entries) for (vertical in listOf(true, false)) {
+            val css = ReaderContentStyles.styleTag(ReaderSettings(viewMode = mode, verticalWriting = vertical))
+            for (selector in listOf("html", "body")) {
+                val declarations = cssDeclarationsForSelector(css, selector)
+                assertEquals("$mode vertical=$vertical $selector max-width", "none !important", declarations["max-width"])
+                assertEquals("$mode vertical=$vertical $selector max-height", "none !important", declarations["max-height"])
+            }
+        }
+    }
+
+    @Test
     fun paginatedReaderCssAllowsFillingPageBottomAcrossParagraphs() {
         val paginatedCss = ReaderContentStyles.styleTag(
             ReaderSettings(viewMode = ReaderViewMode.Paginated),
@@ -845,75 +861,13 @@ class ReaderSettingsTest {
     }
 
     @Test
-    fun visualNovelReaderCssResetsNestedColumnCounts() {
-        val visualNovelCss = ReaderContentStyles.styleTag(
-            ReaderSettings(viewMode = ReaderViewMode.VisualNovel),
-        )
-        val declarations = cssDeclarationsForSelector(visualNovelCss, ".hoshi-vn-content *")
-
-        assertEquals("auto !important", declarations["column-count"])
-        assertEquals("auto !important", declarations["-webkit-column-count"])
-    }
-
-    @Test
-    fun visualNovelReaderCssCentersWithinVisibleViewport() {
-        val css = ReaderContentStyles.styleTag(
-            ReaderSettings(
-                viewMode = ReaderViewMode.VisualNovel,
-                verticalWriting = true,
-                fontSize = 28,
-                verticalPadding = 8,
-                horizontalPadding = 12,
-            ),
-        )
-
-        val stage = cssDeclarationsForSelector(css, ".hoshi-vn-stage")
-        val screen = cssDeclarationsForSelector(css, ".hoshi-vn-screen")
-        val content = cssDeclarationsForSelector(css, ".hoshi-vn-content")
-        val contentSvg = cssDeclarationsForSelector(css, ".hoshi-vn-content svg")
-
-        assertEquals("var(--hoshi-reader-visible-height, var(--page-height, 100vh)) !important", stage["height"])
-        assertEquals("flex !important", screen["display"])
-        assertEquals("center !important", screen["align-items"])
-        assertEquals("center !important", screen["justify-content"])
-        assertEquals("100% !important", screen["height"])
-        assertEquals("var(--hoshi-vertical-padding-block, 4.0vh) 6.0vw !important", screen["padding"])
-        assertEquals("var(--hoshi-vertical-padding-block, 4.0vh) !important", screen["padding-bottom"])
-        assertEquals("100% !important", content["max-width"])
-        assertEquals("100% !important", content["max-height"])
-        assertEquals("visible !important", content["overflow"])
-        assertEquals("allow-end !important", content["hanging-punctuation"])
-        assertEquals("var(--hoshi-image-max-width, 88vw) !important", contentSvg["width"])
-        assertEquals("var(--hoshi-image-max-height, var(--page-height, 100vh)) !important", contentSvg["height"])
-        assertFalse(content.containsValue("calc(100% - 28px) !important"))
-    }
-
-    @Test
-    fun visualNovelContentKeepsTheReaderHangingPunctuationContractWhenTextIsNotJustified() {
-        val paginatedCss = ReaderContentStyles.styleTag(
-            ReaderSettings(viewMode = ReaderViewMode.Paginated),
-        )
-        val visualNovelCss = ReaderContentStyles.styleTag(
-            ReaderSettings(viewMode = ReaderViewMode.VisualNovel),
-        )
-        val visualNovelContent = cssDeclarationsForSelector(visualNovelCss, ".hoshi-vn-content")
-
-        assertTrue(paginatedCss.contains("hanging-punctuation: allow-end !important;"))
-        assertFalse(paginatedCss.contains("hanging-punctuation: none !important;"))
-        assertEquals("allow-end !important", visualNovelContent["hanging-punctuation"])
-        assertFalse(visualNovelCss.contains("hanging-punctuation: none !important;"))
-    }
-
-    @Test
-    fun visualNovelContentDoesNotForceHangingPunctuationWhenTextIsJustified() {
-        val visualNovelCss = ReaderContentStyles.styleTag(
-            ReaderSettings(viewMode = ReaderViewMode.VisualNovel, justifyText = true),
-        )
-        val visualNovelContent = cssDeclarationsForSelector(visualNovelCss, ".hoshi-vn-content")
-
-        assertFalse(visualNovelContent.containsKey("hanging-punctuation"))
-        assertFalse(visualNovelCss.contains("hanging-punctuation: allow-end !important;"))
-        assertFalse(visualNovelCss.contains("hanging-punctuation: none !important;"))
+    fun paragraphUsesPaginatedColumnsAndUpstreamFragmentStyling() {
+        val css = ReaderContentStyles.styleTag(ReaderSettings(paragraphMode = true))
+        assertTrue(css.contains("column-fill: auto !important"))
+        assertTrue(css.contains("p.hoshi-paragraph"))
+        assertTrue(css.contains(".hoshi-fragment + .hoshi-fragment"))
+        assertFalse(ReaderContentStyles.styleTag(ReaderSettings()).contains("p.hoshi-paragraph"))
+        assertFalse(ReaderContentStyles.styleTag(ReaderSettings(viewMode = ReaderViewMode.Continuous, paragraphMode = true)).contains("p.hoshi-paragraph"))
     }
 
     @Test
@@ -967,19 +921,11 @@ class ReaderSettingsTest {
         assertEquals(Color.Black, colors.unselectedContent)
     }
 
-    private fun cssDeclarationsForSelector(css: String, selector: String): Map<String, String> {
-        val block = Regex("""([^{}]+)\{([^{}]*)}""")
+    private fun cssDeclarationsForSelector(css: String, selector: String): Map<String, String> =
+        Regex("""([^{}]+)\{([^{}]*)}""")
             .findAll(css)
-            .firstOrNull { match ->
-                match.groupValues[1]
-                    .split(",")
-                    .any { it.trim() == selector }
-            }
-            ?.groupValues
-            ?.get(2)
-            ?: return emptyMap()
-        return block
-            .split(";")
+            .filter { match -> match.groupValues[1].split(",").any { it.trim() == selector } }
+            .flatMap { it.groupValues[2].split(";").asSequence() }
             .mapNotNull { declaration ->
                 val separator = declaration.indexOf(":")
                 if (separator < 0) return@mapNotNull null
@@ -987,8 +933,12 @@ class ReaderSettingsTest {
                 val value = declaration.substring(separator + 1).trim()
                 if (name.isEmpty() || value.isEmpty()) null else name to value
             }
-            .toMap()
-    }
+            .fold(mutableMapOf<String, String>()) { declarations, (name, value) ->
+                if (declarations[name]?.endsWith("!important") != true || value.endsWith("!important")) {
+                    declarations[name] = value
+                }
+                declarations
+            }
 
     private fun cssCustomProperty(css: String, property: String): String? =
         Regex("""${Regex.escape(property)}\s*:\s*([^;]+);""")

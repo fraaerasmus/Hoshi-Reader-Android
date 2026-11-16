@@ -5,7 +5,6 @@ import moe.antimony.hoshi.ui.theme.hoshiContainerBorder
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.core.Animatable
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.rememberScrollState
@@ -29,10 +28,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
@@ -41,13 +42,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import moe.antimony.hoshi.ui.HoshiAlertDialog as AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.CenterAlignedTopAppBar
 import moe.antimony.hoshi.ui.HoshiDropdownMenu as DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,7 +59,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -66,9 +67,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.DataObject
@@ -94,7 +93,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -116,6 +114,7 @@ import moe.antimony.hoshi.dictionary.DictionaryInfo
 import moe.antimony.hoshi.dictionary.DictionaryType
 import moe.antimony.hoshi.dictionary.recommendedDictionariesForLanguage
 import moe.antimony.hoshi.features.settings.SettingsDetailScaffold
+import moe.antimony.hoshi.features.settings.SettingsLoadState
 import moe.antimony.hoshi.features.reader.ReaderFontManager
 import moe.antimony.hoshi.importing.ImportFileType
 import moe.antimony.hoshi.importing.MultipleFileImportContent
@@ -123,11 +122,18 @@ import moe.antimony.hoshi.importing.importDisplayName
 import moe.antimony.hoshi.ui.HoshiBlockingProgressOverlay
 import moe.antimony.hoshi.ui.asString
 import moe.antimony.hoshi.ui.hoshiTextFieldCursorBrush
+import moe.antimony.hoshi.ui.rememberSyncedTextFieldState
 import kotlin.math.roundToInt
 
 
-internal fun scanNonJapaneseTextSettingVisible(contentLanguageProfile: ContentLanguageProfile): Boolean =
-    contentLanguageProfile.dictionaryLanguageId == ContentLanguageProfile.JapaneseLanguageId
+@androidx.annotation.StringRes
+internal fun scanOtherLanguageTextLabel(contentLanguageProfile: ContentLanguageProfile): Int? =
+    when (contentLanguageProfile.dictionaryLanguageId) {
+        ContentLanguageProfile.JapaneseLanguageId -> R.string.dictionary_scan_non_japanese
+        ContentLanguageProfile.ChineseLanguageId -> R.string.dictionary_scan_non_chinese
+        ContentLanguageProfile.KoreanLanguageId -> R.string.dictionary_scan_non_korean
+        else -> null
+    }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,10 +153,6 @@ fun DictionaryView(
     var intervalMenuExpanded by remember { mutableStateOf(false) }
     val recommendedDictionaries = remember(profileState.effectiveContentLanguageProfile.dictionaryLanguageId) {
         recommendedDictionariesForLanguage(profileState.effectiveContentLanguageProfile.dictionaryLanguageId)
-    }
-
-    LaunchedEffect(profileState.effectiveProfile.id) {
-        dictionaryViewModel.reload()
     }
 
     val importer = rememberLauncherForActivityResult(MultipleFileImportContent()) { uris: List<Uri> ->
@@ -324,8 +326,23 @@ fun DictionaryView(
         }
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(dictionaryViewModel) {
         dictionaryViewModel.reload()
+    }
+
+    if (uiState.settingsPageState !is SettingsLoadState.Loaded) {
+        SettingsDetailScaffold(
+            state = uiState.settingsPageState,
+            title = stringResource(when (destination) {
+                DictionaryDestination.Settings -> R.string.settings_title
+                DictionaryDestination.CustomCss -> R.string.dictionary_custom_css
+                null -> R.string.settings_dictionaries
+            }),
+            onClose = { if (destination == null) onClose() else destination = null },
+            modifier = modifier,
+            onRetry = dictionaryViewModel::retrySettings,
+        ) { _, _ -> }
+        return
     }
 
     when (destination) {
@@ -334,7 +351,7 @@ fun DictionaryView(
                 settings = uiState.settings,
                 termDictionaries = uiState.dictionaries[DictionaryType.Term].orEmpty(),
                 frequencyDictionaries = uiState.dictionaries[DictionaryType.Frequency].orEmpty(),
-                showScanNonJapaneseText = scanNonJapaneseTextSettingVisible(
+                scanOtherLanguageTextLabelRes = scanOtherLanguageTextLabel(
                     profileState.effectiveContentLanguageProfile,
                 ),
                 onSettingsChange = dictionaryViewModel::updateSettings,
@@ -360,6 +377,8 @@ fun DictionaryView(
     val colorScheme = MaterialTheme.colorScheme
 
     SettingsDetailScaffold(
+        state = uiState.settingsPageState,
+        onRetry = dictionaryViewModel::retrySettings,
         title = stringResource(R.string.settings_dictionaries),
         onClose = {
             if (!isBusy) {
@@ -393,7 +412,7 @@ fun DictionaryView(
                 }
             }
         },
-    ) { innerPadding ->
+    ) { innerPadding, _ ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1059,16 +1078,6 @@ private fun HoshiSwitch(
 private fun hoshiSwitchColors() = SwitchDefaults.colors()
 
 @Composable
-private fun HoshiIconBackButton(onClick: () -> Unit) {
-    IconButton(onClick = onClick) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-            contentDescription = stringResource(R.string.action_back),
-        )
-    }
-}
-
-@Composable
 private fun GroupDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 16.dp),
@@ -1082,7 +1091,7 @@ private fun DictionarySettingsView(
     settings: DictionarySettings,
     termDictionaries: List<DictionaryInfo>,
     frequencyDictionaries: List<DictionaryInfo>,
-    showScanNonJapaneseText: Boolean,
+    @androidx.annotation.StringRes scanOtherLanguageTextLabelRes: Int?,
     onSettingsChange: ((DictionarySettings) -> DictionarySettings) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -1106,24 +1115,15 @@ private fun DictionarySettingsView(
         )
         return
     }
-    BackHandler(onBack = onClose)
     val colorScheme = MaterialTheme.colorScheme
-    Scaffold(
+    SettingsDetailScaffold(
+        state = SettingsLoadState.Loaded(settings),
+        title = stringResource(R.string.settings_title),
+        onClose = onClose,
         modifier = modifier.fillMaxSize(),
         containerColor = hoshiSurfaces.page,
-        topBar = {
-            CenterAlignedTopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = hoshiSurfaces.page,
-                    scrolledContainerColor = hoshiSurfaces.page,
-                    titleContentColor = colorScheme.onBackground,
-                    navigationIconContentColor = colorScheme.onBackground,
-                ),
-                title = { Text(stringResource(R.string.settings_title)) },
-                navigationIcon = { HoshiIconBackButton(onClose) },
-            )
-        },
-    ) { innerPadding ->
+        contentColor = colorScheme.onBackground,
+    ) { innerPadding, settings ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -1134,9 +1134,9 @@ private fun DictionarySettingsView(
             item {
                 SectionLabel(stringResource(R.string.dictionary_settings_lookup))
                 SettingsGroup {
-                    if (showScanNonJapaneseText) {
+                    if (scanOtherLanguageTextLabelRes != null) {
                         ToggleRow(
-                            stringResource(R.string.dictionary_scan_non_japanese),
+                            stringResource(scanOtherLanguageTextLabelRes),
                             settings.scanNonJapaneseText,
                         ) {
                             onSettingsChange { current -> current.copy(scanNonJapaneseText = it) }
@@ -1362,15 +1362,15 @@ private fun CollapsedDictionariesView(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BackHandler(onBack = onClose)
     val colorScheme = MaterialTheme.colorScheme
     SettingsDetailScaffold(
+        state = SettingsLoadState.Loaded(dictionaries to collapsedDictionaries),
         title = stringResource(R.string.dictionary_collapse_dictionaries),
         onClose = onClose,
         modifier = modifier.fillMaxSize(),
         containerColor = hoshiSurfaces.page,
         contentColor = colorScheme.onBackground,
-    ) { innerPadding ->
+    ) { innerPadding, (dictionaries, collapsedDictionaries) ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -1420,7 +1420,7 @@ private fun CollapsedDictionariesView(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DictionaryCustomCssView(
+internal fun DictionaryCustomCssView(
     settings: DictionarySettings,
     termDictionaries: List<DictionaryInfo>,
     fontManager: ReaderFontManager,
@@ -1428,30 +1428,18 @@ private fun DictionaryCustomCssView(
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    BackHandler(onBack = onClose)
     val colorScheme = MaterialTheme.colorScheme
     val fontLibraryState by fontManager.libraryState.collectAsStateWithLifecycle()
     val fontNames = remember(fontManager, fontLibraryState.revision) { fontManager.allFontNames() }
     var fontMenuExpanded by remember { mutableStateOf(false) }
     var selectorMenuExpanded by remember { mutableStateOf(false) }
     var customCssResetState by remember { mutableStateOf(DictionaryCustomCssResetState()) }
-    var cssFieldValue by remember {
-        mutableStateOf(
-            TextFieldValue(
-                text = settings.customCSS,
-                selection = TextRange(settings.customCSS.length),
-            ),
-        )
-    }
-
-    LaunchedEffect(settings.customCSS) {
-        if (settings.customCSS != cssFieldValue.text) {
-            cssFieldValue = TextFieldValue(
-                text = settings.customCSS,
-                selection = TextRange(settings.customCSS.length),
-            )
-        }
-    }
+    val cssScrollState = rememberScrollState()
+    val cssFieldState = rememberSyncedTextFieldState(
+        value = settings.customCSS,
+        onValueChange = { css -> onSettingsChange { it.copy(customCSS = css) } },
+        scrollState = cssScrollState,
+    )
 
     fun dispatchCustomCssReset(action: DictionaryCustomCssResetAction) {
         val nextState = dictionaryCustomCssResetStateAfter(customCssResetState, action)
@@ -1459,9 +1447,7 @@ private fun DictionaryCustomCssView(
         if (!nextState.shouldClearCss) return
 
         customCssResetState = nextState.copy(shouldClearCss = false)
-        val clearedValue = TextFieldValue(text = "", selection = TextRange.Zero)
-        cssFieldValue = clearedValue
-        onSettingsChange { it.copy(customCSS = clearedValue.text) }
+        cssFieldState.clearText()
     }
 
     if (customCssResetState.isConfirmationVisible) {
@@ -1492,41 +1478,29 @@ private fun DictionaryCustomCssView(
         )
     }
 
-    fun insertCssText(text: String) {
-        val nextValue = insertCustomCssText(cssFieldValue, text)
-        cssFieldValue = nextValue
-        onSettingsChange { it.copy(customCSS = nextValue.text) }
-    }
-
-    Scaffold(
+    SettingsDetailScaffold(
+        state = SettingsLoadState.Loaded(settings),
+        title = stringResource(R.string.dictionary_custom_css),
+        onClose = onClose,
         modifier = modifier.fillMaxSize(),
         containerColor = hoshiSurfaces.page,
-        topBar = {
-            CenterAlignedTopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = hoshiSurfaces.page,
-                    scrolledContainerColor = hoshiSurfaces.page,
-                    titleContentColor = colorScheme.onBackground,
-                    navigationIconContentColor = colorScheme.onBackground,
-                ),
-                title = { Text(stringResource(R.string.dictionary_custom_css)) },
-                navigationIcon = { HoshiIconBackButton(onClose) },
-                actions = {
-                    TextButton(
-                        onClick = {
-                            dispatchCustomCssReset(DictionaryCustomCssResetAction.RequestConfirmation)
-                        },
-                    ) {
-                        Text(stringResource(R.string.action_reset))
-                    }
+        contentColor = colorScheme.onBackground,
+        actions = {
+            TextButton(
+                onClick = {
+                    dispatchCustomCssReset(DictionaryCustomCssResetAction.RequestConfirmation)
                 },
-            )
+            ) {
+                Text(stringResource(R.string.action_reset))
+            }
         },
-    ) { innerPadding ->
+    ) { innerPadding, _ ->
         Surface(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding()
                 .padding(16.dp),
             shape = RoundedCornerShape(18.dp),
             color = hoshiSurfaces.group,
@@ -1560,7 +1534,7 @@ private fun DictionaryCustomCssView(
                                     text = { Text(fontName) },
                                     onClick = {
                                         fontMenuExpanded = false
-                                        insertCssText(
+                                        cssFieldState.insertCustomCssText(
                                             fontFamilyCssDeclaration(fontManager.cssFontName(fontName)),
                                         )
                                     },
@@ -1591,7 +1565,7 @@ private fun DictionaryCustomCssView(
                                     text = { Text(title) },
                                     onClick = {
                                         selectorMenuExpanded = false
-                                        insertCssText(dictionarySelectorCssSnippet(title))
+                                        cssFieldState.insertCustomCssText(dictionarySelectorCssSnippet(title))
                                     },
                                 )
                             }
@@ -1600,11 +1574,8 @@ private fun DictionaryCustomCssView(
                 }
                 HorizontalDivider(color = colorScheme.outlineVariant)
                 BasicTextField(
-                    value = cssFieldValue,
-                    onValueChange = { value ->
-                        cssFieldValue = value
-                        onSettingsChange { it.copy(customCSS = value.text) }
-                    },
+                    state = cssFieldState,
+                    scrollState = cssScrollState,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = colorScheme.onSurface),
                     cursorBrush = hoshiTextFieldCursorBrush(colorScheme.onSurface),
                     modifier = Modifier
@@ -1616,18 +1587,12 @@ private fun DictionaryCustomCssView(
     }
 }
 
-internal fun insertCustomCssText(
-    value: TextFieldValue,
-    insertedText: String,
-): TextFieldValue {
-    val start = value.selection.min.coerceIn(0, value.text.length)
-    val end = value.selection.max.coerceIn(start, value.text.length)
-    val nextText = buildString {
-        append(value.text.substring(0, start))
-        append(insertedText)
-        append(value.text.substring(end))
+internal fun TextFieldState.insertCustomCssText(insertedText: String) {
+    edit {
+        val start = selection.min
+        replace(start, selection.max, insertedText)
+        selection = TextRange(start + insertedText.length)
     }
-    return TextFieldValue(nextText, selection = TextRange(start + insertedText.length))
 }
 
 internal fun dictionarySelectorCssSnippet(dictionaryTitle: String): String =

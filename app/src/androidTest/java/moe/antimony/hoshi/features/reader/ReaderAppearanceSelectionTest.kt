@@ -53,8 +53,7 @@ class ReaderAppearanceSelectionTest {
         val settings = mutableStateOf(ReaderSettings(
             verticalWriting = true,
             furiganaMode = FuriganaMode.Toggle,
-            viewMode = ReaderViewMode.VisualNovel,
-            visualNovelScreenMode = VisualNovelScreenMode.Block,
+            paragraphMode = true,
             showProgress = true,
             alwaysShowProgress = false,
             showProgressTop = true,
@@ -68,10 +67,12 @@ class ReaderAppearanceSelectionTest {
             composeRule.setContent {
                 HoshiReaderTheme(darkTheme = dark, eInkMode = eInk, accentSeed = 0xFF2E7D32) {
                     ReaderAppearanceScreen(
-                        settings = settings.value,
+                        settings = moe.antimony.hoshi.features.settings.SettingsLoadState.Loaded(settings.value),
+                        onRetrySettings = {},
                         profileName = "Selection test",
                         onSettingsChange = { settings.value = it(settings.value) },
-                        sasayakiSettings = SasayakiSettings(),
+                        sasayakiSettings = moe.antimony.hoshi.features.settings.SettingsLoadState.Loaded(SasayakiSettings()),
+                        onRetrySasayakiSettings = {},
                         onSasayakiSettingsChange = {},
                         fontManager = fontManager,
                         onClose = {},
@@ -94,8 +95,7 @@ class ReaderAppearanceSelectionTest {
             val selectedLabels = listOf(
                 R.string.reader_appearance_horizontal,
                 FuriganaMode.Toggle.labelResId,
-                R.string.reader_appearance_visual_novel,
-                R.string.reader_visual_novel_screen_mode_block,
+                R.string.reader_appearance_paginated,
                 R.string.reader_appearance_progress_top,
             ).map(context::getString)
             selectedLabels.forEach { assertSegmentColors(it, selectedFill, selectedText, track) }

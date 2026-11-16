@@ -2,26 +2,11 @@ package moe.antimony.hoshi.features.reader
 
 import java.io.File
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import moe.antimony.hoshi.features.sasayaki.SasayakiCueRange
-
-@Serializable
-internal data class ReaderPageInfo(val page: Int, val pages: Int) {
-    companion object {
-        private val json = Json { ignoreUnknownKeys = true }
-
-        fun fromWebViewResult(result: String?): ReaderPageInfo? {
-            val trimmed = result?.trim().orEmpty()
-            if (trimmed.isBlank() || trimmed == "null" || trimmed == "undefined") return null
-            return runCatching { json.decodeFromString<ReaderPageInfo>(trimmed) }.getOrNull()
-        }
-    }
-}
 
 @Serializable
 internal data class ReaderSasayakiMediaStop(
     val scroll: Double? = null,
-    val screenIndex: Int? = null,
 )
 
 internal enum class ReaderNavigationDirection(val jsValue: String) {
@@ -31,7 +16,7 @@ internal enum class ReaderNavigationDirection(val jsValue: String) {
 
 internal enum class ReaderNavigationResult {
     Advanced,
-    Revealed,
+    Blocked,
     Limit,
 }
 
@@ -43,24 +28,16 @@ internal object ReaderPaginationScripts {
         "if (window.hoshiHighlights) window.hoshiHighlights.clearSearchHighlight()"
 
     fun paginateInvocation(direction: ReaderNavigationDirection): String =
-        "window.hoshiReader.paginate('${direction.jsValue}')"
-
-    fun nativeSelectionActiveInvocation(active: Boolean): String =
-        "if (window.hoshiReader && typeof window.hoshiReader.setNativeSelectionActive === 'function') { window.hoshiReader.setNativeSelectionActive($active); }"
+        "window.hoshiReader.paginateWithProgress('${direction.jsValue}')"
 
     fun progressInvocation(): String =
         "window.hoshiReader.calculateProgress()"
 
-    fun pageInfoInvocation(): String =
-        "(window.hoshiReader && typeof window.hoshiReader.getPageInfo === 'function') ? window.hoshiReader.getPageInfo() : null"
+    fun applySasayakiCuesInvocation(cuesJson: String): String =
+        "if (window.hoshiReader && typeof window.hoshiReader.applySasayakiCues === 'function') { window.hoshiReader.applySasayakiCues($cuesJson); }"
 
-    fun pageInfoResult(result: String?): ReaderPageInfo? = ReaderPageInfo.fromWebViewResult(result)
-
-    fun applySasayakiCuesInvocation(cuesJson: String, preserveLayout: Boolean = false): String =
-        "if (window.hoshiReader && typeof window.hoshiReader.applySasayakiCues === 'function') { window.hoshiReader.applySasayakiCues($cuesJson, $preserveLayout); }"
-
-    fun highlightSasayakiCueInvocation(cue: SasayakiCueRange, reveal: Boolean, preserveReveal: Boolean = false): String =
-        "window.hoshiReader.highlightSasayakiCue(${cue.toJavaScriptObjectLiteral()}, $reveal, $preserveReveal)"
+    fun highlightSasayakiCueInvocation(cue: SasayakiCueRange, reveal: Boolean): String =
+        "window.hoshiReader.highlightSasayakiCue(${cue.toJavaScriptObjectLiteral()}, $reveal)"
 
     fun sasayakiMediaStopsBeforeCueInvocation(cue: SasayakiCueRange): String =
         "window.hoshiReader.sasayakiMediaStopsBeforeCue(${cue.toJavaScriptObjectLiteral()})"
@@ -78,10 +55,13 @@ internal object ReaderPaginationScripts {
         navigationResult(result) == ReaderNavigationResult.Advanced
 
     fun navigationResult(result: String?): ReaderNavigationResult =
-        when (result?.trim()?.trim('"')) {
-            "scrolled" -> ReaderNavigationResult.Advanced
-            "revealed" -> ReaderNavigationResult.Revealed
-            else -> ReaderNavigationResult.Limit
+        when {
+            doubleResult(result)?.let { it in 0.0..1.0 } == true -> ReaderNavigationResult.Advanced
+            else -> when (result?.trim()?.trim('"')) {
+                "scrolled" -> ReaderNavigationResult.Advanced
+                "blocked" -> ReaderNavigationResult.Blocked
+                else -> ReaderNavigationResult.Limit
+            }
         }
 
     fun doubleResult(result: String?): Double? =
@@ -113,105 +93,89 @@ internal object ReaderPaginationScripts {
         restoreToken: String,
         assets: ReaderWebAssets? = null,
         paginatedTwoPage: Boolean = false,
+        measurementOnly: Boolean = false,
     ): String {
         val initialRestoreScript = initialFragment?.let { fragment ->
             "window.hoshiReader.jumpToFragment(${fragment.javaScriptStringLiteral()});"
         } ?: "window.hoshiReader.restoreProgress($initialProgress);"
         val source = ReaderPaginationAssetSource.load(assets)
         val template = when (settings.viewMode) {
-            ReaderViewMode.Paginated -> source.paginated
-            ReaderViewMode.Continuous -> source.continuous
-            ReaderViewMode.VisualNovel -> source.visualNovel
+            ReaderViewMode.Paginated -> source.paginatedTemplate
+            ReaderViewMode.Continuous -> source.continuousTemplate
         }
-        val restoreScripts = if (settings.viewMode == ReaderViewMode.VisualNovel) {
-            ""
-        } else {
-            readerRestoreScripts(
-                highlightsJson = highlightsJson,
-                initialRestoreScript = initialRestoreScript,
-            )
-        }
+        val restoreScripts = if (measurementOnly) {
+            "window.hoshiReader.calculatePageStartsForMeasurement().then(starts => window.HoshiReaderPages.postMessage(${restoreToken.javaScriptStringLiteral()}, JSON.stringify(starts)));"
+        } else readerRestoreScripts(
+            sasayakiCuesJson = sasayakiCuesJson,
+            highlightsJson = highlightsJson,
+            initialRestoreScript = initialRestoreScript,
+        )
         val generatedLayout = ReaderGeneratedLayout.from(settings, paginatedTwoPage)
-        val body = template
-            .replace("__HOSHI_HIGHLIGHTS_SCRIPT__", source.highlights)
-            .replace("__HOSHI_READER_VIEWPORT_SCRIPT__", source.readerViewport)
-            .replace("__HOSHI_READER_SASAYAKI_SCRIPT__", source.readerSasayaki)
-            .replace("__HOSHI_READER_TEXT_SEMANTICS_SCRIPT__", source.readerTextSemantics)
-            .replace("__HOSHI_READER_DOM_TEXT_SCRIPT__", source.readerDomText)
-            .replace("__HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__", source.readerMediaSemantics)
-            .replace("__HOSHI_READER_LAYOUT_SEMANTICS_SCRIPT__", source.readerLayoutSemantics)
-            .replace("__HOSHI_READER_VN_CONTENT_STREAM_SCRIPT__", source.readerVnContentStream)
-            .replace("__HOSHI_READER_VN_RANGE_MAP_SCRIPT__", source.readerVnRangeMap)
-            .replace("__HOSHI_READER_VN_SELECTION_PROJECTION_SCRIPT__", source.readerVnSelectionProjection)
-            .replace("__HOSHI_RESTORE_TOKEN_LITERAL__", restoreToken.javaScriptStringLiteral())
-            .replace("__HOSHI_VISUAL_NOVEL_REVEAL_SPEED__", settings.visualNovelRevealSpeed.coerceIn(0, 120).toString())
-            .replace("__HOSHI_VISUAL_NOVEL_SCREEN_MODE_LITERAL__", settings.visualNovelScreenMode.rawValue.javaScriptStringLiteral())
-            .replace(
-                "__HOSHI_VISUAL_NOVEL_SENTENCES_PER_SCREEN__",
-                settings.visualNovelSentencesPerScreen.coerceIn(1, 12).toString(),
-            )
-            .replace("__HOSHI_VISUAL_NOVEL_PRESERVE_DIALOGUE__", settings.visualNovelPreserveDialogueBubbles.toString())
-            .replace(
-                "__HOSHI_VISUAL_NOVEL_MERGE_CROSS_SCREEN_SASAYAKI_CUES__",
-                settings.visualNovelMergeCrossScreenSasayakiCues.toString(),
-            )
-            .replace("__HOSHI_INITIAL_SASAYAKI_CUES_JSON__", sasayakiCuesJson ?: "null")
-            .replace("__HOSHI_INITIAL_PROGRESS__", initialProgress.toString())
-            .replace(
-                "__HOSHI_INITIAL_FRAGMENT_LITERAL__",
-                initialFragment?.javaScriptStringLiteral() ?: "null",
-            )
-            .replace("__HOSHI_INITIAL_HIGHLIGHTS_JSON__", highlightsJson ?: "null")
-            .replace("__HOSHI_VERTICAL_PADDING_BLOCK_RATIO__", (settings.verticalPadding / 200.0).toString())
-            .replace("__HOSHI_VERTICAL_PADDING_GAP_RATIO__", (settings.verticalPadding / 100.0).toString())
-            .replace("__HOSHI_IMAGE_WIDTH_VIEWPORT_RATIO__", generatedLayout.imageWidthViewportRatio.toString())
-            .replace("__HOSHI_IMAGE_HEIGHT_VIEWPORT_RATIO__", generatedLayout.imageHeightViewportRatio.toString())
-            .replace("__HOSHI_IMAGE_WIDTH_REDUCTION_PX__", generatedLayout.imageWidthReductionPx.toString())
-            .replace("__HOSHI_PAGINATED_TWO_PAGE__", paginatedTwoPage.toString())
-            .replace("__HOSHI_TRAILING_SPACER_HEIGHT_LITERAL__", settings.trailingSpacerHeightCss.javaScriptSingleQuotedStringLiteral())
-            .replace("__HOSHI_TRAILING_SPACER_WIDTH_LITERAL__", settings.trailingSpacerWidthCss.javaScriptSingleQuotedStringLiteral())
-            .replace("__HOSHI_BLUR_IMAGES__", settings.blurImages.toString())
-            .replace("__HOSHI_RESTORE_SCRIPTS__", restoreScripts)
-        return "<script>\n$body\n</script>"
+        val body = template.render(mapOf(
+            "__HOSHI_PAGINATED_TWO_PAGE__" to paginatedTwoPage.toString(),
+            "__HOSHI_INITIAL_PROGRESS__" to initialProgress.toString(),
+            "__HOSHI_INITIAL_FRAGMENT_LITERAL__" to (initialFragment?.javaScriptStringLiteral() ?: "null"),
+            "__HOSHI_RESTORE_TOKEN_LITERAL__" to restoreToken.javaScriptStringLiteral(),
+            "__HOSHI_PARAGRAPH_ENABLED__" to settings.paragraphMode.toString(),
+            "__HOSHI_PARAGRAPH_MAX_SENTENCES__" to settings.maxSentencesPerPage.coerceIn(0, 10).toString(),
+            "__HOSHI_PARAGRAPH_SPLIT_DIALOGUE__" to settings.splitDialogue.toString(),
+            "__HOSHI_PARAGRAPH_TEXT_ANIMATION__" to settings.textAnimation.toString(),
+            "__HOSHI_PARAGRAPH_TEXT_SPEED__" to settings.textSpeed.coerceParagraphTextSpeed().toString(),
+            "__HOSHI_CONTINUOUS_HORIZONTAL_PADDING_RATIO__" to generatedLayout.viewportHorizontalPaddingRatio.toString(),
+            "__HOSHI_CONTINUOUS_VERTICAL_PADDING_RATIO__" to generatedLayout.viewportVerticalPaddingRatio.toString(),
+            "__HOSHI_VERTICAL_PADDING_BLOCK_RATIO__" to (settings.verticalPadding / 200.0).toString(),
+            "__HOSHI_VERTICAL_PADDING_GAP_RATIO__" to (settings.verticalPadding / 100.0).toString(),
+            "__HOSHI_IMAGE_WIDTH_VIEWPORT_RATIO__" to generatedLayout.imageWidthViewportRatio.toString(),
+            "__HOSHI_IMAGE_HEIGHT_VIEWPORT_RATIO__" to generatedLayout.imageHeightViewportRatio.toString(),
+            "__HOSHI_IMAGE_WIDTH_REDUCTION_PX__" to generatedLayout.imageWidthReductionPx.toString(),
+            "__HOSHI_TRAILING_SPACER_HEIGHT_LITERAL__" to settings.trailingSpacerHeightCss.javaScriptSingleQuotedStringLiteral(),
+            "__HOSHI_TRAILING_SPACER_WIDTH_LITERAL__" to settings.trailingSpacerWidthCss.javaScriptSingleQuotedStringLiteral(),
+            "__HOSHI_BLUR_IMAGES__" to settings.blurImages.toString(),
+            "__HOSHI_RESTORE_SCRIPTS__" to restoreScripts,
+        ))
+        return "<script>\n" + (if (measurementOnly) "window.hoshiReaderMeasurement = true;\n" else "") + "$body\n</script>"
     }
 }
 
-private data class ReaderPaginationAssetSource(
+internal data class ReaderPaginationAssetSource(
     val paginated: String,
     val continuous: String,
-    val visualNovel: String,
+    val paragraph: String,
     val readerViewport: String,
     val readerSasayaki: String,
     val readerTextSemantics: String,
     val readerDomText: String,
     val readerMediaSemantics: String,
-    val readerLayoutSemantics: String,
-    val readerVnContentStream: String,
-    val readerVnRangeMap: String,
-    val readerVnSelectionProjection: String,
     val highlights: String,
 ) {
+    private val components: Map<String, String>
+        get() = mapOf(
+            "__HOSHI_HIGHLIGHTS_SCRIPT__" to highlights,
+            "__HOSHI_READER_VIEWPORT_SCRIPT__" to readerViewport,
+            "__HOSHI_READER_SASAYAKI_SCRIPT__" to readerSasayaki,
+            "__HOSHI_READER_TEXT_SEMANTICS_SCRIPT__" to readerTextSemantics,
+            "__HOSHI_READER_DOM_TEXT_SCRIPT__" to readerDomText,
+            "__HOSHI_READER_MEDIA_SEMANTICS_SCRIPT__" to readerMediaSemantics,
+            "__HOSHI_READER_PARAGRAPH_SCRIPT__" to paragraph,
+        )
+    val paginatedTemplate by lazy { ReaderScriptTemplate(paginated, components) }
+    val continuousTemplate by lazy { ReaderScriptTemplate(continuous, components) }
+
     companion object {
-        fun load(assets: ReaderWebAssets?): ReaderPaginationAssetSource {
-            if (assets != null) {
-                return ReaderPaginationAssetSource(
-                    paginated = assets.readerPaginatedJs,
-                    continuous = assets.readerContinuousJs,
-                    visualNovel = assets.readerVisualNovelJs,
-                    readerViewport = assets.readerViewportJs,
-                    readerSasayaki = assets.readerSasayakiJs,
-                    readerTextSemantics = assets.readerTextSemanticsJs,
-                    readerDomText = assets.readerDomTextJs,
-                    readerMediaSemantics = assets.readerMediaSemanticsJs,
-                    readerLayoutSemantics = assets.readerLayoutSemanticsJs,
-                    readerVnContentStream = assets.readerVnContentStreamJs,
-                    readerVnRangeMap = assets.readerVnRangeMapJs,
-                    readerVnSelectionProjection = assets.readerVnSelectionProjectionJs,
-                    highlights = assets.highlightsJs,
-                )
-            }
-            return SourceTreeReaderPaginationAssets.value
-        }
+        fun load(assets: ReaderWebAssets?): ReaderPaginationAssetSource =
+            assets?.paginationSource ?: SourceTreeReaderPaginationAssets.value
+
+        fun from(assets: ReaderWebAssets): ReaderPaginationAssetSource = ReaderPaginationAssetSource(
+            paginated = assets.readerPaginatedJs,
+            continuous = assets.readerContinuousJs,
+            paragraph = assets.readerParagraphJs,
+            readerViewport = assets.readerViewportJs,
+            readerSasayaki = assets.readerSasayakiJs,
+            readerTextSemantics = assets.readerTextSemanticsJs,
+            readerDomText = assets.readerDomTextJs,
+            readerMediaSemantics = assets.readerMediaSemanticsJs,
+            highlights = assets.highlightsJs,
+        )
     }
 }
 
@@ -220,16 +184,12 @@ private object SourceTreeReaderPaginationAssets {
         ReaderPaginationAssetSource(
             paginated = readSourceAsset("hoshi-web/reader/reader-paginated.js"),
             continuous = readSourceAsset("hoshi-web/reader/reader-continuous.js"),
-            visualNovel = readSourceAsset("hoshi-web/reader/reader-visual-novel.js"),
+            paragraph = readSourceAsset("hoshi-web/reader/reader-paragraph.js"),
             readerViewport = readSourceAsset("hoshi-web/reader/reader-viewport.js"),
             readerSasayaki = readSourceAsset("hoshi-web/reader/reader-sasayaki.js"),
             readerTextSemantics = readSourceAsset("hoshi-web/reader/reader-text-semantics.js"),
             readerDomText = readSourceAsset("hoshi-web/reader/reader-dom-text.js"),
             readerMediaSemantics = readSourceAsset("hoshi-web/reader/reader-media-semantics.js"),
-            readerLayoutSemantics = readSourceAsset("hoshi-web/reader/reader-layout-semantics.js"),
-            readerVnContentStream = readSourceAsset("hoshi-web/reader/reader-vn-content-stream.js"),
-            readerVnRangeMap = readSourceAsset("hoshi-web/reader/reader-vn-range-map.js"),
-            readerVnSelectionProjection = readSourceAsset("hoshi-web/reader/reader-vn-selection-projection.js"),
             highlights = readSourceAsset("hoshi-web/reader/highlights.js"),
         )
     }
@@ -245,10 +205,12 @@ private object SourceTreeReaderPaginationAssets {
 }
 
 private fun readerRestoreScripts(
+    sasayakiCuesJson: String?,
     highlightsJson: String?,
     initialRestoreScript: String,
 ): String = listOfNotNull(
     highlightsJson?.let { "window.hoshiHighlights.applyHighlights($it);" },
+    sasayakiCuesJson?.let { "window.hoshiReader.applySasayakiCues($it);" },
     initialRestoreScript,
 ).joinToString(separator = "\n")
 

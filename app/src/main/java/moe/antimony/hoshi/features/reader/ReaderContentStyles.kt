@@ -179,11 +179,7 @@ internal object ReaderContentStyles {
         } else {
             ""
         }
-        val vnContentHangingPunctuationCss = if (!settings.justifyText) {
-            "hanging-punctuation: allow-end !important;"
-        } else {
-            ""
-        }
+
         val pageBreakCss = if (settings.avoidPageBreak) {
             """
             p {
@@ -231,92 +227,47 @@ internal object ReaderContentStyles {
             .orEmpty()
         val layoutCss = when (settings.viewMode) {
             ReaderViewMode.Continuous -> {
-                val hiddenOverflowAxis = if (settings.verticalWriting) "overflow-y" else "overflow-x"
-                val viewportConstraintCss = if (settings.verticalWriting) {
-                    "height: var(--hoshi-continuous-height, 100vh) !important;"
-                } else {
-                    """
-                    width: 100vw !important;
-                    min-height: 100vh !important;
-                    """.trimIndent()
-                }
+                val horizontalInset = generatedLayout.viewportHorizontalPaddingRatio * 100
+                val verticalInset = generatedLayout.viewportVerticalPaddingRatio * 100
                 """
                 html, body {
-                    $hiddenOverflowAxis: hidden !important;
+                    max-width: none !important;
+                    max-height: none !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     background: var(--hoshi-background-color) !important;
                     color: var(--hoshi-text-color) !important;
                     writing-mode: ${settings.writingModeCss} !important;
                 }
+                html {
+                    overflow: hidden !important;
+                    width: var(--page-width, 100vw) !important;
+                    height: var(--page-height, 100vh) !important;
+                }
                 body {
+                    position: fixed !important;
+                    left: var(--hoshi-continuous-left, ${horizontalInset.cssNumber()}vw) !important;
+                    top: var(--hoshi-continuous-top, ${verticalInset.cssNumber()}vh) !important;
+                    width: var(--hoshi-continuous-width, ${(100 - horizontalInset * 2).cssNumber()}vw) !important;
+                    height: var(--hoshi-continuous-height, ${(100 - verticalInset * 2).cssNumber()}vh) !important;
+                    min-width: 0 !important;
+                    min-height: 0 !important;
+                    overflow-x: ${if (settings.verticalWriting) "auto" else "hidden"} !important;
+                    overflow-y: ${if (settings.verticalWriting) "hidden" else "auto"} !important;
+                    scrollbar-width: none;
                     $bodyFontFamilyCss
                     $bodyFontVariantCss
                     font-size: ${settings.fontSize}px !important;
                     -webkit-text-size-adjust: none !important;
                     $textSpacingCss
                     box-sizing: border-box !important;
-                    $viewportConstraintCss
                     padding: ${generatedLayout.continuousBodyPaddingCss} !important;
                     padding-bottom: ${generatedLayout.continuousBodyBottomPaddingCss} !important;
                     $gridCss
                     text-orientation: mixed;
                 }
-                """.trimIndent()
-            }
-            ReaderViewMode.VisualNovel -> {
-                """
-                html, body {
-                    overflow: hidden !important;
-                    height: var(--page-height, 100vh) !important;
-                    width: var(--page-width, 100vw) !important;
-                    margin: 0 !important;
-                    padding: 0 !important;
-                    background: var(--hoshi-background-color) !important;
-                    color: var(--hoshi-text-color) !important;
-                }
-                body {
-                    $bodyFontFamilyCss
-                    $bodyFontVariantCss
-                    font-size: ${settings.fontSize}px !important;
-                    -webkit-text-size-adjust: none !important;
-                    $textSpacingCss
-                    box-sizing: border-box !important;
-                    height: var(--page-height, 100vh) !important;
-                    width: var(--page-width, 100vw) !important;
-                    padding: 0 !important;
-                    $gridCss
-                    text-orientation: mixed;
-                }
-                .hoshi-vn-stage {
-                    height: var(--hoshi-reader-visible-height, var(--page-height, 100vh)) !important;
-                    width: var(--page-width, 100vw) !important;
-                }
-                .hoshi-vn-screen {
-                    writing-mode: ${settings.writingModeCss} !important;
-                    display: flex !important;
-                    align-items: center !important;
-                    justify-content: center !important;
-                    height: 100% !important;
-                    width: 100% !important;
-                    padding: ${settings.pagePaddingCss} !important;
-                    padding-bottom: ${settings.verticalPaddingBlockCss} !important;
-                }
-                .hoshi-vn-content {
-                    writing-mode: ${settings.writingModeCss} !important;
-                    box-sizing: border-box !important;
-                    max-width: 100% !important;
-                    max-height: 100% !important;
-                    overflow: visible !important;
-                    $vnContentHangingPunctuationCss
-                }
-                .hoshi-vn-content * {
-                    column-count: auto !important;
-                    -webkit-column-count: auto !important;
-                }
-                .hoshi-vn-content svg {
-                    width: var(--hoshi-image-max-width, ${settings.imageMaxWidthFallbackCss}) !important;
-                    height: var(--hoshi-image-max-height, ${settings.imageMaxHeightFallbackCss}) !important;
+                body::-webkit-scrollbar {
+                    display: none;
                 }
                 """.trimIndent()
             }
@@ -326,6 +277,8 @@ internal object ReaderContentStyles {
                     overflow: hidden !important;
                     height: var(--page-height, 100vh) !important;
                     width: var(--page-width, 100vw) !important;
+                    max-width: none !important;
+                    max-height: none !important;
                     margin: 0 !important;
                     padding: 0 !important;
                     background: var(--hoshi-background-color) !important;
@@ -333,6 +286,7 @@ internal object ReaderContentStyles {
                     writing-mode: ${settings.writingModeCss} !important;
                 }
                 body {
+                    --hoshi-preload-face: ${if (fontFaceCss.isNotEmpty()) fontFaceFamily else ""};
                     $bodyFontFamilyCss
                     $bodyFontVariantCss
                     font-size: ${settings.fontSize}px !important;
@@ -354,6 +308,15 @@ internal object ReaderContentStyles {
                     orphans: 1 !important;
                     widows: 1 !important;
                 }
+                html.hoshi-paged-selection {
+                    overflow: clip !important;
+                }
+                html.hoshi-paged-selection body {
+                    overflow: visible !important;
+                    position: relative !important;
+                    left: var(--hoshi-selection-page-x) !important;
+                    top: var(--hoshi-selection-page-y) !important;
+                }
                 """.trimIndent()
             }
         }
@@ -371,7 +334,26 @@ internal object ReaderContentStyles {
                 "__HOSHI_SASAYAKI_BACKGROUND_COLOR__",
                 sasayakiBackgroundColor.toReaderCssColor(includeAlpha = true),
             )
-            .replace("__HOSHI_LAYOUT_CSS__", layoutCss)
+            .replace("__HOSHI_LAYOUT_CSS__", layoutCss + if (settings.viewMode == ReaderViewMode.Paginated && settings.paragraphMode) {
+                """
+                body { column-fill: auto !important; font-kerning: none; }
+                p.hoshi-paragraph, .hoshi-fragment {
+                    min-block-size: var(--hoshi-paragraph-block-size);
+                    box-sizing: border-box !important;
+                    align-content: center !important;
+                    inline-size: fit-content !important;
+                    margin-inline: auto !important;
+                    margin-block: 0 !important;
+                    padding-block: 0 !important;
+                    break-after: column;
+                    break-inside: avoid-column !important;
+                }
+                .hoshi-paragraph-empty { block-size: 0 !important; margin-block: 0 !important; padding-block: 0 !important; overflow: hidden; }
+                p.hoshi-sentence { text-indent: 0 !important; }
+                .hoshi-fragment { display: block; }
+                .hoshi-fragment + .hoshi-fragment { text-indent: 0 !important; }
+                """.trimIndent()
+            } else "")
             .replace("__HOSHI_IMAGE_MAX_WIDTH_FALLBACK__", imageMaxWidthFallbackCss)
             .replace("__HOSHI_IMAGE_MAX_HEIGHT_FALLBACK__", settings.imageMaxHeightFallbackCss)
             .replace("__HOSHI_FURIGANA_CSS__", furiganaCss)

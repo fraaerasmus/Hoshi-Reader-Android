@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -382,15 +384,10 @@ internal fun rememberCurrentStatusBarPadding(): Dp {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 internal fun rememberStableStatusBarPadding(): Dp {
-    val currentTop = rememberCurrentStatusBarPadding()
-    var stableTop by remember { mutableStateOf(0.dp) }
-    LaunchedEffect(currentTop) {
-        if (currentTop > stableTop) {
-            stableTop = currentTop
-        }
-    }
-    return if (currentTop > 0.dp) currentTop else stableTop
+    val density = LocalDensity.current
+    return with(density) { WindowInsets.statusBarsIgnoringVisibility.getTop(this).toDp() }
 }
 
 @Composable
@@ -423,6 +420,7 @@ internal fun BoxScope.ReaderBottomChrome(
     onStatistics: (() -> Unit)?,
     onSasayaki: (() -> Unit)?,
     onSync: (() -> Unit)?,
+    onTts: (() -> Unit)? = null,
     metrics: ReaderBottomChromeMetrics,
     modifier: Modifier = Modifier,
 ) {
@@ -454,6 +452,7 @@ internal fun BoxScope.ReaderBottomChrome(
             onStatistics = onStatistics,
             onSasayaki = onSasayaki,
             onSync = onSync,
+            onTts = onTts,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = metrics.horizontalPaddingDp.dp, bottom = metrics.menuBottomOffsetDp.dp),
@@ -596,6 +595,7 @@ internal fun ReaderBottomSafeProgress(
     onSasayakiHoldStart: () -> Unit,
     onSasayakiHoldEnd: () -> Unit,
     sasayakiDoubleTapEnabled: Boolean,
+    onRestartSentence: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val progress = readerBottomSafeProgressText(
@@ -625,6 +625,7 @@ internal fun ReaderBottomSafeProgress(
             onHoldStart = onSasayakiHoldStart,
             onHoldEnd = onSasayakiHoldEnd,
             doubleTapEnabled = sasayakiDoubleTapEnabled,
+            onRestartSentence = onRestartSentence,
         )
         Box(
             modifier = Modifier
@@ -669,6 +670,7 @@ private fun ReaderMenuCard(
     onStatistics: (() -> Unit)?,
     onSasayaki: (() -> Unit)?,
     onSync: (() -> Unit)?,
+    onTts: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -700,6 +702,7 @@ private fun ReaderMenuCard(
                 showStatistics = onStatistics != null,
                 showSasayaki = onSasayaki != null,
                 showSync = onSync != null,
+                showTts = onTts != null,
             ).forEachIndexed { index, destination ->
                 if (index > 0) {
                     HorizontalDivider(
@@ -778,6 +781,11 @@ private fun ReaderMenuCard(
                         onClick = onStatistics ?: return@forEachIndexed,
                     )
 
+                    ReaderMenuDestination.Tts -> ReaderMenuItem(
+                        text = stringResource(R.string.tts_title),
+                        icon = { Icon(readerBottomMenuIcon(ReaderMenuDestination.Tts), contentDescription = null, tint = Color(colors.menuContent)) },
+                        colors = colors, metrics = metrics, onClick = onTts ?: return@forEachIndexed,
+                    )
                     ReaderMenuDestination.Sasayaki -> ReaderMenuItem(
                         text = stringResource(R.string.sasayaki_title),
                         icon = {
@@ -804,6 +812,7 @@ internal fun readerBottomMenuIcon(destination: ReaderMenuDestination): ImageVect
         ReaderMenuDestination.GoTo -> Icons.Rounded.TravelExplore
         ReaderMenuDestination.Sync -> Icons.Rounded.Sync
         ReaderMenuDestination.Statistics -> Icons.AutoMirrored.Rounded.ShowChart
+        ReaderMenuDestination.Tts -> Icons.Rounded.GraphicEq
         ReaderMenuDestination.Sasayaki -> Icons.Rounded.GraphicEq
     }
 

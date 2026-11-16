@@ -30,6 +30,7 @@ internal sealed interface ReaderHardwareKeyAction {
     data class PopupHistory(val forward: Boolean) : ReaderHardwareKeyAction
     data object SasayakiTogglePlayback : ReaderHardwareKeyAction
     data class PopupTermNavigation(val direction: PopupTermNavigationDirection) : ReaderHardwareKeyAction
+    data class TtsSentenceNavigation(val direction: ReaderNavigationDirection) : ReaderHardwareKeyAction
     data object SasayakiSeekForward : ReaderHardwareKeyAction
     data object SasayakiSeekBackward : ReaderHardwareKeyAction
     /** `>` / `<`: step the saved playback rate, like YouTube. */
@@ -77,8 +78,10 @@ internal fun readerHardwareKeyEventForKeyEvent(
     keyBindings: ReaderKeyBindings = ReaderKeyBindings(),
     /** Null resolves every event on its own, which is what the tests of single events want. */
     presses: ReaderKeyPresses? = null,
+    hasStartedTts: Boolean = false,
 ): ReaderHardwareKeyEventResult {
-    val audioLoaded = sasayakiEnabled && hasSasayakiAudio
+    // Audiobook bindings drive TTS too while a TTS session is running.
+    val audioLoaded = sasayakiEnabled && hasSasayakiAudio || hasStartedTts
     // Nothing is bound while typing, since any key can be.
     val resolve = {
         if (textEditorFocused) {

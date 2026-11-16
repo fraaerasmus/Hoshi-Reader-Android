@@ -30,6 +30,13 @@
         return layer;
     }
 
+    function applyReaderHighlightClip(layer) {
+        const viewport = window.hoshiReader?.contentViewport?.();
+        layer.style.clipPath = viewport
+            ? `inset(${viewport.top}px ${window.innerWidth - viewport.right}px ${window.innerHeight - viewport.bottom}px ${viewport.left}px)`
+            : '';
+    }
+
     function ensureHighlightLayer() {
         const layer = ensureLayer();
         let highlightLayer = layer.querySelector('.hoshi-reader-selection-highlight-layer');
@@ -60,7 +67,7 @@
     }
 
     function frameContentTop(payload) {
-        return (payload.actionBarVisible ? ACTION_BAR_HEIGHT : 0) + (payload.sasayakiVisible ? SASAYAKI_BAR_HEIGHT : 0);
+        return (payload.actionBarVisible ? ACTION_BAR_HEIGHT : 0) + ((payload.sasayakiVisible || payload.ttsVisible) ? SASAYAKI_BAR_HEIGHT : 0);
     }
 
     function button(iconName, enabled, action, label, className = '') {
@@ -134,12 +141,14 @@
             );
             if (strip) revealActiveTab(strip);
         }
-        if (payload.sasayakiVisible) {
+        if (payload.sasayakiVisible || payload.ttsVisible) {
+            const tts = payload.ttsVisible && !payload.sasayakiVisible;
+            const playing = tts ? payload.ttsIsPlaying || payload.ttsWasPaused : payload.sasayakiIsPlaying || payload.sasayakiWasPaused;
             shell.insertBefore(
                 buildBar('hoshi-reader-popup-bar hoshi-reader-popup-sasayaki-bar', [
-                    button('replay', true, () => postNative({ name: 'sasayakiReplayCue', popupId: payload.id }), 'Replay cue', 'hoshi-reader-popup-sasayaki-control'),
-                    button((payload.sasayakiIsPlaying || payload.sasayakiWasPaused) ? 'pause' : 'play_arrow', true, () => postNative({ name: 'sasayakiTogglePlayback', popupId: payload.id }), 'Play or pause', 'hoshi-reader-popup-sasayaki-control'),
-                    button('start', true, () => postNative({ name: 'sasayakiPlayForward', popupId: payload.id }), 'Play from cue', 'hoshi-reader-popup-sasayaki-control')
+                    button('replay', true, () => postNative({ name: tts ? 'ttsReplaySentence' : 'sasayakiReplayCue', popupId: payload.id }), 'Replay cue', 'hoshi-reader-popup-sasayaki-control'),
+                    button((playing) ? 'pause' : 'play_arrow', true, () => postNative({ name: tts ? 'ttsTogglePlayback' : 'sasayakiTogglePlayback', popupId: payload.id }), 'Play or pause', 'hoshi-reader-popup-sasayaki-control'),
+                    button('start', true, () => postNative({ name: tts ? 'ttsPlayForward' : 'sasayakiPlayForward', popupId: payload.id }), 'Play from cue', 'hoshi-reader-popup-sasayaki-control')
                 ]),
                 iframe,
             );
@@ -171,7 +180,16 @@
         return message;
     }
 
+    function syncIframeTheme(record) {
+        const {darkMode, eInkMode} = record.payload;
+        const key = `${!!darkMode}/${!!eInkMode}`;
+        if (record.themeKey === key) return;
+        record.themeKey = key;
+        record.iframe.contentWindow?.postMessage({type: 'setPopupTheme', darkMode: !!darkMode, eInkMode: !!eInkMode}, ORIGIN);
+    }
+
     function renderIframe(record) {
+        syncIframeTheme(record);
         record.iframe.contentWindow?.postMessage(iframeRenderMessage(record.payload), ORIGIN);
     }
 
@@ -189,8 +207,8 @@
         const previousHadHistory =
             historyCount(previous, 'backCount') > 0 ||
             historyCount(previous, 'forwardCount') > 0;
-        const hasNextInitialEntry = (next.initialEntryJson || null) !== null;
-        if (!hasNextInitialEntry) return false;
+        const hasNextContent = (next.initialEntryJson || null) !== null || next.sourceText != null;
+        if (!hasNextContent) return false;
         if (previousHadHistory) return true;
         const previousContentKey = previous.contentKey || null;
         const nextContentKey = next.contentKey || null;
@@ -226,6 +244,7 @@
         shell.dataset.revealReady = 'false';
         const record = { shell, iframe, payload, contentReady: false, revealReady: false, loaded: false, root: false };
         iframe.addEventListener('load', () => {
+            record.themeKey = null;
             record.loaded = true;
             if (record.payload) {
                 frameSources.set(iframe.contentWindow, record.payload.id);
@@ -309,8 +328,9 @@
             resetIframe(record);
             record.loaded = false;
             record.iframe.src = payload.iframeUrl;
-        } else if (needsRender && record.loaded) {
-            renderIframe(record);
+        } else if (record.loaded) {
+            syncIframeTheme(record);
+            if (needsRender) renderIframe(record);
         }
     }
 
@@ -443,6 +463,7 @@
             return;
         }
         const layer = ensureSasayakiHighlightLayer();
+        applyReaderHighlightClip(layer);
         const verticalWriting = sasayakiHighlight.verticalWriting ?? readerVerticalWriting();
         const color = readerEInkLineColor(!!sasayakiHighlight.darkMode);
         const rects = highlightBoxRects(
@@ -610,6 +631,7 @@
             return;
         }
         const layer = ensureHighlightLayer();
+        applyReaderHighlightClip(layer);
         layer.replaceChildren();
         const color = rootHighlight.eInkMode
             ? (rootHighlight.darkMode ? '#fff' : '#000')
@@ -791,6 +813,7 @@
             writing-mode: horizontal-tb;
             direction: ltr;
             text-orientation: mixed;
+            color-scheme: light;
             background: #fff;
             border: 1px solid rgba(120, 120, 128, 0.36);
             border-radius: 10px;
@@ -822,6 +845,7 @@
             pointer-events: none;
         }
         #${LAYER_ID} .hoshi-reader-popup-shell[data-dark-mode="true"] {
+            color-scheme: dark;
             background: #000;
             border-color: rgba(255, 255, 255, 0.34);
             box-shadow: 0 3px 12px rgba(0, 0, 0, 0.44);
@@ -918,6 +942,7 @@
             border-bottom-color: rgba(255, 255, 255, 0.34);
         }
         #${LAYER_ID} .hoshi-reader-popup-control {
+            display: block;
             appearance: none;
             width: 34px;
             height: 34px;

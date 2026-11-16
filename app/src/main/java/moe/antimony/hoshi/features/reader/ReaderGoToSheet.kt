@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -71,6 +72,7 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.ui.withErrorDetails
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.ReaderHighlight
 import moe.antimony.hoshi.ui.hoshiSingleLineTextFieldLineLimits
@@ -104,6 +106,7 @@ internal fun ReaderGoToSheet(
     onHighlightDelete: (ReaderHighlight) -> Unit,
     onGalleryImageSelected: (String) -> Unit,
     onDismiss: () -> Unit,
+    pageIndex: ReaderPageIndex? = null,
 ) {
     var showJumpDialog by remember { mutableStateOf(false) }
     val coverBitmap = remember(book) { book.decodeCoverImageBitmap() }
@@ -121,16 +124,16 @@ internal fun ReaderGoToSheet(
             return@LaunchedEffect
         }
         searchState.searching = true
-        searchState.failed = false
+        searchState.failure = null
         when (val searchResult = loadReaderSearchResults { withContext(Dispatchers.IO) { searchEngine.search(captured) } }) {
             is ReaderSearchLoadResult.Success -> {
                 searchState.results = searchResult.value
                 searchState.searching = false
             }
-            ReaderSearchLoadResult.Failure -> {
+            is ReaderSearchLoadResult.Failure -> {
                 searchState.results = emptyList()
                 searchState.searching = false
-                searchState.failed = true
+                searchState.failure = searchResult.cause
             }
         }
     }
@@ -154,6 +157,7 @@ internal fun ReaderGoToSheet(
         )
         when (selectedTab) {
             ReaderGoToTab.Chapters -> ReaderGoToChaptersTab(
+                pageIndex = pageIndex,
                 book = book,
                 currentPosition = currentPosition,
                 progressDisplay = progressDisplay,
@@ -161,6 +165,8 @@ internal fun ReaderGoToSheet(
                 modifier = Modifier.weight(1f),
             )
             ReaderGoToTab.Highlights -> ReaderGoToHighlightsTab(
+                progressDisplay = progressDisplay,
+                pageIndex = pageIndex,
                 book = book,
                 highlights = highlights,
                 onJump = onHighlightJump,
@@ -168,6 +174,7 @@ internal fun ReaderGoToSheet(
                 modifier = Modifier.weight(1f),
             )
             ReaderGoToTab.Search -> ReaderSearchTab(
+                pageIndex = pageIndex,
                 searchState = searchState,
                 progressDisplay = progressDisplay,
                 totalCharacters = book.bookInfo.characterCount,
@@ -200,7 +207,7 @@ internal class ReaderSearchSheetState {
     var submittedQuery by mutableStateOf("")
     var results by mutableStateOf(emptyList<ReaderSearchResult>())
     var searching by mutableStateOf(false)
-    var failed by mutableStateOf(false)
+    var failure by mutableStateOf<Throwable?>(null)
     var searchNonce by mutableStateOf(0)
     var handledSearchNonce by mutableStateOf(0)
 
@@ -224,7 +231,7 @@ internal class ReaderSearchSheetState {
         submittedQuery = ""
         results = emptyList()
         searching = false
-        failed = false
+        failure = null
     }
 }
 
@@ -285,6 +292,7 @@ private fun ReaderSearchTab(
     totalCharacters: Int,
     onJump: (ReaderSearchResult) -> Unit,
     modifier: Modifier = Modifier,
+    pageIndex: ReaderPageIndex? = null,
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -312,9 +320,10 @@ private fun ReaderSearchTab(
             modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
         )
         ReaderSearchResultsContent(
+            pageIndex = pageIndex,
             query = searchState.submittedQuery,
             searching = searchState.searching,
-            failed = searchState.failed,
+            failure = searchState.failure,
             results = searchState.results,
             progressDisplay = progressDisplay,
             totalCharacters = totalCharacters,
@@ -415,12 +424,13 @@ private fun ReaderCompactSearchInput(
 private fun ReaderSearchResultsContent(
     query: String,
     searching: Boolean,
-    failed: Boolean,
+    failure: Throwable?,
     results: List<ReaderSearchResult>,
     progressDisplay: ReaderProgressDisplay,
     totalCharacters: Int,
     onJump: (ReaderSearchResult) -> Unit,
     modifier: Modifier = Modifier,
+    pageIndex: ReaderPageIndex? = null,
 ) {
     val resultsByChapter = remember(results) { results.groupBy { it.chapterIndex } }
     when {
@@ -430,9 +440,9 @@ private fun ReaderSearchResultsContent(
             modifier = modifier,
         )
         searching -> ReaderGoToLoadingState(modifier = modifier)
-        failed -> ReaderGoToEmptyState(
+        failure != null -> ReaderGoToEmptyState(
             icon = Icons.Rounded.Search,
-            text = stringResource(R.string.reader_search_failed),
+            text = stringResource(R.string.reader_search_failed).withErrorDetails(failure),
             modifier = modifier,
         )
         results.isEmpty() -> ReaderGoToEmptyState(
@@ -468,6 +478,7 @@ private fun ReaderSearchResultsContent(
                 }
                 items(chapterResults) { result ->
                     ReaderSearchResultRow(
+                        pageIndex = pageIndex,
                         result = result,
                         progressDisplay = progressDisplay,
                         totalCharacters = totalCharacters,
@@ -488,8 +499,10 @@ private fun ReaderSearchResultRow(
     totalCharacters: Int,
     chapterLabel: String,
     onClick: () -> Unit,
+    pageIndex: ReaderPageIndex? = null,
 ) {
-    val positionText = progressDisplay.countWithPercentText(result.character, totalCharacters)
+    val positionText = progressDisplay.countWithPercentText(result.character, totalCharacters,
+        pageIndex?.pageAt(result.character, result.chapterIndex)?.toString())
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -533,6 +546,7 @@ private fun ReaderGoToChaptersTab(
     progressDisplay: ReaderProgressDisplay,
     onJump: (ReaderChapterPosition, String?) -> Unit,
     modifier: Modifier = Modifier,
+    pageIndex: ReaderPageIndex? = null,
 ) {
     val currentCharacter = book.characterCountAt(currentPosition.index, currentPosition.progress)
     val rows = remember(book, currentCharacter) { book.chapterRows(currentCharacter) }
@@ -550,6 +564,7 @@ private fun ReaderGoToChaptersTab(
     ) {
         items(rows) { row ->
             ReaderChapterListRow(
+                pageIndex = pageIndex,
                 row = row,
                 progressDisplay = progressDisplay,
                 onClick = {
@@ -567,10 +582,12 @@ internal fun readerCurrentChapterRowIndex(rows: List<ReaderChapterRow>): Int? =
 @Composable
 private fun ReaderGoToHighlightsTab(
     book: EpubBook,
+    progressDisplay: ReaderProgressDisplay,
     highlights: List<ReaderHighlight>,
     onJump: (ReaderHighlight) -> Unit,
     onDelete: (ReaderHighlight) -> Unit,
     modifier: Modifier = Modifier,
+    pageIndex: ReaderPageIndex? = null,
 ) {
     val sections = remember(book, highlights) { ReaderHighlightSections.sections(book, highlights) }
     val formatter = remember {
@@ -605,6 +622,7 @@ private fun ReaderGoToHighlightsTab(
                     ReaderHighlightRow(
                         highlight = highlight,
                         createdAtText = highlight.createdAtDisplayText(formatter),
+                        positionText = pageIndex?.pageAt(highlight.character)?.toString() ?: progressDisplay.countText(highlight.character),
                         onJump = { onJump(highlight) },
                         onDelete = { onDelete(highlight) },
                     )
@@ -637,7 +655,7 @@ private fun ReaderGoToEmptyState(
             text = text,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 8.dp),
+            modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(top = 8.dp),
         )
     }
 }

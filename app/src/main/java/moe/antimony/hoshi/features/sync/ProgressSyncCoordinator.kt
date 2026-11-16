@@ -64,7 +64,7 @@ val SyncBackend.displayName: String
 @Singleton
 internal class ProgressSyncCoordinator private constructor(
     private val bookRepository: BookRepository,
-    private val syncManager: SyncManager,
+    private val syncManager: TtuSyncManager,
     private val kosyncManager: KosyncManager,
     private val syncSettings: suspend () -> SyncSettings,
     private val kosyncSettings: suspend () -> KosyncSettings,
@@ -74,7 +74,7 @@ internal class ProgressSyncCoordinator private constructor(
     @Inject
     constructor(
         bookRepository: BookRepository,
-        syncManager: SyncManager,
+        syncManager: TtuSyncManager,
         kosyncManager: KosyncManager,
         syncSettingsRepository: SyncSettingsRepository,
         kosyncSettingsRepository: KosyncSettingsRepository,
@@ -92,7 +92,7 @@ internal class ProgressSyncCoordinator private constructor(
 
     constructor(
         bookRepository: BookRepository,
-        syncManager: SyncManager,
+        syncManager: TtuSyncManager,
         kosyncManager: KosyncManager,
         syncSettings: SyncSettings,
         kosyncSettings: KosyncSettings,
@@ -109,7 +109,7 @@ internal class ProgressSyncCoordinator private constructor(
     )
 
     suspend fun enabledBackends(manual: Boolean): Set<SyncBackend> = buildSet {
-        syncSettings().let { if (it.enabled && (manual || it.autoSyncEnabled)) add(SyncBackend.Ttu) }
+        syncSettings().let { if (it.usesTtuSync && (manual || it.autoSyncEnabled)) add(SyncBackend.Ttu) }
         kosyncSettings().let { if (it.enabled && (manual || it.autoSyncEnabled)) add(SyncBackend.Kosync) }
     }
 

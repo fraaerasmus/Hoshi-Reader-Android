@@ -9,6 +9,7 @@ class ReaderBehaviorSasayakiTest {
     fun behaviorKeepsOnlyNonGestureRows() {
         assertEquals(
             listOf(
+                R.string.reader_behavior_exit_reader_on_first_back,
                 R.string.reader_behavior_keep_screen_on,
                 R.string.reader_behavior_lock_current_orientation,
                 R.string.reader_behavior_open_last_read_book_on_launch,

@@ -5,6 +5,7 @@ import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ListenableWorker.Result
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -20,6 +21,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import moe.antimony.hoshi.R
+import moe.antimony.hoshi.ui.ErrorDiagnosticEvents
+import moe.antimony.hoshi.ui.UiText
 import moe.antimony.hoshi.di.ApplicationScope
 import moe.antimony.hoshi.di.IoDispatcher
 import java.util.concurrent.TimeUnit
@@ -97,13 +104,32 @@ internal class UpdateCheckWorker @AssistedInject constructor(
     private val updateCheckService: UpdateCheckService,
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
-        val enabled = updateSettingsRepository.settings.first().autoCheckUpdates
+        val enabled = try {
+            updateSettingsRepository.settings.first().autoCheckUpdates
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            ErrorDiagnosticEvents.buffer.record(UiText.Resource(R.string.about_update_check_failed), error)
+            throw error
+        }
         if (!enabled) return Result.success()
-        return runCatching {
+        return updateCheckWorkerResult(runAttemptCount) {
             updateCheckService.check(notifyAvailable = true)
-        }.fold(
-            onSuccess = { Result.success() },
-            onFailure = { Result.retry() },
-        )
+        }
     }
 }
+
+internal suspend fun updateCheckWorkerResult(runAttemptCount: Int, check: suspend () -> Unit): Result =
+    try {
+        check()
+        Result.success()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: Exception) {
+        currentCoroutineContext().ensureActive()
+        if (runAttemptCount == 0 && error is GitHubReleaseException && error.failure == GitHubApiFailure.Transient) {
+            Result.retry()
+        } else {
+            ErrorDiagnosticEvents.buffer.record(UiText.Resource(R.string.about_update_check_failed), error)
+            Result.failure()
+        }
+    }

@@ -54,7 +54,9 @@ data class SasayakiSettings(
     val dragPlaybackControlsToScrub: Boolean = true,
     val holdPlaybackControlsToBoost: Boolean = true,
     val doubleTapPlaybackControlsToToggle: Boolean = true,
+    val showReaderRestartSentenceButton: Boolean = false,
     val copyAudiobookToPrivateStorage: Boolean = false,
+    val pageAdvance: Boolean = false,
     val autoScroll: Boolean = true,
     val autoPause: Boolean = true,
     val transcriptionPreset: SasayakiTranscriptionPreset = SasayakiTranscriptionPreset.Balanced,
@@ -106,6 +108,7 @@ class SasayakiSettingsStore(context: Context) : SasayakiSettingsLegacySource {
             holdPlaybackControlsToBoost = preferences.getBoolean(KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST, true),
             doubleTapPlaybackControlsToToggle = preferences.getBoolean(KEY_DOUBLE_TAP_PLAYBACK_CONTROLS_TO_TOGGLE, true),
             copyAudiobookToPrivateStorage = preferences.getBoolean(KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE, false),
+            pageAdvance = preferences.getBoolean(KEY_PAGE_ADVANCE, false),
             autoScroll = preferences.getBoolean(KEY_AUTO_SCROLL, true),
             autoPause = preferences.getBoolean(KEY_AUTO_PAUSE, true),
             imageHoldSeconds = normalizeSasayakiImageHoldSeconds(
@@ -129,6 +132,7 @@ class SasayakiSettingsStore(context: Context) : SasayakiSettingsLegacySource {
             .putBoolean(KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST, settings.holdPlaybackControlsToBoost)
             .putBoolean(KEY_DOUBLE_TAP_PLAYBACK_CONTROLS_TO_TOGGLE, settings.doubleTapPlaybackControlsToToggle)
             .putBoolean(KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE, settings.copyAudiobookToPrivateStorage)
+            .putBoolean(KEY_PAGE_ADVANCE, settings.pageAdvance)
             .putBoolean(KEY_AUTO_SCROLL, settings.autoScroll)
             .putBoolean(KEY_AUTO_PAUSE, settings.autoPause)
             .putFloat(KEY_IMAGE_HOLD_SECONDS, normalizeSasayakiImageHoldSeconds(settings.imageHoldSeconds))
@@ -150,6 +154,7 @@ class SasayakiSettingsStore(context: Context) : SasayakiSettingsLegacySource {
         const val KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST = "sasayakiHoldPlaybackControlsToBoost"
         const val KEY_DOUBLE_TAP_PLAYBACK_CONTROLS_TO_TOGGLE = "sasayakiDoubleTapPlaybackControlsToToggle"
         const val KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE = "sasayakiCopyAudiobookToPrivateStorage"
+        const val KEY_PAGE_ADVANCE = "pageAdvance"
         const val KEY_AUTO_SCROLL = "sasayakiAutoScroll"
         const val KEY_AUTO_PAUSE = "sasayakiAutoPause"
         const val KEY_IMAGE_HOLD_SECONDS = "sasayakiImageHoldSeconds"
@@ -210,7 +215,9 @@ class SasayakiSettingsRepository(
             dragPlaybackControlsToScrub = this[KEY_DRAG_PLAYBACK_CONTROLS_TO_SCRUB] ?: true,
             holdPlaybackControlsToBoost = this[KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST] ?: true,
             doubleTapPlaybackControlsToToggle = this[KEY_DOUBLE_TAP_PLAYBACK_CONTROLS_TO_TOGGLE] ?: true,
+            showReaderRestartSentenceButton = this[KEY_SHOW_READER_RESTART_SENTENCE_BUTTON] ?: false,
             copyAudiobookToPrivateStorage = this[KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE] ?: false,
+            pageAdvance = this[KEY_PAGE_ADVANCE] ?: false,
             autoScroll = this[KEY_AUTO_SCROLL] ?: true,
             autoPause = this[KEY_AUTO_PAUSE] ?: true,
             transcriptionPreset = SasayakiTranscriptionPreset.fromStorage(this[KEY_TRANSCRIPTION_PRESET]),
@@ -233,7 +240,9 @@ class SasayakiSettingsRepository(
         this[KEY_DRAG_PLAYBACK_CONTROLS_TO_SCRUB] = settings.dragPlaybackControlsToScrub
         this[KEY_HOLD_PLAYBACK_CONTROLS_TO_BOOST] = settings.holdPlaybackControlsToBoost
         this[KEY_DOUBLE_TAP_PLAYBACK_CONTROLS_TO_TOGGLE] = settings.doubleTapPlaybackControlsToToggle
+        this[KEY_SHOW_READER_RESTART_SENTENCE_BUTTON] = settings.showReaderRestartSentenceButton
         this[KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE] = settings.copyAudiobookToPrivateStorage
+        this[KEY_PAGE_ADVANCE] = settings.pageAdvance
         this[KEY_AUTO_SCROLL] = settings.autoScroll
         this[KEY_AUTO_PAUSE] = settings.autoPause
         this[KEY_TRANSCRIPTION_PRESET] = settings.transcriptionPreset.name
@@ -263,8 +272,11 @@ class SasayakiSettingsRepository(
             booleanPreferencesKey("sasayakiHoldPlaybackControlsToBoost")
         private val KEY_DOUBLE_TAP_PLAYBACK_CONTROLS_TO_TOGGLE =
             booleanPreferencesKey("sasayakiDoubleTapPlaybackControlsToToggle")
+        private val KEY_SHOW_READER_RESTART_SENTENCE_BUTTON =
+            booleanPreferencesKey("showReaderRestartSentenceButton")
         private val KEY_COPY_AUDIOBOOK_TO_PRIVATE_STORAGE =
             booleanPreferencesKey("sasayakiCopyAudiobookToPrivateStorage")
+        private val KEY_PAGE_ADVANCE = booleanPreferencesKey("pageAdvance")
         private val KEY_AUTO_SCROLL = booleanPreferencesKey("sasayakiAutoScroll")
         private val KEY_AUTO_PAUSE = booleanPreferencesKey("sasayakiAutoPause")
         private val KEY_TRANSCRIPTION_PRESET = stringPreferencesKey("sasayakiTranscriptionPreset")
@@ -278,3 +290,5 @@ class SasayakiSettingsRepository(
 
 internal fun Color.toSasayakiColorLong(): Long =
     toArgb().toLong() and 0xFFFFFFFF
+
+internal typealias SasayakiSettingsUpdate = (SasayakiSettings) -> SasayakiSettings

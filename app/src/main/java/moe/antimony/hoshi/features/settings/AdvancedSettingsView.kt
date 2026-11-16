@@ -15,6 +15,7 @@ import androidx.compose.material.icons.rounded.Cloud
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.RecordVoiceOver
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.Icon
@@ -30,26 +31,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.features.anki.AnkiConnectView
 import moe.antimony.hoshi.features.audio.AudioSettingsView
 import moe.antimony.hoshi.features.backup.BackupSettingsView
-import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.reader.input.ReaderGesturesView
 import moe.antimony.hoshi.features.sasayaki.SasayakiSettingsView
 import moe.antimony.hoshi.features.kosync.KosyncSettingsView
-import moe.antimony.hoshi.features.sync.SyncSettingsView
 import moe.antimony.hoshi.features.wallpaper.BookCoverWallpaperSettingsView
 
 @Composable
 fun AdvancedSettingsView(
-    readerSettings: ReaderSettings,
-    onReaderSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
     onClose: () -> Unit,
+    onOpenSync: () -> Unit,
     onBooksRestored: () -> Unit = {},
+    onOpenTts: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var destination by remember { mutableStateOf<AdvancedDestination?>(null) }
@@ -83,13 +83,6 @@ fun AdvancedSettingsView(
         )
         return
     }
-    if (destination == AdvancedDestination.Syncing) {
-        SyncSettingsView(
-            onClose = { destination = null },
-            modifier = modifier,
-        )
-        return
-    }
     if (destination == AdvancedDestination.KoreaderSync) {
         KosyncSettingsView(
             onClose = { destination = null },
@@ -113,7 +106,7 @@ fun AdvancedSettingsView(
     }
 
     val colorScheme = MaterialTheme.colorScheme
-    SettingsDetailScaffold(
+    StaticSettingsDetailScaffold(
         title = stringResource(R.string.settings_advanced),
         onClose = onClose,
         modifier = modifier.fillMaxSize(),
@@ -134,8 +127,13 @@ fun AdvancedSettingsView(
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                                 leadingContent = { Icon(row.icon.imageVector(), contentDescription = null) },
                                 headlineContent = { Text(stringResource(row.titleRes)) },
-                                supportingContent = row.subtitleRes?.let { subtitleRes -> { Text(stringResource(subtitleRes)) } },
-                                modifier = Modifier.clickable { destination = row.destination },
+                                modifier = Modifier.clickable {
+                                    when (row.destination) {
+                                        AdvancedDestination.Tts -> onOpenTts()
+                                        AdvancedDestination.Syncing -> onOpenSync()
+                                        else -> destination = row.destination
+                                    }
+                                },
                             )
                             if (index != section.rows.lastIndex) {
                                 GroupDivider()
@@ -144,15 +142,19 @@ fun AdvancedSettingsView(
                     }
                 }
             }
-            if (isAppLanguagePickerSupported()) {
-                item {
-                    val context = LocalContext.current
-                    GroupCard {
-                        AppLanguageListItem(
-                            selected = context.currentAppLanguageMode(),
-                            onSelected = { mode -> context.setAppLanguageMode(mode) },
-                        )
-                    }
+            item {
+                var languageMode by remember { mutableStateOf(currentAppLanguageMode()) }
+                LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+                    languageMode = currentAppLanguageMode()
+                }
+                GroupCard {
+                    AppLanguageListItem(
+                        selected = languageMode,
+                        onSelected = { mode ->
+                            setAppLanguageMode(mode)
+                            languageMode = currentAppLanguageMode()
+                        },
+                    )
                 }
             }
         }
@@ -163,6 +165,7 @@ internal enum class AdvancedDestination {
     Audio,
     Sasayaki,
     Gestures,
+    Tts,
     Backup,
     Syncing,
     KoreaderSync,
@@ -172,6 +175,7 @@ internal enum class AdvancedDestination {
 
 internal enum class AdvancedSettingsIcon {
     Speaker,
+    Voice,
     Waveform,
     Touch,
     Cloud,
@@ -184,7 +188,6 @@ internal data class AdvancedSettingsRow(
     @param:StringRes val titleRes: Int,
     val destination: AdvancedDestination,
     val icon: AdvancedSettingsIcon,
-    @param:StringRes val subtitleRes: Int? = null,
 )
 
 internal data class AdvancedSettingsSection(
@@ -200,33 +203,30 @@ internal fun advancedSettingsSections(): List<AdvancedSettingsSection> =
                     destination = AdvancedDestination.Audio,
                     icon = AdvancedSettingsIcon.Speaker,
                 ),
+                AdvancedSettingsRow(titleRes = R.string.tts_title, destination = AdvancedDestination.Tts, icon = AdvancedSettingsIcon.Voice),
                 AdvancedSettingsRow(
                     titleRes = R.string.advanced_sasayaki_audiobooks,
                     destination = AdvancedDestination.Sasayaki,
                     icon = AdvancedSettingsIcon.Waveform,
-                    subtitleRes = R.string.advanced_sasayaki_subtitle,
                 ),
                 AdvancedSettingsRow(
                     titleRes = R.string.gestures_title,
                     destination = AdvancedDestination.Gestures,
                     icon = AdvancedSettingsIcon.Touch,
-                    subtitleRes = R.string.advanced_gestures_subtitle,
                 ),
             ),
         ),
         AdvancedSettingsSection(
             rows = listOf(
                 AdvancedSettingsRow(
-                    titleRes = R.string.advanced_sync_ttu,
+                    titleRes = R.string.sync_title,
                     destination = AdvancedDestination.Syncing,
                     icon = AdvancedSettingsIcon.Cloud,
-                    subtitleRes = R.string.advanced_sync_ttu_subtitle,
                 ),
                 AdvancedSettingsRow(
                     titleRes = R.string.kosync_title,
                     destination = AdvancedDestination.KoreaderSync,
                     icon = AdvancedSettingsIcon.Cloud,
-                    subtitleRes = R.string.advanced_sync_kosync_subtitle,
                 ),
             ),
         ),
@@ -245,7 +245,6 @@ internal fun advancedSettingsSections(): List<AdvancedSettingsSection> =
                     titleRes = R.string.settings_book_cover_wallpaper,
                     destination = AdvancedDestination.BookCoverWallpaper,
                     icon = AdvancedSettingsIcon.Wallpaper,
-                    subtitleRes = R.string.settings_book_cover_wallpaper_subtitle,
                 ),
             ),
         ),
@@ -263,6 +262,7 @@ internal fun advancedSettingsSections(): List<AdvancedSettingsSection> =
 private fun AdvancedSettingsIcon.imageVector(): ImageVector =
     when (this) {
         AdvancedSettingsIcon.Speaker -> Icons.AutoMirrored.Rounded.VolumeUp
+        AdvancedSettingsIcon.Voice -> Icons.Rounded.RecordVoiceOver
         AdvancedSettingsIcon.Waveform -> Icons.Rounded.GraphicEq
         AdvancedSettingsIcon.Touch -> Icons.Rounded.TouchApp
         AdvancedSettingsIcon.Cloud -> Icons.Rounded.Cloud

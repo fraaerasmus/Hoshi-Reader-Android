@@ -1,10 +1,11 @@
 package moe.antimony.hoshi.features.anki
 
 import androidx.annotation.StringRes
-import javax.inject.Inject
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.ui.diagnosticMessage
 
 interface AnkiBackend {
+    fun checkAvailability(): Boolean = isAvailable()
     fun isAvailable(): Boolean
     fun fetchDecks(): List<AnkiDeck>
     fun fetchNoteTypes(): List<AnkiNoteType>
@@ -26,6 +27,8 @@ interface AnkiBackend {
     ): Boolean
     fun addMediaFromUri(uriString: String, preferredName: String, mimeType: String): String?
     fun addMediaFromBytes(bytes: ByteArray, preferredName: String, mimeType: String): String? = null
+    suspend fun addCoverFromBytes(bytes: ByteArray, preferredName: String, mimeType: String): String? =
+        addMediaFromBytes(bytes, preferredName, mimeType)
     fun openNotes(
         deck: AnkiDeck,
         noteType: AnkiNoteType,
@@ -90,8 +93,9 @@ interface AnkiContentApi {
     fun isAvailable(): Boolean = true
 }
 
-class AnkiDroidBackendAdapter @Inject constructor(
+class AnkiDroidBackendAdapter(
     private val api: AnkiContentApi,
+    private val clientName: String = AnkiDroidClient.AnkiDroid.displayName,
 ) : AnkiBackend {
     override fun isAvailable(): Boolean = api.isAvailable()
 
@@ -102,11 +106,14 @@ class AnkiDroidBackendAdapter @Inject constructor(
 
     override fun fetchNoteTypes(): List<AnkiNoteType> {
         val unreadableModels = mutableListOf<String>()
+        val unreadableCauses = mutableListOf<Throwable>()
         val noteTypes = api.modelList().mapNotNull { (id, name) ->
             val fields = runCatching { api.fieldList(id) }
                 .getOrElse { error ->
                     if (error is AnkiFetchException && error.failure == AnkiFetchFailure.ModelFieldsUnavailable) {
                         unreadableModels += name
+                        if (error.message != error.failure.userMessage) unreadableCauses += error
+                        else if (error.cause != null) unreadableCauses += error.cause!!
                         return@mapNotNull null
                     }
                     throw error
@@ -120,11 +127,16 @@ class AnkiDroidBackendAdapter @Inject constructor(
         }
         if (unreadableModels.isNotEmpty()) {
             val message = if (unreadableModels.size == 1) {
-                "Unable to read fields for AnkiDroid note type: ${unreadableModels.single()}."
+                "Unable to read fields for $clientName note type: ${unreadableModels.single()}."
             } else {
-                "Unable to read fields for AnkiDroid note types: ${unreadableModels.joinToString()}."
+                "Unable to read fields for $clientName note types: ${unreadableModels.joinToString()}."
             }
-            throw AnkiFetchException(AnkiFetchFailure.ModelFieldsUnavailable, message)
+            val cause = unreadableCauses.takeIf { it.isNotEmpty() }?.let { causes ->
+                IllegalStateException(causes.joinToString("\n") { it.diagnosticMessage() }).apply {
+                    causes.forEach(::addSuppressed)
+                }
+            }
+            throw AnkiFetchException(AnkiFetchFailure.ModelFieldsUnavailable, message, cause)
         }
         return noteTypes
     }

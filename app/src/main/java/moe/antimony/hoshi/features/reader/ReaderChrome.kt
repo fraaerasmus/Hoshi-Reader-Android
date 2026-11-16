@@ -6,7 +6,20 @@ import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.ui.graphics.vector.ImageVector
 import moe.antimony.hoshi.features.display.DisplayPalettePreset
 import moe.antimony.hoshi.features.display.resolveDisplaySettings
+import moe.antimony.hoshi.features.sasayaki.SasayakiSettings
 import java.util.Locale
+
+internal data class ReaderTopPlaybackControl(
+    val isPlaying: Boolean,
+    val onToggle: () -> Unit,
+)
+
+internal fun readerTopPlaybackControl(
+    settings: SasayakiSettings,
+    tts: ReaderTopPlaybackControl?,
+    sasayaki: ReaderTopPlaybackControl?,
+): ReaderTopPlaybackControl? =
+    if (!settings.showReaderToggle) null else tts ?: sasayaki.takeIf { settings.enabled }
 
 data class ReaderChromeState(
     val title: String,
@@ -18,6 +31,8 @@ data class ReaderChromeState(
     val forwardTargetCharacter: Int? = null,
     val statistics: ReaderStatisticsChromeState? = null,
     val chapter: ReaderChapterChromeState? = null,
+    val pageProgress: ReaderPageProgress? = null,
+    val pageCountsFailed: Boolean = false,
 ) {
     fun progressText(
         settings: ReaderSettings,
@@ -25,12 +40,12 @@ data class ReaderChromeState(
     ): String {
         val lines = mutableListOf<String>()
         if (settings.showProgress) {
-            progressLine(currentCharacter, totalCharacters, settings, progressDisplay)
+            progressLine(currentCharacter, totalCharacters, settings, progressDisplay, pageProgress?.let { it.current to it.total })
                 .takeIf { it.isNotEmpty() }
                 ?.let(lines::add)
         }
         if (settings.showChapterProgress) {
-            progressLine(chapterCurrentCharacter, chapterTotalCharacters, settings, progressDisplay)
+            progressLine(chapterCurrentCharacter, chapterTotalCharacters, settings, progressDisplay, pageProgress?.let { it.chapterCurrent to it.chapterTotal })
                 .takeIf { it.isNotEmpty() }
                 ?.let { lines += "($it)" }
         }
@@ -43,9 +58,12 @@ data class ReaderChromeState(
         total: Int,
         settings: ReaderSettings,
         progressDisplay: ReaderProgressDisplay,
+        pages: Pair<Int, Int>?,
     ): String {
         val parts = mutableListOf<String>()
-        if (settings.showCharacters) {
+        if (settings.usesPageCounts && !pageCountsFailed) {
+            parts += pages?.let { "${it.first} / ${it.second}" } ?: "…"
+        } else if (settings.progressCount != ReaderProgressCount.Off) {
             parts += progressDisplay.countText(current)
             if (total > 0) {
                 parts[parts.lastIndex] = progressDisplay.rangeText(current, total)
@@ -65,11 +83,7 @@ data class ReaderChromeState(
     fun chapterText(settings: ReaderSettings): String {
         val chapter = chapter ?: return ""
         if (!settings.showChapter) return ""
-        val position = if (chapter.page != null && chapter.pages != null && chapter.pages > 0) {
-            "(${chapter.page}/${chapter.pages})"
-        } else {
-            "(${chapter.number}/${chapter.total})"
-        }
+        val position = "(${chapter.number}/${chapter.total})"
         return listOf(chapter.label, position).filter { it.isNotBlank() }.joinToString(separator = " ")
     }
 
@@ -98,8 +112,6 @@ data class ReaderChapterChromeState(
     val number: Int,
     val total: Int,
     val label: String,
-    val page: Int? = null,
-    val pages: Int? = null,
 )
 
 data class ReaderChromeColors(
@@ -154,6 +166,7 @@ enum class ReaderMenuDestination {
     Sync,
     Statistics,
     Sasayaki,
+    Tts,
 }
 
 data class ReaderSasayakiBottomPlaybackControls(
@@ -163,7 +176,11 @@ data class ReaderSasayakiBottomPlaybackControls(
     val buttonWidthDp: Int,
     val iconSizeDp: Int,
     val horizontalPaddingDp: Int,
-)
+    val showRestartSentenceButton: Boolean = false,
+) {
+    val widthDp: Int
+        get() = buttonWidthDp * (if (showRestartSentenceButton) 4 else 3) + horizontalPaddingDp
+}
 
 enum class ReaderSasayakiBottomSkipButtonAction {
     Backward,
@@ -308,9 +325,12 @@ fun readerInfoBubbleMetrics(): ReaderInfoBubbleMetrics =
         cornerRadiusDp = 24,
     )
 
-fun readerSystemBarVisibility(focusMode: Boolean): ReaderSystemBarVisibility =
+fun readerSystemBarVisibility(
+    focusMode: Boolean,
+    isFullscreenImageVisible: Boolean,
+): ReaderSystemBarVisibility =
     ReaderSystemBarVisibility(
-        showStatusBar = !focusMode,
+        showStatusBar = !focusMode && !isFullscreenImageVisible,
         showNavigationBar = false,
     )
 
@@ -377,7 +397,9 @@ fun readerBottomMenuVisualOrder(
     showStatistics: Boolean,
     showSasayaki: Boolean,
     showSync: Boolean = false,
+    showTts: Boolean = false,
 ): List<ReaderMenuDestination> = buildList {
+    if (showTts) add(ReaderMenuDestination.Tts)
     if (showSasayaki) add(ReaderMenuDestination.Sasayaki)
     if (showStatistics) add(ReaderMenuDestination.Statistics)
     add(ReaderMenuDestination.GoTo)
@@ -401,6 +423,7 @@ fun readerSasayakiBottomPlaybackControls(
         buttonWidthDp = scale(readerSasayakiBottomPlaybackButtonWidthDp(metrics.bottomSafeAreaDp)),
         iconSizeDp = scale(readerSasayakiBottomPlaybackIconSizeDp(metrics.bottomSafeAreaDp)),
         horizontalPaddingDp = 18,
+        showRestartSentenceButton = settings.showReaderRestartSentenceButton,
     )
 }
 

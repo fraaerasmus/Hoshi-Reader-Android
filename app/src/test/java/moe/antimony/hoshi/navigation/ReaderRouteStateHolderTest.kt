@@ -8,6 +8,7 @@ import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubChapter
 import moe.antimony.hoshi.epub.ReadingStatistics
+import moe.antimony.hoshi.epub.ReadingSessions
 import moe.antimony.hoshi.epub.ReaderRouteBookRepository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -16,6 +17,22 @@ import java.io.File
 import java.nio.file.Files
 
 class ReaderRouteStateHolderTest {
+    @Test
+    fun cancelledLoadIsNotConvertedToAnErrorState() = runBlocking {
+        val cancelled = kotlinx.coroutines.CancellationException("Reader closed")
+        val stateHolder = ReaderRouteStateHolder(
+            repository = FakeReaderRouteBookRepository(
+                entry = BookEntry(File("book"), BookMetadata("book", "Book", null, "book", 0.0)),
+            ),
+            parser = object : ReaderRouteEpubParser {
+                override fun parse(root: File, cachedBookInfo: BookInfo?): EpubBook = throw cancelled
+            },
+        )
+        val failure = runCatching { stateHolder.load("book") }.exceptionOrNull()
+        assertTrue(failure is kotlinx.coroutines.CancellationException)
+        assertEquals(cancelled.message, failure?.message)
+    }
+
     @Test
     fun loadReadyParsesBookUpdatesSidecarsAndRestoresBookmark() = runBlocking {
         val root = Files.createTempDirectory("hoshi-reader-route-book").toFile()
@@ -43,13 +60,13 @@ class ReaderRouteStateHolderTest {
         assertTrue(state is ReaderRouteLoadState.Ready)
         state as ReaderRouteLoadState.Ready
         assertEquals(root, state.bookRoot)
-        assertEquals(parsedBook, state.book)
+        assertEquals(parsedBook.copy(title = "Old Title"), state.book)
         assertEquals(root.resolve("cover.jpg"), state.bookCoverFile)
-        assertEquals(bookmark, state.bookmark)
+        assertEquals(bookmark.copy(progress = 0.4), state.bookmark)
         assertEquals(
             BookMetadata(
                 id = "book-a",
-                title = "Parsed Title",
+                title = "Old Title",
                 cover = "Books/${root.name}/cover.jpg",
                 folder = root.name,
                 lastAccess = 42.0,
@@ -60,7 +77,7 @@ class ReaderRouteStateHolderTest {
     }
 
     @Test
-    fun loadErrorUsesSameGenericStateForMissingAndUnparsableBooks() = runBlocking {
+    fun loadErrorRetainsDistinctMissingAndParserDiagnostics() = runBlocking {
         val missingBookStateHolder = ReaderRouteStateHolder(
             repository = FakeReaderRouteBookRepository(entry = null),
             parser = FakeReaderRouteEpubParser(readerBook()),
@@ -84,7 +101,8 @@ class ReaderRouteStateHolderTest {
         val unparsableBookState = unparsableBookStateHolder.load("broken")
 
         assertTrue(missingBookState is ReaderRouteLoadState.Error)
-        assertEquals(missingBookState, unparsableBookState)
+        assertTrue((missingBookState as ReaderRouteLoadState.Error).cause.message == "Book not found.")
+        assertTrue((unparsableBookState as ReaderRouteLoadState.Error).cause.message == "Parser implementation detail")
     }
 
     @Test
@@ -112,6 +130,31 @@ class ReaderRouteStateHolderTest {
         assertTrue(state is ReaderRouteLoadState.Ready)
         assertEquals(cachedBookInfo, parser.cachedBookInfo)
         assertEquals(null, repository.savedBookInfo)
+    }
+
+    @Test
+    fun rebuiltBookInfoRestoresFromCharacterCountAndPreservesTimestamp() = runBlocking {
+        val root = File("book-a")
+        val original = readerBook()
+        val updated = original.copy(
+            chapters = listOf(EpubChapter("image", "front.xhtml", "application/xhtml+xml", "<html><body/></html>")) + original.chapters,
+            bookInfo = original.bookInfo.copy(chapterInfo = mapOf(
+                "front.xhtml" to BookInfo.ChapterInfo(0, 0, 0),
+                "chapter-1.xhtml" to BookInfo.ChapterInfo(1, 0, 10),
+            )),
+        )
+        val bookmark = Bookmark(0, 0.8, 4, 123.0)
+        val repository = FakeReaderRouteBookRepository(
+            entry = BookEntry(root, BookMetadata("book-a", "Book", null, "book-a", 0.0)),
+            bookInfo = original.bookInfo,
+            bookmark = bookmark,
+        )
+        val parser = object : ReaderRouteEpubParser {
+            override fun parse(root: File, cachedBookInfo: BookInfo?): EpubBook = updated
+        }
+        val state = ReaderRouteStateHolder(repository, parser).load("book-a") as ReaderRouteLoadState.Ready
+        assertEquals(bookmark.copy(chapterIndex = 1, progress = 0.4), state.bookmark)
+        assertEquals(updated.bookInfo, repository.savedBookInfo)
     }
 
     @Test
@@ -151,7 +194,7 @@ class ReaderRouteStateHolderTest {
     fun saveBookmarkPersistsStatisticsThroughSameRepositoryPath() = runBlocking {
         val root = File("book-a")
         val book = readerBook(html = "1234567890")
-        val statistics = listOf(ReadingStatistics(title = "Book", dateKey = "2026-05-13", charactersRead = 5))
+        val statistics = mapOf("session" to moe.antimony.hoshi.features.sync.Timestamped<moe.antimony.hoshi.epub.ReadingSession?>(1, moe.antimony.hoshi.epub.ReadingSession(0, 1, 5)))
         val repository = FakeReaderRouteBookRepository(entry = null, now = 99.0)
         val stateHolder = ReaderRouteStateHolder(repository, FakeReaderRouteEpubParser(book))
 
@@ -184,27 +227,29 @@ class ReaderRouteStateHolderTest {
             private set
         var savedBookmark: Bookmark? = null
             private set
-        var savedStatistics: List<ReadingStatistics>? = null
+        var savedStatistics: ReadingSessions? = null
             private set
 
-        override suspend fun loadBookEntry(bookId: String): BookEntry? = entry
+        override suspend fun loadBookEntry(bookId: String): BookEntry? = entry?.let { it.copy(metadata = savedMetadata ?: it.metadata) }
 
-        override suspend fun metadataCoverPath(bookRoot: File, coverHref: String?): String? =
-            coverHref?.let { "Books/${bookRoot.name}/${File(it).name}" }
+        override suspend fun restoreCoverIfNeeded(bookRoot: File, parsedBook: EpubBook) {
+            val metadata = savedMetadata ?: entry?.metadata ?: return
+            savedMetadata = metadata.copy(cover = metadata.cover ?: parsedBook.coverHref?.let { "Books/${bookRoot.name}/${File(it).name}" })
+        }
 
         override suspend fun saveMetadata(bookRoot: File, metadata: BookMetadata) {
             savedMetadata = metadata
         }
 
-        override suspend fun loadBookmark(bookRoot: File): Bookmark? = bookmark
+        override suspend fun loadBookmark(bookRoot: File): Bookmark? = savedBookmark ?: bookmark
 
         override suspend fun saveBookmark(bookRoot: File, bookmark: Bookmark) {
             savedBookmark = bookmark
         }
 
-        override suspend fun loadStatistics(bookRoot: File): List<ReadingStatistics> = emptyList()
+        override suspend fun loadSessions(bookRoot: File): ReadingSessions = emptyMap()
 
-        override suspend fun saveTrackedStatistics(bookRoot: File, statistics: List<ReadingStatistics>) {
+        override suspend fun saveTrackedSessions(bookRoot: File, statistics: ReadingSessions) {
             savedStatistics = statistics
         }
 

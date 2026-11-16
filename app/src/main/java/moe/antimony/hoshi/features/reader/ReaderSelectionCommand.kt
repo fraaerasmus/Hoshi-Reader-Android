@@ -11,7 +11,7 @@ internal sealed interface ReaderSelectionCommand {
         val maxLength: Int,
     ) : ReaderSelectionCommand {
         override val source: String =
-            "window.hoshiSelection.selectText($x, $y, $maxLength)"
+            "(window.hoshiParagraph?.enabled ? window.hoshiParagraph : window.hoshiSelection).selectText($x, $y, $maxLength)"
     }
 
     data class HighlightSelection(
@@ -26,6 +26,22 @@ internal sealed interface ReaderSelectionCommand {
     ) : ReaderSelectionCommand {
         override val source: String =
             "JSON.stringify(window.hoshiSelection.selectionRects($count))"
+    }
+
+    data class NativeMenuRect(val request: Int) : ReaderSelectionCommand {
+        override val source = "window.hoshiSelection.nativeSelectionMenuRect($request)"
+    }
+
+    data class TakeMenuRecovery(val request: Int, val generation: Int) : ReaderSelectionCommand {
+        override val source = "window.hoshiSelection.takeNativeMenuRecovery($request, $generation)"
+    }
+
+    data class CancelMenuRecovery(val request: Int, val documentToken: String) : ReaderSelectionCommand {
+        override val source = "window.hoshiSelection.cancelNativeMenuRecoveryReplay($request, ${documentToken.javaScriptDoubleQuotedString()})"
+    }
+
+    data object NativeContext : ReaderSelectionCommand {
+        override val source = "window.hoshiSelection.nativeSelectionContext()"
     }
 
     data object ClearSelection : ReaderSelectionCommand {
@@ -62,6 +78,7 @@ internal data class ReaderSelectionResult(
     val selectedNothing: Boolean,
     val isImageTap: Boolean = false,
     val isLinkTap: Boolean = false,
+    val isTextTap: Boolean = false,
 ) {
     companion object {
         fun fromWebViewResult(result: String?): ReaderSelectionResult {
@@ -71,6 +88,7 @@ internal data class ReaderSelectionResult(
                 selectedNothing = value == null || value == "null" || value == "undefined",
                 isImageTap = token == "image",
                 isLinkTap = token == "link",
+                isTextTap = token == "text",
             )
         }
     }

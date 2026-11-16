@@ -18,6 +18,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.PlaybackPendingIntentBuilder
 import com.google.common.collect.ImmutableList
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.ui.appLanguageContext
 import androidx.media3.session.R as Media3R
 
 internal const val SasayakiPlaybackNotificationId = 1001
@@ -96,20 +97,22 @@ internal class SasayakiPlaybackNotificationProvider(
     override fun getNotificationChannelInfo(): MediaNotification.Provider.NotificationChannelInfo =
         MediaNotification.Provider.NotificationChannelInfo(
             SasayakiPlaybackNotificationChannelId,
-            context.getString(R.string.sasayaki_title),
+            context.appLanguageContext().getString(R.string.sasayaki_title),
         )
 
     @OptIn(UnstableApi::class)
     fun buildNotification(session: MediaSession): Notification {
-        ensureChannel()
+        val languageContext = context.appLanguageContext()
+        ensureChannel(languageContext)
         val player = session.player
         val metadata = player.mediaMetadata
-        val title = metadata.title?.takeIf { it.isNotBlank() } ?: context.getString(R.string.sasayaki_title)
+        val title = metadata.title?.takeIf { it.isNotBlank() } ?: languageContext.getString(R.string.sasayaki_title)
         val isPlaying = player.isPlaying || isPlaybackOngoing()
         val builder = Notification.Builder(context, SasayakiPlaybackNotificationChannelId)
             .setSmallIcon(R.drawable.ic_stat_hoshi)
             .setContentTitle(title)
-            .setContentText(context.getString(R.string.sasayaki_playback))
+            .setContentText(metadata.artist?.takeIf { it.isNotBlank() }
+                ?: languageContext.getString(R.string.sasayaki_playback))
             .setContentIntent(contentIntent())
             .setCategory(Notification.CATEGORY_TRANSPORT)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
@@ -130,7 +133,7 @@ internal class SasayakiPlaybackNotificationProvider(
             builder.addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(context, spec.iconResId),
-                    context.getString(spec.titleResId),
+                    languageContext.getString(spec.titleResId),
                     actionIntent(spec),
                 ).build(),
             )
@@ -139,7 +142,7 @@ internal class SasayakiPlaybackNotificationProvider(
         builder.addAction(
             Notification.Action.Builder(
                 Icon.createWithResource(context, sasayakiSpeedNotificationIconRes(currentSpeed())),
-                context.getString(R.string.sasayaki_speed),
+                languageContext.getString(R.string.sasayaki_speed),
                 cycleSpeedIntent(),
             ).build(),
         )
@@ -164,10 +167,10 @@ internal class SasayakiPlaybackNotificationProvider(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-    private fun ensureChannel() {
+    private fun ensureChannel(languageContext: Context) {
         val channel = NotificationChannel(
             SasayakiPlaybackNotificationChannelId,
-            context.getString(R.string.sasayaki_title),
+            languageContext.getString(R.string.sasayaki_title),
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
             setSound(null, null)

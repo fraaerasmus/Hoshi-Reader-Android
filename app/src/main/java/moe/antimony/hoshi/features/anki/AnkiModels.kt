@@ -95,6 +95,8 @@ data class AnkiSettings(
     val schemaVersion: Int = AnkiSettingsSchemaVersion,
     val cardFormats: List<AnkiCardFormat> = emptyList(),
     val backendKind: AnkiBackendKind = AnkiBackendKind.AnkiDroid,
+    val ankiDroidClient: AnkiDroidClient = AnkiDroidClient.AnkiDroid,
+    val ankiDroidClientRevision: Long = 0,
     val selectedDeckId: Long? = null,
     val selectedDeckName: String? = null,
     val selectedNoteTypeId: Long? = null,
@@ -104,6 +106,7 @@ data class AnkiSettings(
     val fieldMappings: Map<String, String> = emptyMap(),
     val tags: String = "",
     val allowDupes: Boolean = false,
+    val preventAccidentalDuplicates: Boolean = false,
     val checkDuplicatesAcrossAllModels: Boolean = false,
     val duplicateScope: AnkiDuplicateScope = AnkiDuplicateScope.Collection,
     val compactGlossaries: Boolean = false,
@@ -228,9 +231,12 @@ data class AnkiPopupSettings(
     val useAnkiConnect: Boolean = false,
     val needsAudio: Boolean = false,
     val needsSasayakiAudio: Boolean = false,
+    val needsSentenceAudio: Boolean = false,
     val allowDupes: Boolean = false,
+    val preventAccidentalDuplicates: Boolean = false,
     val compactGlossaries: Boolean = false,
     val disableShowNotes: Boolean = false,
+    val excludedDictionaries: List<String> = emptyList(),
 )
 
 internal fun Map<String, String>.referencesAnkiHandlebar(handlebar: String): Boolean =
@@ -312,6 +318,8 @@ data class AnkiMiningContext(
     val documentTitle: String? = null,
     val coverPath: String? = null,
     val sasayakiAudioPath: String? = null,
+    val sentenceAudioPath: String? = null,
+    val sentenceAudioSuppressed: Boolean = false,
     val sentenceOffset: Int? = null,
 )
 
@@ -468,6 +476,7 @@ internal object AnkiHandlebarRenderer {
             "{document-title}" -> context.documentTitle.orEmpty()
             "{book-cover}" -> context.coverPath.orEmpty()
             "{sasayaki-audio}" -> context.sasayakiAudioPath.orEmpty()
+            "{sentence-audio}" -> context.sentenceAudioPath.orEmpty()
             else -> ""
         }
     }
@@ -495,8 +504,7 @@ internal object AnkiHandlebarRenderer {
         selectedGlossaryFallback: String,
         termDictionaries: List<AnkiTermDictionary>,
     ): String {
-        val selected = singleGlossaryForDictionary(selectedDictionary)
-        if (selected.isNotBlank()) return selected
+        singleGlossaryForDictionaryOrNull(selectedDictionary)?.let { return it }
         if (selectedGlossaryFallback in SelectedGlossaryHandlebars) return ""
         return handlebarToValue(
             handlebar = selectedGlossaryFallback,

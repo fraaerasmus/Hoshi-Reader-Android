@@ -4,6 +4,8 @@ import android.webkit.WebResourceResponse
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URI
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import moe.antimony.hoshi.epub.EpubBook
 
 internal data class ReaderWebResource(
@@ -12,6 +14,7 @@ internal data class ReaderWebResource(
     val data: ByteArray,
     val statusCode: Int = HttpURLConnection.HTTP_OK,
     val reasonPhrase: String = "OK",
+    val headers: Map<String, String> = emptyMap(),
 ) {
     fun toWebResourceResponse(): WebResourceResponse =
         WebResourceResponse(
@@ -19,7 +22,7 @@ internal data class ReaderWebResource(
             encoding,
             statusCode,
             reasonPhrase,
-            emptyMap(),
+            headers,
             data.inputStream(),
         )
 
@@ -49,6 +52,10 @@ internal class ReaderWebResourceBridge(
         if (uri.scheme != "https" || uri.host != "appassets.androidplatform.net") return null
         val path = uri.path.orEmpty()
         return when {
+            path == "/reader-media/image-references.json" -> ReaderWebResource(
+                mediaType = "application/json", encoding = "UTF-8",
+                data = Json.encodeToString(book.imageReferenceCounts).toByteArray(Charsets.UTF_8),
+            )
             path.startsWith("/fonts/") -> fontResource(path.removePrefix("/fonts/")) ?: ReaderWebResource.notFound()
             path.startsWith("/epub/") -> epubResource(path.removePrefix("/epub/")) ?: ReaderWebResource.notFound()
             else -> ReaderWebResource.notFound()

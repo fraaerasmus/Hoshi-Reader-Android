@@ -19,11 +19,15 @@ import moe.antimony.hoshi.epub.BookMetadata
 import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.BookShelf
 import moe.antimony.hoshi.epub.BookSortOption
+import moe.antimony.hoshi.epub.BookReadingState
 import moe.antimony.hoshi.epub.Bookmark
 import moe.antimony.hoshi.epub.EpubBook
 import moe.antimony.hoshi.epub.EpubBookParser
 import moe.antimony.hoshi.epub.LegacyBookMigrationProgress
 import moe.antimony.hoshi.epub.isUuidString
+import moe.antimony.hoshi.features.sync.GoogleDriveSyncManager
+import moe.antimony.hoshi.features.sync.syncKey
+import moe.antimony.hoshi.features.sync.StatisticsSyncMode
 import moe.antimony.hoshi.features.sync.DriveAuthStatus
 import moe.antimony.hoshi.features.sync.DriveAuthorizer
 import moe.antimony.hoshi.features.sync.DriveSyncDataSource
@@ -33,6 +37,7 @@ import moe.antimony.hoshi.features.sync.ProgressSyncCoordinator
 import moe.antimony.hoshi.features.sync.ProgressSyncReport
 import moe.antimony.hoshi.features.sync.SyncDirection
 import moe.antimony.hoshi.features.sync.SyncOptions
+import moe.antimony.hoshi.features.sync.SyncProvider
 import moe.antimony.hoshi.features.sync.SyncSettingsRepository
 import moe.antimony.hoshi.features.sync.TtuBookDataConverter
 import moe.antimony.hoshi.features.sync.TtuProgress
@@ -54,9 +59,12 @@ internal interface BookshelfRepository {
         sortOption: BookSortOption,
         onLegacyBookMigrationProgress: (LegacyBookMigrationProgress) -> Unit = {},
     ): BookshelfLoadResult
-    suspend fun loadBookProgress(entries: List<BookEntry>): Map<String, Double>
+    suspend fun loadBook(entry: BookEntry): BookshelfBookSnapshot?
+    suspend fun loadBookReadingStates(entries: List<BookEntry>): Map<String, BookReadingState>
+    suspend fun syncLibrary()
     suspend fun loadRemoteBooks(localEntries: List<BookEntry>): RemoteBookshelfLoadResult
-    suspend fun openBook(entry: BookEntry): String
+    suspend fun openBook(entry: BookEntry): BookEntry
+    suspend fun downloadBook(entry: BookEntry, onProgress: (Double) -> Unit)
     suspend fun importBook(uri: Uri): String
     suspend fun importBookFile(file: File, displayName: String): String
     suspend fun exportBook(entry: BookEntry, uri: Uri)
@@ -68,6 +76,7 @@ internal interface BookshelfRepository {
     ): String
     suspend fun deleteRemoteBook(entry: RemoteBookEntry)
     suspend fun deleteBook(entry: BookEntry)
+    suspend fun deleteLocalBook(entry: BookEntry)
     suspend fun deleteBooks(entries: Collection<BookEntry>)
     suspend fun moveBooks(bookIds: Set<String>, shelfName: String?)
     suspend fun createShelf(name: String)
@@ -76,6 +85,7 @@ internal interface BookshelfRepository {
     suspend fun renameShelf(oldName: String, newName: String)
     suspend fun moveShelf(fromIndex: Int, toIndex: Int)
     suspend fun markRead(entry: BookEntry)
+    suspend fun markUnread(entry: BookEntry)
     suspend fun renameBook(entry: BookEntry, title: String?)
     suspend fun setBookProfile(entry: BookEntry, profileId: String?)
     suspend fun changeSort(sortOption: BookSortOption)
@@ -95,6 +105,7 @@ internal class AndroidBookshelfRepository @Inject constructor(
     private val settingsRepository: BookshelfSettingsRepository,
     private val syncSettingsRepository: SyncSettingsRepository,
     private val progressSyncCoordinator: ProgressSyncCoordinator,
+    private val hoshiSync: GoogleDriveSyncManager,
     private val drive: DriveSyncDataSource,
     private val driveAuthorizer: DriveAuthorizer,
     private val ttuBookDataConverter: TtuBookDataConverter,
@@ -109,18 +120,32 @@ internal class AndroidBookshelfRepository @Inject constructor(
         onLegacyBookMigrationProgress: (LegacyBookMigrationProgress) -> Unit,
     ): BookshelfLoadResult = withContext(ioDispatcher) {
         val entries = bookRepository.loadBookEntries(sortOption, onLegacyBookMigrationProgress)
-        val shelves = bookRepository.loadShelves()
+        val shelves = bookRepository.loadShelves(entries)
+        val readingStates = loadBookReadingStatesById(entries, bookRepository)
         BookshelfLoadResult(
             entries = entries,
-            progressById = loadBookProgressById(entries, bookRepository),
+            progressById = readingStates.mapValues { it.value.progress },
+            readingStateById = readingStates,
             coverSourcesById = loadBookCoverSourcesById(entries, bookRepository),
             shelves = shelves,
             settings = settingsRepository.settings.first(),
+            canDeleteLocalBookIds = hoshiSync.store.transaction {
+                entries.filter { it.metadata.epub != null && hoshiSync.store.state.books[it.root.name.syncKey()]?.files?.get(moe.antimony.hoshi.features.sync.SyncFileType.epub)?.value != null }.mapTo(mutableSetOf()) { it.metadata.id }
+            },
         )
     }
 
-    override suspend fun loadBookProgress(entries: List<BookEntry>): Map<String, Double> = withContext(ioDispatcher) {
-        loadBookProgressById(entries, bookRepository)
+    override suspend fun loadBook(entry: BookEntry): BookshelfBookSnapshot? = withContext(ioDispatcher) {
+        loadBookshelfBookSnapshot(entry, bookRepository)
+    }
+
+    override suspend fun loadBookReadingStates(entries: List<BookEntry>): Map<String, BookReadingState> = withContext(ioDispatcher) {
+        loadBookReadingStatesById(entries, bookRepository)
+    }
+
+    override suspend fun syncLibrary() {
+        if (syncSettingsRepository.settings.first().provider != SyncProvider.Gdrive) return
+        hoshiSync.syncOrThrow()
     }
 
     override suspend fun loadRemoteBooks(localEntries: List<BookEntry>): RemoteBookshelfLoadResult = withContext(ioDispatcher) {
@@ -141,32 +166,26 @@ internal class AndroidBookshelfRepository @Inject constructor(
         )
     }
 
-    override suspend fun openBook(entry: BookEntry): String = withContext(ioDispatcher) {
+    override suspend fun downloadBook(entry: BookEntry, onProgress: (Double) -> Unit) = withContext(ioDispatcher) {
+        val current = bookRepository.loadMetadata(entry.root) ?: entry.metadata
+        if (current.epub == null) hoshiSync.downloadBook(current, onProgress)
+    }
+
+    override suspend fun openBook(entry: BookEntry): BookEntry = withContext(ioDispatcher) {
         val metadata = bookRepository.loadMetadata(entry.root) ?: entry.metadata
-        bookRepository.saveMetadata(
-            entry.root,
-            metadata.copy(lastAccess = bookRepository.currentAppleReferenceDateSeconds()),
-        )
-        readerBookId(entry.root)
+        val opened = metadata.copy(lastAccess = bookRepository.currentAppleReferenceDateSeconds())
+        bookRepository.saveMetadata(entry.root, opened)
+        entry.copy(metadata = opened)
     }
 
     override suspend fun importBook(uri: Uri): String = withContext(ioDispatcher) {
-        val root = bookRepository.importBook(contentResolver, uri)
-        val parsedBook = bookParser.parse(root)
-        saveMetadata(root, parsedBook, bookRepository.loadMetadata(root))
-        saveBookInfo(root, parsedBook)
-        bookRepository.restoreArchivedStatistics(root.name)
-        prewarmBookCover(root)
+        val root = bookRepository.importBook(contentResolver, uri, ::finishImportedBook)
         restoreBackedUpReadingData(root)
         readerBookId(root)
     }
 
     override suspend fun importBookFile(file: File, displayName: String): String = withContext(ioDispatcher) {
-        val root = bookRepository.importBook(file, displayName)
-        val parsedBook = bookParser.parse(root)
-        saveMetadata(root, parsedBook, bookRepository.loadMetadata(root))
-        saveBookInfo(root, parsedBook)
-        prewarmBookCover(root)
+        val root = bookRepository.importBook(file, displayName, ::finishImportedBook)
         restoreBackedUpReadingData(root)
         readerBookId(root)
     }
@@ -193,8 +212,8 @@ internal class AndroidBookshelfRepository @Inject constructor(
                 }
             }
             val imported = ttuBookDataConverter.importBookData(tempRoot)
+            hoshiSync.store.handleBookImport(bookRepository.loadMetadata(imported.root)!!, imported.root)
             importRemoteSidecars(imported, entry, syncStats, syncAudioBook)
-            bookRepository.restoreArchivedStatistics(imported.root.name)
             prewarmBookCover(imported.root)
             readerBookId(imported.root)
         } finally {
@@ -207,18 +226,25 @@ internal class AndroidBookshelfRepository @Inject constructor(
     }
 
     override suspend fun deleteBook(entry: BookEntry) = withContext(ioDispatcher) {
-        bookRepository.deleteBook(entry.root, ::releasePersistedSasayakiAudioUri)
+        bookRepository.loadSasayakiPlayback(entry.root)?.audioUri?.let(::releasePersistedSasayakiAudioUri)
+        hoshiSync.store.prepareBook(entry.root)
+        hoshiSync.store.deleteBook(entry.root.name.syncKey())
+    }
+
+    override suspend fun deleteLocalBook(entry: BookEntry) {
+        hoshiSync.store.deleteLocalBook(entry.root.name.syncKey())
     }
 
     override suspend fun deleteBooks(entries: Collection<BookEntry>) = withContext(ioDispatcher) {
-        entries.forEach { bookRepository.deleteBook(it.root, ::releasePersistedSasayakiAudioUri) }
+        entries.forEach { deleteBook(it) }
     }
 
     override suspend fun moveBooks(bookIds: Set<String>, shelfName: String?) = withContext(ioDispatcher) {
+        val targetName = shelfName?.syncKey()
         val shelves = bookRepository.loadShelves()
             .map { shelf -> shelf.copy(bookIds = shelf.bookIds.filterNot { it in bookIds }) }
             .map { shelf ->
-                if (shelf.name == shelfName) {
+                if (shelf.name.syncKey() == targetName) {
                     shelf.copy(bookIds = (shelf.bookIds + bookIds).distinct())
                 } else {
                     shelf
@@ -228,10 +254,10 @@ internal class AndroidBookshelfRepository @Inject constructor(
     }
 
     override suspend fun createShelf(name: String) = withContext(ioDispatcher) {
-        val trimmed = name.trim()
+        val trimmed = name.trim().syncKey()
         if (trimmed.isEmpty()) return@withContext
         val shelves = bookRepository.loadShelves()
-        if (shelves.none { it.name == trimmed }) {
+        if (shelves.none { it.name.syncKey() == trimmed }) {
             bookRepository.saveShelves(shelves + BookShelf(trimmed, emptyList()))
         }
     }
@@ -250,7 +276,8 @@ internal class AndroidBookshelfRepository @Inject constructor(
     }
 
     override suspend fun deleteShelf(name: String) = withContext(ioDispatcher) {
-        bookRepository.saveShelves(bookRepository.loadShelves().filterNot { it.name == name })
+        val targetName = name.syncKey()
+        bookRepository.saveShelves(bookRepository.loadShelves().filterNot { it.name.syncKey() == targetName })
     }
 
     override suspend fun renameShelf(oldName: String, newName: String) = withContext(ioDispatcher) {
@@ -271,26 +298,13 @@ internal class AndroidBookshelfRepository @Inject constructor(
         bookRepository.saveShelves(shelves)
     }
 
-    override suspend fun markRead(entry: BookEntry) = withContext(ioDispatcher) {
-        val bookInfo = bookRepository.loadBookInfo(entry.root) ?: return@withContext
-        val lastChapter = bookInfo.chapterInfo.values
-            .mapNotNull { it.spineIndex }
-            .maxOrNull()
-            ?: 0
-        bookRepository.saveBookmark(
-            entry.root,
-            Bookmark(
-                chapterIndex = lastChapter,
-                progress = 1.0,
-                characterCount = bookInfo.characterCount,
-                lastModified = bookRepository.currentAppleReferenceDateSeconds(),
-            ),
-        )
-    }
+    override suspend fun markRead(entry: BookEntry) = bookRepository.markRead(entry.root)
+
+    override suspend fun markUnread(entry: BookEntry) = bookRepository.markUnread(entry.root)
 
     override suspend fun renameBook(entry: BookEntry, title: String?) = withContext(ioDispatcher) {
         val metadata = bookRepository.loadMetadata(entry.root) ?: entry.metadata
-        bookRepository.saveMetadata(entry.root, metadata.copy(renamedTitle = title))
+        bookRepository.saveMetadata(entry.root, metadata.copy(renamedTitle = title, modified = System.currentTimeMillis()))
     }
 
     override suspend fun setBookProfile(entry: BookEntry, profileId: String?) = withContext(ioDispatcher) {
@@ -325,18 +339,19 @@ internal class AndroidBookshelfRepository @Inject constructor(
     override suspend fun pullBook(entry: BookEntry, options: SyncOptions): ProgressSyncReport =
         withContext(ioDispatcher) { progressSyncCoordinator.pull(entry, options = options, manual = true, force = false) }
 
-    private suspend fun saveMetadata(root: File, parsedBook: EpubBook, previous: BookMetadata? = null) {
+    private suspend fun saveMetadata(root: File, parsedBook: EpubBook, previous: BookMetadata?, epub: String) {
         val metadata = BookMetadata(
             id = previous?.id?.takeIf { it.isUuidString() } ?: UUID.randomUUID().toString(),
             title = parsedBook.title,
-            cover = bookRepository.metadataCoverPath(root, parsedBook) ?: previous?.cover,
+            cover = bookRepository.metadataCoverPath(root, parsedBook),
             folder = root.name,
             lastAccess = bookRepository.currentAppleReferenceDateSeconds(),
             renamedTitle = previous?.renamedTitle,
-            epub = bookRepository.epubFile(root, previous)?.name ?: previous?.epub,
+            epub = epub,
             profileId = previous?.profileId,
             bookLanguage = previous?.bookLanguage ?: parsedBook.language,
-            author = parsedBook.author ?: previous?.author,
+            author = parsedBook.author?.trim(),
+            shelves = previous?.shelves,
         )
         bookRepository.saveMetadata(root, metadata)
     }
@@ -396,7 +411,7 @@ internal class AndroidBookshelfRepository @Inject constructor(
         if (syncStats) {
             remote.syncFiles.statistics?.let { file ->
                 val stats = remoteJson.decodeFromString(ListSerializer(moe.antimony.hoshi.epub.ReadingStatistics.serializer()), drive.downloadFile(file.id).decodeToString())
-                bookRepository.saveStatistics(entry.root, stats)
+                bookRepository.statisticsStore.importHistory(entry.root, stats)
             }
         }
         if (syncAudioBook) {
@@ -409,6 +424,18 @@ internal class AndroidBookshelfRepository @Inject constructor(
     }
 
     /** A book the backup server already knows gets its reading data back before the shelf shows it. */
+    private suspend fun finishImportedBook(root: File, epub: File) {
+        val parsedBook = bookParser.parse(epub)
+        saveMetadata(root, parsedBook, bookRepository.loadMetadata(root), epub.name)
+        saveBookInfo(root, parsedBook)
+        bookRepository.loadBookmark(root)?.let { bookmark ->
+            val position = parsedBook.bookInfo.resolveTtuCharacterPosition(bookmark.characterCount)
+            bookRepository.saveBookmark(root, bookmark.copy(chapterIndex = position?.spineIndex ?: 0, progress = position?.progress ?: 0.0))
+        }
+        hoshiSync.store.handleBookImport(bookRepository.loadMetadata(root)!!, root)
+        prewarmBookCover(root)
+    }
+
     private suspend fun restoreBackedUpReadingData(root: File) {
         val metadata = bookRepository.loadMetadata(root) ?: return
         remoteBackupManager.restoreBookStateAfterImport(BookEntry(root, metadata))
@@ -430,18 +457,19 @@ internal fun renameShelfList(
     oldName: String,
     newName: String,
 ): List<BookShelf> {
-    val trimmedName = newName.trim()
-    if (trimmedName.isEmpty() || trimmedName == oldName) {
+    val trimmedName = newName.trim().syncKey()
+    val currentName = oldName.syncKey()
+    if (trimmedName.isEmpty() || trimmedName == currentName) {
         return shelves
     }
-    if (shelves.none { it.name == oldName }) {
+    if (shelves.none { it.name.syncKey() == currentName }) {
         return shelves
     }
-    if (shelves.any { it.name == trimmedName }) {
+    if (shelves.any { it.name.syncKey() == trimmedName }) {
         return shelves
     }
     return shelves.map { shelf ->
-        if (shelf.name == oldName) {
+        if (shelf.name.syncKey() == currentName) {
             shelf.copy(name = trimmedName)
         } else {
             shelf
@@ -454,8 +482,8 @@ internal fun createShelfAndMoveBooksList(
     name: String,
     bookIds: Set<String>,
 ): List<BookShelf>? {
-    val trimmedName = name.trim()
-    if (trimmedName.isEmpty() || bookIds.isEmpty() || shelves.any { it.name == trimmedName }) {
+    val trimmedName = name.trim().syncKey()
+    if (trimmedName.isEmpty() || bookIds.isEmpty() || shelves.any { it.name.syncKey() == trimmedName }) {
         return null
     }
     val updatedShelves = shelves.map { shelf ->
@@ -470,7 +498,7 @@ private val remoteJson = Json {
 }
 
 internal fun shouldLoadRemoteBooks(syncSettings: moe.antimony.hoshi.features.sync.SyncSettings, authStatus: DriveAuthStatus): Boolean =
-    syncSettings.enabled && authStatus is DriveAuthStatus.Connected
+    syncSettings.enabled && syncSettings.provider == SyncProvider.Ttu && authStatus is DriveAuthStatus.Connected
 
 internal suspend fun loadRemoteBooksOnce(
     drive: DriveSyncDataSource,
@@ -591,6 +619,19 @@ internal suspend fun loadRemoteCoverSources(
 private fun moe.antimony.hoshi.features.sync.DriveFile.withIosThumbnailSize(): moe.antimony.hoshi.features.sync.DriveFile =
     copy(thumbnailLink = thumbnailLink?.replace(Regex("""=s\d+$"""), "=s768"))
 
+internal suspend fun loadBookshelfBookSnapshot(
+    entry: BookEntry,
+    bookRepository: BookRepository,
+): BookshelfBookSnapshot? {
+    bookRepository.awaitReaderSaves(entry.root)
+    return bookRepository.storageLock.withLock {
+        val metadata = bookRepository.loadMetadata(entry.root) ?: return@withLock null
+        if (metadata.id != entry.metadata.id) return@withLock null
+        val current = entry.copy(metadata = metadata)
+        BookshelfBookSnapshot(current, bookRepository.loadReadingState(entry.root), bookRepository.coverFile(current)?.toBookCoverSource())
+    }
+}
+
 internal suspend fun loadBookCoverSourcesById(
     entries: List<BookEntry>,
     bookRepository: BookRepository,
@@ -606,3 +647,10 @@ internal fun File.toBookCoverSource(): BookCoverSource =
         path = absolutePath,
         cacheKey = "$absolutePath:${lastModified()}:${length()}",
     )
+
+internal suspend fun loadBookReadingStatesById(
+    entries: List<BookEntry>,
+    bookRepository: BookRepository,
+): Map<String, BookReadingState> = entries.associate { entry ->
+    entry.metadata.id to bookRepository.loadReadingState(entry.root)
+}

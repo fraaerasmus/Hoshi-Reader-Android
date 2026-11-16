@@ -9,19 +9,24 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import moe.antimony.hoshi.di.DefaultDispatcher
 import moe.antimony.hoshi.features.reader.ReaderSettingsRepository
+import moe.antimony.hoshi.features.sync.SyncReloadScheduler
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.ui.UiText
+import moe.antimony.hoshi.ui.ErrorDiagnosticEvents
+import moe.antimony.hoshi.ui.diagnosticMessage
+import moe.antimony.hoshi.ui.withErrorDetails
 
 @HiltViewModel
 internal class StatisticsViewModel internal constructor(
@@ -40,56 +45,89 @@ internal class StatisticsViewModel internal constructor(
         readerSettingsRepository: ReaderSettingsRepository,
         dateProvider: StatisticsDateProvider,
         @DefaultDispatcher calculationDispatcher: CoroutineDispatcher,
+        statisticsStore: moe.antimony.hoshi.epub.BookStatisticsStore,
+        syncStorage: moe.antimony.hoshi.features.sync.SyncStorage,
     ) : this(
         repository = repository,
         settings = settingsRepository.settings,
         updateSettings = settingsRepository::update,
-        resetMinutes = readerSettingsRepository.settings.map { it.statisticsResetMinutes },
+        resetMinutes = readerSettingsRepository.statisticsResetMinutes,
         dateProvider = dateProvider,
         calculationDispatcher = calculationDispatcher,
         coroutineScope = null,
-    )
+    ) {
+        val syncReload = SyncReloadScheduler(scope, { syncStorage.applyReaderState != null }, ::reload)
+        scope.launch {
+            combine(statisticsStore.changes, syncStorage.booksChanged, resetMinutes) { _, _, _ -> Unit }
+                .collect { syncReload.schedule() }
+        }
+    }
 
     private val scope: CoroutineScope
         get() = coroutineScope ?: viewModelScope
 
     private val snapshot = MutableStateFlow(StatisticsSnapshot(days = emptyList(), availableYears = emptyList()))
-    private val selection = MutableStateFlow(StatisticsSelectionState())
+    private val selection = MutableStateFlow(StatisticsSelectionState(today = dateProvider.currentDate(0)))
     private val isLoading = MutableStateFlow(true)
-    private var currentResetMinutes = 0
     private val _uiState = MutableStateFlow(
         buildStatisticsUiState(
             snapshot = snapshot.value,
             settings = StatisticsTargetSettings(),
             selection = selection.value,
-            today = currentDate(),
             isLoading = true,
         ),
     )
     val uiState: StateFlow<StatisticsUiState> = _uiState.asStateFlow()
     private var reloadJob: Job? = null
     private var reloadGeneration = 0
+    private var observationJob: Job? = null
+    private val loadError = MutableStateFlow<UiText?>(null)
 
     init {
-        scope.launch {
-            combine(snapshot, settings, resetMinutes, selection, isLoading) { snapshot, settings, resetMinutes, selection, isLoading ->
-                currentResetMinutes = resetMinutes
-                withContext(calculationDispatcher) {
-                    buildStatisticsUiState(
-                        snapshot = snapshot,
-                        settings = settings,
-                        selection = selection,
-                        today = currentDate(),
-                        isLoading = isLoading,
-                    )
+        observeSettings()
+    }
+
+    private fun observeSettings() {
+        observationJob = scope.launch {
+            try {
+                coroutineScope {
+                    launch { resetMinutes.collect { refreshCalendar(it) } }
+                    val confirmedSelection = selection.filter { it.resetMinutes != null }
+                    combine(snapshot, settings, confirmedSelection, isLoading) { snapshot, settings, selection, isLoading ->
+                        withContext(calculationDispatcher) {
+                            buildStatisticsUiState(
+                                snapshot = snapshot,
+                                settings = settings,
+                                selection = selection,
+                                isLoading = isLoading,
+                            )
+                        }
+                    }.combine(loadError) { state, error -> state.copy(loadError = error) }.collect { state ->
+                        _uiState.value = state
+                    }
                 }
-            }.collect { state ->
-                _uiState.value = state
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                showLoadError(UiText.Resource(R.string.settings_load_failed).withErrorDetails(error))
             }
         }
     }
 
+    private fun showLoadError(message: UiText) {
+        loadError.value = message
+        _uiState.update { it.copy(loadError = message, isLoading = false) }
+    }
+
+    fun dismissLoadError() {
+        loadError.value = null
+        _uiState.update { it.copy(loadError = null) }
+    }
+
     fun reload() {
+        dismissLoadError()
+        refreshCalendar()
+        if (observationJob?.isActive != true) observeSettings()
         val generation = ++reloadGeneration
         reloadJob?.cancel()
         reloadJob = scope.launch {
@@ -98,6 +136,12 @@ internal class StatisticsViewModel internal constructor(
                 val loaded = repository.loadSnapshot()
                 if (generation == reloadGeneration) {
                     snapshot.value = loaded
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (generation == reloadGeneration) {
+                    showLoadError(UiText.Resource(R.string.statistics_operation_failed).withErrorDetails(error))
                 }
             } finally {
                 if (generation == reloadGeneration) {
@@ -124,15 +168,21 @@ internal class StatisticsViewModel internal constructor(
                 current.copy(rangeMode = event.mode, referenceDate = null, selectedBucketKey = null)
             }
             is StatisticsEvent.SelectPeriodPage -> selection.update { current ->
-                val pageCount = uiState.value.currentRange.pageCount
-                if (event.index !in 0 until pageCount) current else current.copy(
-                    referenceDate = statisticsPeriodPageAnchor(current.rangeMode, event.index, pageCount, currentDate()),
-                    selectedBucketKey = null,
-                )
+                val displayed = uiState.value
+                val range = displayed.currentRange
+                if (range.mode != current.rangeMode || event.index !in 0 until range.pageCount) {
+                    current
+                } else {
+                    val referenceDate = if (event.index == range.pageCount - 1) null else {
+                        statisticsPeriodPageAnchor(range.mode, event.index, range.pageCount, displayed.today.date)
+                    }
+                    current.copy(referenceDate = referenceDate, selectedBucketKey = null)
+                }
             }
             is StatisticsEvent.SelectTrendBucket -> selection.update { current ->
-                val valid = event.key == null || uiState.value.currentRange.trendPoints.any {
-                    it.key == event.key && statisticsTrendBucket(current.rangeMode, it.key)?.start?.isAfter(currentDate()) == false
+                val displayed = uiState.value
+                val valid = event.key == null || displayed.currentRange.trendPoints.any {
+                    it.key == event.key && statisticsTrendBucket(current.rangeMode, it.key)?.start?.isAfter(displayed.today.date) == false
                 }
                 if (valid) current.copy(
                     selectedBucketKey = event.key.takeUnless { it == current.selectedBucketKey },
@@ -141,7 +191,23 @@ internal class StatisticsViewModel internal constructor(
         }
     }
 
-    private fun currentDate(): LocalDate = dateProvider.currentDate(currentResetMinutes)
+    private fun refreshCalendar(resetMinutes: Int? = null) {
+        selection.update { current ->
+            val minutes = resetMinutes ?: current.resetMinutes
+            val today = dateProvider.currentDate(minutes ?: 0)
+            val previousAnchor = current.referenceDate ?: current.today
+            val resetChanged = minutes != current.resetMinutes
+            val currentPeriodRolled = today != current.today &&
+                selectedStatisticsRange(current.rangeMode, previousAnchor, current.today).contains(current.today)
+            val followToday = resetChanged || currentPeriodRolled
+            current.copy(
+                today = today,
+                resetMinutes = minutes,
+                referenceDate = if (followToday) null else current.referenceDate,
+                selectedBucketKey = if (followToday && previousAnchor != today) null else current.selectedBucketKey,
+            )
+        }
+    }
 
     private fun updateTargets(transform: (StatisticsTargetSettings) -> StatisticsTargetSettings) {
         scope.launch {
@@ -150,14 +216,16 @@ internal class StatisticsViewModel internal constructor(
                 selection.update { it.copy(targetError = null) }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                selection.update { it.copy(targetError = UiText.Resource(R.string.statistics_goal_save_failed)) }
+            } catch (error: Exception) {
+                selection.update { it.copy(targetError = UiText.Resource(R.string.statistics_goal_save_failed).withErrorDetails(error)) }
             }
         }
     }
 }
 
 private data class StatisticsSelectionState(
+    val today: LocalDate,
+    val resetMinutes: Int? = null,
     val rangeMode: StatisticsRangeMode = StatisticsRangeMode.Week,
     val referenceDate: LocalDate? = null,
     val selectedBucketKey: String? = null,
@@ -169,9 +237,9 @@ private fun buildStatisticsUiState(
     snapshot: StatisticsSnapshot,
     settings: StatisticsTargetSettings,
     selection: StatisticsSelectionState,
-    today: LocalDate,
     isLoading: Boolean,
 ): StatisticsUiState {
+    val today = selection.today
     val daysByDate = snapshot.days.associateBy { it.date }
     val rangeMode = selection.rangeMode
     val activity = snapshot.days.filter { it.isActiveReadingDay() && !it.date.isAfter(today) }
@@ -225,6 +293,15 @@ private fun buildStatisticsUiState(
         emptyState = StatisticsEmptyState(
             hasAnyStatistics = snapshot.days.isNotEmpty(),
             hasPartialReadError = snapshot.skippedCorruptBookIds.isNotEmpty(),
+            readError = snapshot.readErrors.takeIf { it.isNotEmpty() }?.let { errors ->
+                UiText.Joined(listOf(UiText.Resource(R.string.statistics_partial_unavailable)) + errors.map { (id, error) ->
+                    ErrorDiagnosticEvents.buffer.record(
+                        UiText.Joined(listOf(UiText.Resource(R.string.statistics_partial_unavailable), UiText.Literal(id))),
+                        error,
+                    )
+                    UiText.Literal("$id: ${error.diagnosticMessage()}")
+                })
+            },
         ),
     )
 }

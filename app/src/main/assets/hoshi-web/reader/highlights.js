@@ -19,15 +19,22 @@ window.hoshiHighlights = {
       this.pendingRange = null;
       return null;
     }
-    var startBase = window.hoshiReader.nodeStartOffsets.get(range.startContainer);
-    var rawStartBase = window.hoshiReader.nodeStartRawOffsets.get(range.startContainer);
-    var rawEndBase = window.hoshiReader.nodeStartRawOffsets.get(range.endContainer);
+    var segments = window.hoshiReaderDomText.selectedTextSegments(range);
+    if (!segments.length) {
+      this.pendingRange = null;
+      return null;
+    }
+    var first = segments[0];
+    var last = segments[segments.length - 1];
+    var startBase = window.hoshiReader.nodeStartOffsets.get(first.node);
+    var rawStartBase = window.hoshiReader.nodeStartRawOffsets.get(first.node);
+    var rawEndBase = window.hoshiReader.nodeStartRawOffsets.get(last.node);
     if (startBase === undefined || rawStartBase === undefined || rawEndBase === undefined) {
       this.pendingRange = null;
       return null;
     }
-    var startPrefix = range.startContainer.textContent.substring(0, range.startOffset);
-    var endPrefix = range.endContainer.textContent.substring(0, range.endOffset);
+    var startPrefix = first.node.textContent.substring(0, first.start);
+    var endPrefix = last.node.textContent.substring(0, last.end);
     var start = startBase + window.hoshiReader.countChars(startPrefix);
     var rawStart = rawStartBase + window.hoshiReader.countRawChars(startPrefix);
     var rawEnd = rawEndBase + window.hoshiReader.countRawChars(endPrefix);
@@ -75,10 +82,6 @@ window.hoshiHighlights = {
     });
     return { action: 'recolored', id: id };
   },
-  // VN substitutes source segments here; rendering still uses collectSegments.
-  collectTextSegments: function(offset, length) {
-    return this.collectSegments(offset, length);
-  },
   readingForNode: function(node) {
     var base = node;
     var ruby = node.parentElement && node.parentElement.closest('ruby');
@@ -90,7 +93,7 @@ window.hoshiHighlights = {
     return null;
   },
   textForRange: function(offset, length) {
-    var segments = this.collectTextSegments(offset, length);
+    var segments = this.collectSegments(offset, length);
     var text = '';
     var annotated = '';
     var reading = null;
@@ -196,7 +199,7 @@ window.hoshiHighlights = {
   applyHighlights: function(highlights) {
     for (var i = 0; i < highlights.length; i++) {
       this.wrapHighlight(highlights[i]);
-      // VN projects each subsequent range through offsets of the newly split nodes.
+      // Wrapping splits live text nodes; refresh their offsets before the next range.
       window.hoshiReader.buildNodeOffsets();
     }
     this.refreshSearchHighlight();

@@ -5,15 +5,28 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.features.settings.SettingsLoadState
+import moe.antimony.hoshi.features.settings.map
+import moe.antimony.hoshi.features.settings.settingsLoadStates
 import moe.antimony.hoshi.ui.UiText
+import moe.antimony.hoshi.ui.ErrorDiagnosticEvents
+import moe.antimony.hoshi.ui.withErrorDetails
 
 data class AnkiUiState(
+    val profileId: String? = null,
+    val settingsLoadState: SettingsLoadState<AnkiSettings> = SettingsLoadState.Loading,
     val settings: AnkiSettings = AnkiSettings(),
     val decks: List<AnkiDeck> = emptyList(),
     val noteTypes: List<AnkiNoteType> = emptyList(),
@@ -24,7 +37,11 @@ data class AnkiUiState(
     val ankiConnectMessage: UiText? = null,
     val errorMessage: UiText? = null,
     val errorAction: AnkiErrorAction? = null,
+    val excludedDictionaries: List<String> = emptyList(),
 ) {
+    internal val settingsPageState: SettingsLoadState<AnkiUiState>
+        get() = settingsLoadState.map { this }
+
     val availableDecks: List<AnkiDeck>
         get() = decks.ifEmpty { settings.availableDecks }
 
@@ -48,6 +65,14 @@ data class AnkiUiState(
                 !format.fieldMappings[field].isNullOrBlank()
             } == true
         }
+
+    fun usesHandlebar(formatId: String?, handlebar: String): Boolean {
+        val formats = settings.effectiveCardFormats()
+        val format = (if (formatId == null) formats.firstOrNull() else formats.firstOrNull { it.id == formatId }) ?: return false
+        val noteType = availableNoteTypes.firstOrNull { it.id == format.selectedNoteTypeId || it.name == format.selectedNoteTypeName }
+        val mappings = noteType?.let(format.fieldMappings::activeAnkiFieldMappings) ?: format.fieldMappings
+        return mappings.values.any { handlebar in it }
+    }
 
     val popupSettings: AnkiPopupSettings
         get() {
@@ -86,9 +111,12 @@ data class AnkiUiState(
                 useAnkiConnect = settings.backendKind == AnkiBackendKind.AnkiConnect,
                 needsAudio = activeMappings.any { "{audio}" in it },
                 needsSasayakiAudio = activeMappings.any { "{sasayaki-audio}" in it },
+                needsSentenceAudio = activeMappings.any { "{sentence-audio}" in it },
                 allowDupes = settings.allowDupes,
+                preventAccidentalDuplicates = settings.allowDupes && settings.preventAccidentalDuplicates,
                 compactGlossaries = settings.compactGlossaries,
                 disableShowNotes = settings.disableShowNotes,
+                excludedDictionaries = excludedDictionaries,
             )
         }
 }
@@ -113,6 +141,12 @@ enum class AnkiErrorAction {
     OpenPermissionSettings,
 }
 
+internal data class AnkiFetchRequest(
+    val profileId: String,
+    val identity: AnkiConnectionIdentity,
+    val generation: Long,
+)
+
 @HiltViewModel
 internal class AnkiViewModel @Inject constructor(
     private val repository: AnkiRepository,
@@ -123,37 +157,122 @@ internal class AnkiViewModel @Inject constructor(
     val uiState: StateFlow<AnkiUiState> = _uiState.asStateFlow()
     private var attemptedAnkiConnectPing = false
     private var ankiConnectIdentity: Pair<String, String>? = null
+    private val settingsRetry = MutableStateFlow(0)
+    private var activeProfileId: String? = null
+    private var configurationJob: Job? = null
+    private var connectionJob: Job? = null
+    private var exclusionsJob: Job? = null
+    private var fetchRequestGeneration = 0L
 
     init {
         viewModelScope.launch {
-            repository.settings.collectLatest { settings ->
-                val nextIdentity = settings.ankiConnectUrl to settings.ankiConnectApiKey
-                if (settings.backendKind == AnkiBackendKind.AnkiConnect && ankiConnectIdentity != nextIdentity) {
-                    ankiConnectIdentity = nextIdentity
+            combine(repository.profileIds, settingsRetry) { profileId, _ -> profileId }.onEach { profileId ->
+                if (activeProfileId != profileId) {
+                    invalidateFetchRequests()
+                    connectionJob?.cancel()
+                    activeProfileId = profileId
                     attemptedAnkiConnectPing = false
-                    _uiState.value = _uiState.value.copy(isAnkiConnectReachable = false)
-                } else if (settings.backendKind == AnkiBackendKind.AnkiDroid) {
                     ankiConnectIdentity = null
-                    attemptedAnkiConnectPing = false
-                    _uiState.value = _uiState.value.copy(isAnkiConnectReachable = false)
+                    _uiState.value = AnkiUiState(
+                        profileId = profileId,
+                        isAnkiDroidAvailable = repository.isAnkiDroidAvailable(),
+                    )
+                } else {
+                    _uiState.update { it.copy(settingsLoadState = SettingsLoadState.Loading) }
                 }
-                _uiState.value = _uiState.value.copy(settings = settings)
-                if (
-                    !attemptedAnkiConnectPing &&
-                    settings.backendKind == AnkiBackendKind.AnkiConnect &&
-                    settings.ankiConnectUrl.isNotBlank()
-                ) {
-                    attemptedAnkiConnectPing = true
-                    pingAnkiConnect()
+                exclusionsJob?.cancel()
+                exclusionsJob = viewModelScope.launch {
+                    repository.excludedDictionaries.catch { error ->
+                        if (error is CancellationException) throw error
+                    }.collect { dictionaries ->
+                        if (activeProfileId == profileId) {
+                            _uiState.update { it.copy(excludedDictionaries = dictionaries) }
+                        }
+                    }
+                }
+            }.collectLatest { profileId ->
+                repository.settings.settingsLoadStates().collectLatest settings@ { loadState ->
+                    if (activeProfileId != profileId) return@settings
+                    val settings = (loadState as? SettingsLoadState.Loaded)?.value
+                    if (settings == null) {
+                        _uiState.update { it.copy(settingsLoadState = loadState) }
+                        return@settings
+                    }
+                    if (_uiState.value.settings.connectionIdentity != settings.connectionIdentity) {
+                        invalidateFetchRequests()
+                        _uiState.update { it.copy(decks = emptyList(), noteTypes = emptyList(), errorMessage = null, errorAction = null) }
+                    }
+                    val nextIdentity = settings.ankiConnectUrl to settings.ankiConnectApiKey
+                    if (settings.backendKind == AnkiBackendKind.AnkiConnect && ankiConnectIdentity != nextIdentity) {
+                        ankiConnectIdentity = nextIdentity
+                        attemptedAnkiConnectPing = false
+                        connectionJob?.cancel()
+                        _uiState.value = _uiState.value.copy(isAnkiConnectReachable = false, isConnectingAnkiConnect = false)
+                    } else if (settings.backendKind == AnkiBackendKind.AnkiDroid) {
+                        ankiConnectIdentity = null
+                        attemptedAnkiConnectPing = false
+                        connectionJob?.cancel()
+                        _uiState.value = _uiState.value.copy(isAnkiConnectReachable = false, isConnectingAnkiConnect = false)
+                    }
+                    _uiState.update { it.copy(
+                        settings = settings, settingsLoadState = loadState,
+                        isAnkiDroidAvailable = repository.isAnkiDroidAvailable(settings.ankiDroidClient),
+                    ) }
+                    if (
+                        !attemptedAnkiConnectPing &&
+                        settings.backendKind == AnkiBackendKind.AnkiConnect &&
+                        settings.ankiConnectUrl.isNotBlank()
+                    ) {
+                        attemptedAnkiConnectPing = true
+                        pingAnkiConnect()
+                    }
                 }
             }
         }
     }
 
-    fun fetchConfiguration() {
-        viewModelScope.launch {
+    fun retrySettings() {
+        settingsRetry.update { it + 1 }
+    }
+
+    fun createFetchRequest(): AnkiFetchRequest? {
+        val state = _uiState.value
+        if (state.settingsLoadState !is SettingsLoadState.Loaded) return null
+        return AnkiFetchRequest(activeProfileId ?: return null, state.settings.connectionIdentity, fetchRequestGeneration)
+    }
+
+    fun isFetchRequestCurrent(request: AnkiFetchRequest): Boolean =
+        request == createFetchRequest()
+
+    fun onFetchPermissionResult(request: AnkiFetchRequest, granted: Boolean) {
+        if (!isFetchRequestCurrent(request)) return
+        if (granted) fetchConfiguration(request) else showFetchPermissionDenied()
+    }
+
+    private fun invalidateFetchRequests() {
+        fetchRequestGeneration++
+        configurationJob?.cancel()
+        _uiState.update { it.copy(isFetching = false) }
+    }
+
+    fun updateAnkiDroidClient(client: AnkiDroidClient) {
+        invalidateFetchRequests()
+        viewModelScope.launch { repository.updateSettings { it.withAnkiDroidClient(client) } }
+    }
+
+    fun fetchConfiguration(request: AnkiFetchRequest? = createFetchRequest()) {
+        if (request == null || !isFetchRequestCurrent(request)) return
+        configurationJob?.cancel()
+        configurationJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isFetching = true, errorMessage = null, errorAction = null)
-            when (val result = repository.fetchConfiguration()) {
+            val result = try {
+                repository.fetchConfiguration(request.profileId, request.identity)
+            } catch (error: CancellationException) {
+                if (isFetchRequestCurrent(request)) _uiState.update { it.copy(isFetching = false) }
+                throw error
+            }
+            if (!isFetchRequestCurrent(request)) return@launch
+            when (result) {
                 is AnkiFetchResult.Success -> _uiState.value = _uiState.value.copy(
                     decks = result.decks,
                     noteTypes = result.noteTypes,
@@ -175,12 +294,14 @@ internal class AnkiViewModel @Inject constructor(
         }
     }
 
-    fun isAnkiDroidAvailable(): Boolean = repository.isAnkiDroidAvailable()
+    fun isAnkiDroidAvailable(): Boolean = repository.isAnkiDroidAvailable(_uiState.value.settings.ankiDroidClient).also { available ->
+        _uiState.update { it.copy(isAnkiDroidAvailable = available) }
+    }
 
     fun showFetchApiUnavailable() {
         _uiState.value = _uiState.value.copy(
             isFetching = false,
-            errorMessage = UiText.Resource(AnkiFetchFailure.ApiUnavailable.userMessageRes),
+            errorMessage = UiText.Resource(AnkiFetchFailure.ApiUnavailable.userMessageRes, _uiState.value.settings.ankiDroidClient.displayName),
             errorAction = null,
         )
     }
@@ -188,7 +309,7 @@ internal class AnkiViewModel @Inject constructor(
     fun showFetchPermissionDenied() {
         _uiState.value = _uiState.value.copy(
             isFetching = false,
-            errorMessage = UiText.Resource(AnkiFetchFailure.PermissionDenied.userMessageRes),
+            errorMessage = UiText.Resource(AnkiFetchFailure.PermissionDenied.userMessageRes, _uiState.value.settings.ankiDroidClient.displayName),
             errorAction = AnkiErrorAction.OpenPermissionSettings,
         )
     }
@@ -298,13 +419,21 @@ internal class AnkiViewModel @Inject constructor(
         }
     }
 
+    fun updatePreventAccidentalDuplicates(value: Boolean) {
+        viewModelScope.launch {
+            repository.updateSettings { it.copy(preventAccidentalDuplicates = value) }
+        }
+    }
+
     fun updateBackendKind(value: AnkiBackendKind) {
+        invalidateFetchRequests()
         viewModelScope.launch {
             repository.updateSettings { it.copy(backendKind = value) }
         }
     }
 
     fun updateAnkiConnectUrl(value: String) {
+        invalidateFetchRequests()
         viewModelScope.launch {
             repository.updateSettings {
                 it.copy(
@@ -317,6 +446,7 @@ internal class AnkiViewModel @Inject constructor(
     }
 
     fun updateAnkiConnectApiKey(value: String) {
+        invalidateFetchRequests()
         viewModelScope.launch {
             repository.updateSettings {
                 it.copy(
@@ -329,12 +459,16 @@ internal class AnkiViewModel @Inject constructor(
     }
 
     fun pingAnkiConnect() {
-        viewModelScope.launch {
+        val profileId = activeProfileId
+        connectionJob?.cancel()
+        connectionJob = viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isConnectingAnkiConnect = true,
                 ankiConnectMessage = null,
             )
-            when (val result = repository.pingAnkiConnect()) {
+            val result = repository.pingAnkiConnect()
+            if (activeProfileId != profileId) return@launch
+            when (result) {
                 AnkiConnectConnectionResult.Connected -> _uiState.value = _uiState.value.copy(
                     isConnectingAnkiConnect = false,
                     isAnkiConnectReachable = true,
@@ -391,38 +525,69 @@ internal class AnkiViewModel @Inject constructor(
         viewModelScope.launch { repository.updateSettings { it.copy(showAllHandlebars = value) } }
     }
 
-    fun mineEntryAsync(formatId: String?, rawPayload: String, context: AnkiMiningContext, onResult: (Boolean) -> Unit) {
+    suspend fun minePreparedEntry(
+        formatId: String?,
+        rawPayload: String,
+        context: AnkiMiningContext,
+        onWarning: (Throwable) -> Unit,
+    ): Boolean {
+        var synchronizationFailure: Throwable? = null
+        val added = repository.mineEntry(
+            rawPayload, context, _uiState.value.availableDecks, _uiState.value.availableNoteTypes, formatId,
+            onSynchronizationFailure = { synchronizationFailure = it },
+        )
+        synchronizationFailure?.let { error ->
+            reportPopupOperationFailure(error, onWarning, UiText.Resource(R.string.anki_sync_failed))
+        }
+        return added
+    }
+
+    fun mineEntryAsync(
+        formatId: String?, rawPayload: String, context: AnkiMiningContext,
+        onError: (Throwable) -> Unit,
+        onWarning: (Throwable) -> Unit = onError,
+        onResult: (Boolean) -> Unit,
+    ) {
         viewModelScope.launch {
             val mined = runCatching {
-                repository.mineEntry(
-                    rawPayload = rawPayload,
-                    context = context,
-                    decks = _uiState.value.availableDecks,
-                    noteTypes = _uiState.value.availableNoteTypes,
-                    formatId = formatId,
-                )
-            }.getOrDefault(false)
+                minePreparedEntry(formatId, rawPayload, context, onWarning)
+            }.getOrElse { error -> reportPopupOperationFailure(error, onError) }
             onResult(mined)
         }
     }
 
-    fun mineEntryAsync(rawPayload: String, context: AnkiMiningContext, onResult: (Boolean) -> Unit) =
-        mineEntryAsync(null, rawPayload, context, onResult)
+    fun mineEntryAsync(rawPayload: String, context: AnkiMiningContext, onError: (Throwable) -> Unit, onResult: (Boolean) -> Unit) =
+        mineEntryAsync(null, rawPayload, context, onError, onResult = onResult)
 
     fun duplicateStatesAsync(valuesByHandlebar: Map<String, String>, onResult: (Map<String, Boolean>) -> Unit) {
         viewModelScope.launch {
             onResult(runCatching {
                 repository.duplicateStates(valuesByHandlebar, _uiState.value.availableDecks, _uiState.value.availableNoteTypes)
-            }.getOrDefault(emptyMap()))
+            }.getOrElse { error ->
+                if (error is CancellationException) throw error
+                ErrorDiagnosticEvents.buffer.record(UiText.Resource(R.string.anki_operation_failed), error)
+                emptyMap()
+            })
         }
     }
 
-    fun showNotesAsync(formatId: String, valuesByHandlebar: Map<String, String>, onResult: (Boolean) -> Unit) {
+    fun showNotesAsync(formatId: String, valuesByHandlebar: Map<String, String>, onError: (Throwable) -> Unit, onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
             onResult(runCatching {
                 repository.showNotes(formatId, valuesByHandlebar, _uiState.value.availableDecks, _uiState.value.availableNoteTypes)
-            }.getOrDefault(false))
+            }.getOrElse { error -> reportPopupOperationFailure(error, onError) })
         }
+    }
+
+    private fun reportPopupOperationFailure(
+        error: Throwable,
+        onError: (Throwable) -> Unit,
+        operation: UiText = UiText.Resource(R.string.anki_operation_failed),
+    ): Boolean {
+        if (error is CancellationException) throw error
+        _uiState.update { it.copy(errorMessage = operation.withErrorDetails(error)) }
+        onError(error)
+        return false
     }
 
     fun duplicateCheckAsync(expression: String, onResult: (Boolean) -> Unit) {
@@ -433,7 +598,11 @@ internal class AnkiViewModel @Inject constructor(
                     decks = _uiState.value.availableDecks,
                     noteTypes = _uiState.value.availableNoteTypes,
                 )
-            }.getOrDefault(false)
+            }.getOrElse { error ->
+                if (error is CancellationException) throw error
+                ErrorDiagnosticEvents.buffer.record(UiText.Resource(R.string.anki_operation_failed), error)
+                false
+            }
             onResult(isDuplicate)
         }
     }

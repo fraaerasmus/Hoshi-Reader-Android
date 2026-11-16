@@ -178,9 +178,9 @@ class ReaderChromeTest {
             totalCharacters = 169325,
         )
 
-        assertEquals("0.21%", state.progressText(ReaderSettings(showCharacters = false)))
+        assertEquals("0.21%", state.progressText(ReaderSettings(progressCount = ReaderProgressCount.Off)))
         assertEquals("355 / 169325", state.progressText(ReaderSettings(showPercentage = false)))
-        assertEquals("", state.progressText(ReaderSettings(showCharacters = false, showPercentage = false)))
+        assertEquals("", state.progressText(ReaderSettings(progressCount = ReaderProgressCount.Off, showPercentage = false)))
     }
 
     @Test
@@ -193,18 +193,6 @@ class ReaderChromeTest {
         )
 
         assertEquals("The Boy Who Lived (1/12)", state.chapterText(ReaderSettings(showChapter = true)))
-    }
-
-    @Test
-    fun chapterTextPrefersPagePositionWhenAvailable() {
-        val state = ReaderChromeState(
-            title = "Harry Potter",
-            currentCharacter = 355,
-            totalCharacters = 169325,
-            chapter = ReaderChapterChromeState(number = 1, total = 12, label = "The Boy Who Lived", page = 3, pages = 17),
-        )
-
-        assertEquals("The Boy Who Lived (3/17)", state.chapterText(ReaderSettings(showChapter = true)))
     }
 
     @Test
@@ -316,7 +304,7 @@ class ReaderChromeTest {
             ReaderContentChromeInsets(topDp = 34, bottomDp = 18),
             readerContentChromeInsets(
                 state = state,
-                settings = ReaderSettings(showTitle = false, showCharacters = false, showPercentage = false),
+                settings = ReaderSettings(showTitle = false, progressCount = ReaderProgressCount.Off, showPercentage = false),
             ),
         )
         assertEquals(
@@ -575,7 +563,7 @@ class ReaderChromeTest {
                 ReaderSettings(
                     alwaysShowProgress = false,
                     showProgressTop = false,
-                    showCharacters = false,
+                    progressCount = ReaderProgressCount.Off,
                     showPercentage = false,
                 ),
             ).showProgressInBottomBar,
@@ -599,7 +587,7 @@ class ReaderChromeTest {
             "",
             readerBottomSafeProgressText(
                 state,
-                settings.copy(showCharacters = false, showPercentage = false),
+                settings.copy(progressCount = ReaderProgressCount.Off, showPercentage = false),
                 focusMode = true,
             ),
         )
@@ -646,14 +634,22 @@ class ReaderChromeTest {
     }
 
     @Test
-    fun readerSystemBarsShowStatusOutsideFocusAndHideAllInFocus() {
+    fun readerSystemBarsHideStatusInFocusOrWhileViewingAFullscreenImage() {
         assertEquals(
             ReaderSystemBarVisibility(showStatusBar = true, showNavigationBar = false),
-            readerSystemBarVisibility(focusMode = false),
+            readerSystemBarVisibility(focusMode = false, isFullscreenImageVisible = false),
         )
         assertEquals(
             ReaderSystemBarVisibility(showStatusBar = false, showNavigationBar = false),
-            readerSystemBarVisibility(focusMode = true),
+            readerSystemBarVisibility(focusMode = false, isFullscreenImageVisible = true),
+        )
+        assertEquals(
+            ReaderSystemBarVisibility(showStatusBar = false, showNavigationBar = false),
+            readerSystemBarVisibility(focusMode = true, isFullscreenImageVisible = true),
+        )
+        assertEquals(
+            ReaderSystemBarVisibility(showStatusBar = false, showNavigationBar = false),
+            readerSystemBarVisibility(focusMode = true, isFullscreenImageVisible = false),
         )
     }
 

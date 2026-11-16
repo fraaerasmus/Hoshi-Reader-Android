@@ -2,8 +2,6 @@ package moe.antimony.hoshi.features.sasayaki
 
 import moe.antimony.hoshi.ui.theme.hoshiSurfaces
 import moe.antimony.hoshi.ui.theme.hoshiContainerBorder
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,25 +11,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material3.CenterAlignedTopAppBar
 import moe.antimony.hoshi.ui.HoshiDropdownMenu as DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +39,9 @@ import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
 import moe.antimony.hoshi.features.reader.ReaderColorPickerDialog
 import moe.antimony.hoshi.features.reader.ReaderColorSettingRow
-import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
+import moe.antimony.hoshi.features.settings.SettingsDetailScaffold
+import moe.antimony.hoshi.features.settings.SettingsLoadState
+import moe.antimony.hoshi.features.settings.rememberSettingsLoader
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,37 +53,25 @@ fun SasayakiSettingsView(
     val appContainer = LocalHoshiUiDependencies.current
     val scope = rememberCoroutineScope()
     val repository = appContainer.sasayakiSettingsRepository
-    val syncSettings = appContainer.syncSettingsRepository.settings.collectAsLoadedSettings()
-    val settings = repository.settings.collectAsLoadedSettings()
+    val settingsLoader = repository.settings.rememberSettingsLoader()
+    val settings = (settingsLoader.state as? SettingsLoadState.Loaded)?.value
     var skipActionMenuExpanded by remember { mutableStateOf(false) }
     var colorDialogRow by remember { mutableStateOf<SasayakiColorRow?>(null) }
 
-    fun save(next: SasayakiSettings) {
+    fun save(update: SasayakiSettingsUpdate) {
         scope.launch {
-            repository.update { next }
+            repository.update(update)
         }
     }
 
-    BackHandler(onBack = onClose)
     val colorScheme = MaterialTheme.colorScheme
-    Scaffold(
-        modifier = modifier.fillMaxSize(),
-        containerColor = hoshiSurfaces.page,
-        topBar = {
-            CenterAlignedTopAppBar(
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = hoshiSurfaces.page,
-                    scrolledContainerColor = hoshiSurfaces.page,
-                ),
-                title = { Text(stringResource(R.string.sasayaki_title), fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.action_back))
-                    }
-                },
-            )
-        },
-    ) { innerPadding ->
+    SettingsDetailScaffold(
+        state = settingsLoader.state,
+        title = stringResource(R.string.sasayaki_title),
+        onClose = onClose,
+        onRetry = settingsLoader.retry,
+        modifier = modifier,
+    ) { innerPadding, loadedSettings ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -99,8 +80,6 @@ fun SasayakiSettingsView(
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             item {
-                val loadedSettings = settings ?: return@item
-                val loadedSyncSettings = syncSettings ?: return@item
                 SettingsCard {
                     ListItem(
                         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -108,7 +87,7 @@ fun SasayakiSettingsView(
                         trailingContent = {
                             Switch(
                                 checked = loadedSettings.enabled,
-                                onCheckedChange = { save(loadedSettings.copy(enabled = it)) },
+                                onCheckedChange = { save { current -> current.copy(enabled = it) } },
                             )
                         },
                     )
@@ -121,23 +100,10 @@ fun SasayakiSettingsView(
                             trailingContent = {
                                 Switch(
                                     checked = loadedSettings.copyAudiobookToPrivateStorage,
-                                    onCheckedChange = { save(loadedSettings.copy(copyAudiobookToPrivateStorage = it)) },
+                                    onCheckedChange = { save { current -> current.copy(copyAudiobookToPrivateStorage = it) } },
                                 )
                             },
                         )
-                        if (loadedSettings.enabled && loadedSyncSettings.enabled) {
-                            SettingsDivider()
-                            ListItem(
-                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                headlineContent = { Text(stringResource(R.string.sync_ttu_sync)) },
-                                trailingContent = {
-                                    Switch(
-                                        checked = loadedSettings.syncEnabled,
-                                        onCheckedChange = { save(loadedSettings.copy(syncEnabled = it)) },
-                                    )
-                                },
-                            )
-                        }
                         SettingsDivider()
                         ListItem(
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -147,7 +113,7 @@ fun SasayakiSettingsView(
                                 Switch(
                                     checked = loadedSettings.showReaderBottomPlaybackControls,
                                     onCheckedChange = {
-                                        save(loadedSettings.copy(showReaderBottomPlaybackControls = it))
+                                        save { current -> current.copy(showReaderBottomPlaybackControls = it) }
                                     },
                                 )
                             },
@@ -162,7 +128,21 @@ fun SasayakiSettingsView(
                                     Switch(
                                         checked = loadedSettings.reverseVerticalReaderSkipButtons,
                                         onCheckedChange = {
-                                            save(loadedSettings.copy(reverseVerticalReaderSkipButtons = it))
+                                            save { current -> current.copy(reverseVerticalReaderSkipButtons = it) }
+                                        },
+                                    )
+                                },
+                            )
+                            SettingsDivider()
+                            ListItem(
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                headlineContent = { Text(stringResource(R.string.reader_show_restart_sentence_button)) },
+                                supportingContent = { Text(stringResource(R.string.reader_show_restart_sentence_button_help)) },
+                                trailingContent = {
+                                    Switch(
+                                        checked = loadedSettings.showReaderRestartSentenceButton,
+                                        onCheckedChange = {
+                                            save { current -> current.copy(showReaderRestartSentenceButton = it) }
                                         },
                                     )
                                 },
@@ -195,7 +175,7 @@ fun SasayakiSettingsView(
                                                 text = { Text(action.labelText()) },
                                                 onClick = {
                                                     skipActionMenuExpanded = false
-                                                    save(loadedSettings.copy(readerSkipButtonAction = action))
+                                                    save { current -> current.copy(readerSkipButtonAction = action) }
                                                 },
                                             )
                                         }
@@ -210,7 +190,7 @@ fun SasayakiSettingsView(
                             trailingContent = {
                                 Switch(
                                     checked = loadedSettings.autoScroll,
-                                    onCheckedChange = { save(loadedSettings.copy(autoScroll = it)) },
+                                    onCheckedChange = { save { current -> current.copy(autoScroll = it) } },
                                 )
                             },
                         )
@@ -218,7 +198,7 @@ fun SasayakiSettingsView(
                         SasayakiImageHoldSettingsRow(
                             settings = loadedSettings,
                             onValueChange = { seconds ->
-                                save(loadedSettings.copy(imageHoldSeconds = seconds))
+                                save { current -> current.copy(imageHoldSeconds = seconds) }
                             },
                         )
                         SettingsDivider()
@@ -228,7 +208,25 @@ fun SasayakiSettingsView(
                             trailingContent = {
                                 Switch(
                                     checked = loadedSettings.autoPause,
-                                    onCheckedChange = { save(loadedSettings.copy(autoPause = it)) },
+                                    onCheckedChange = { save { current -> current.copy(autoPause = it) } },
+                                )
+                            },
+                        )
+                        SettingsDivider()
+                        Text(
+                            text = stringResource(R.string.reader_paragraph_mode),
+                            color = colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                        )
+                        ListItem(
+                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                            headlineContent = { Text(stringResource(R.string.sasayaki_page_advance)) },
+                            trailingContent = {
+                                Switch(
+                                    checked = loadedSettings.pageAdvance,
+                                    onCheckedChange = { save { current -> current.copy(pageAdvance = it) } },
                                 )
                             },
                         )
@@ -265,7 +263,7 @@ fun SasayakiSettingsView(
             initialColor = currentColorDialogRow.color(currentSettings),
             defaultColor = currentColorDialogRow.defaultColor,
             onColorChange = { color ->
-                save(currentColorDialogRow.updated(currentSettings, color))
+                save { current -> currentColorDialogRow.updated(current, color) }
                 colorDialogRow = null
             },
             onDismiss = { colorDialogRow = null },

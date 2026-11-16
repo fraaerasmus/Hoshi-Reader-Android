@@ -4,6 +4,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntSize
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import moe.antimony.hoshi.features.dictionary.LookupPopupItem
 import moe.antimony.hoshi.features.sasayaki.SasayakiSheetTab
 
@@ -53,6 +56,7 @@ internal class ReaderWebViewStateHolder(
 
     var lookupPopups by mutableStateOf<List<LookupPopupItem>>(emptyList())
         private set
+    private val miningPopupIds = mutableSetOf<String>()
 
     var readerPosition by mutableStateOf(ReaderPositionState(initialPosition))
         private set
@@ -75,8 +79,8 @@ internal class ReaderWebViewStateHolder(
     var webViewRestoreEpoch by mutableStateOf(0)
         private set
 
-    var sasayakiWasPausedByLookup by mutableStateOf(false)
-        private set
+    val sasayakiLookupPause = ReaderLookupPauseState()
+    val ttsLookupPause = ReaderLookupPauseState()
 
     fun syncSettings(settings: ReaderSettings) {
         val shouldReloadContent = effectiveSettings.readerContentReloadKey() != settings.readerContentReloadKey()
@@ -119,7 +123,7 @@ internal class ReaderWebViewStateHolder(
     }
 
     fun handleBackNavigation(): Boolean {
-        if (focusMode) {
+        if (focusMode && !effectiveSettings.exitReaderOnFirstBack) {
             exitFocusMode()
             return false
         }
@@ -198,38 +202,29 @@ internal class ReaderWebViewStateHolder(
         showStatistics = false
     }
 
-    fun setLookupPopups(
-        popups: List<LookupPopupItem>,
-        resumeSasayakiAfterLookup: () -> Unit = {},
-    ) {
+    fun updateLookupPopups(popups: List<LookupPopupItem>) {
         lookupPopups = popups
-        if (popups.isEmpty() && sasayakiWasPausedByLookup) {
-            sasayakiWasPausedByLookup = false
-            resumeSasayakiAfterLookup()
+        if (popups.isEmpty()) {
+            sasayakiLookupPause.resume()
+            ttsLookupPause.resume()
         }
     }
 
-    fun markSasayakiPausedByLookup() {
-        sasayakiWasPausedByLookup = true
-    }
-
-    fun clearSasayakiPauseState() {
-        sasayakiWasPausedByLookup = false
-    }
-
-    fun shouldPauseSasayakiForLookup(
-        enabled: Boolean,
-        autoPause: Boolean,
-        isPlaying: Boolean,
-    ): Boolean {
-        if (enabled && autoPause && isPlaying) {
-            markSasayakiPausedByLookup()
-            return true
+    fun startLookupMining(
+        readerScope: CoroutineScope,
+        popupId: String,
+        onResult: (Boolean) -> Unit,
+        mine: suspend () -> Boolean,
+    ) {
+        if (!readerScope.isActive || !miningPopupIds.add(popupId)) return
+        readerScope.launch {
+            try {
+                val added = mine()
+                if (lookupPopups.any { it.id == popupId }) onResult(added)
+            } finally {
+                miningPopupIds.remove(popupId)
+            }
         }
-        if (!autoPause) {
-            clearSasayakiPauseState()
-        }
-        return false
     }
 
     fun recordDisplayedProgress(progress: Double): ReaderChapterPosition {
@@ -276,6 +271,12 @@ internal class ReaderWebViewStateHolder(
         if (pending.chapterIndex != chapterIndex) return null
         pendingSearchHighlight = null
         return pending
+    }
+
+    fun applySyncedBookmark(position: ReaderChapterPosition) {
+        pendingSearchHighlight = null
+        readerPosition = readerPosition.jumpTo(position)
+        markWebViewRestoring()
     }
 
     fun jumpTo(position: ReaderChapterPosition, fragment: String? = null): ReaderChapterPosition {
@@ -336,6 +337,11 @@ internal class ReaderWebViewStateHolder(
         isWebViewRestoring = false
     }
 
+    fun pageProgress(index: ReaderPageIndex?, currentPage: Int?): ReaderPageProgress? {
+        if (!effectiveSettings.usesPageCounts) return null
+        return index?.progress(readerPosition.displayedPosition, currentPage)
+    }
+
     fun goToNextChapter(lastIndex: Int): ReaderChapterPosition? {
         val next = readerPosition.loadPosition.nextOrNull(lastIndex) ?: return null
         return jumpTo(next)
@@ -350,10 +356,10 @@ internal class ReaderWebViewStateHolder(
         if (size == webViewViewportSize) return false
         val resizedExistingViewport = webViewViewportSize != IntSize.Zero
         if (resizedExistingViewport) {
-            setLookupPopups(emptyList())
             prepareReloadAtDisplayedPosition()
         }
         webViewViewportSize = size
+        if (resizedExistingViewport) updateLookupPopups(emptyList())
         return resizedExistingViewport
     }
 
@@ -381,10 +387,10 @@ internal data class ReaderContentReloadKey(
     val fontSize: Int,
     val furiganaMode: FuriganaMode,
     val viewMode: ReaderViewMode,
-    val visualNovelScreenMode: VisualNovelScreenMode,
-    val visualNovelSentencesPerScreen: Int,
-    val visualNovelPreserveDialogueBubbles: Boolean,
-    val visualNovelMergeCrossScreenSasayakiCues: Boolean,
+    val paragraphMode: Boolean,
+    val paragraphEInkMode: Boolean,
+    val maxSentencesPerPage: Int,
+    val splitDialogue: Boolean,
     val horizontalPadding: Int,
     val verticalPadding: Int,
     val avoidPageBreak: Boolean,
@@ -405,10 +411,10 @@ internal fun ReaderSettings.readerContentReloadKey(): ReaderContentReloadKey =
         fontSize = fontSize,
         furiganaMode = furiganaMode,
         viewMode = viewMode,
-        visualNovelScreenMode = visualNovelScreenMode,
-        visualNovelSentencesPerScreen = visualNovelSentencesPerScreen.coerceIn(1, 12),
-        visualNovelPreserveDialogueBubbles = visualNovelPreserveDialogueBubbles,
-        visualNovelMergeCrossScreenSasayakiCues = visualNovelMergeCrossScreenSasayakiCues,
+        paragraphMode = paragraphMode,
+        paragraphEInkMode = viewMode == ReaderViewMode.Paginated && paragraphMode && eInkMode,
+        maxSentencesPerPage = maxSentencesPerPage.coerceIn(0, 10),
+        splitDialogue = splitDialogue,
         horizontalPadding = horizontalPadding,
         verticalPadding = verticalPadding,
         avoidPageBreak = avoidPageBreak,

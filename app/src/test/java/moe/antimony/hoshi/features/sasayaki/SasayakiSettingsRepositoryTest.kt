@@ -41,6 +41,7 @@ class SasayakiSettingsRepositoryTest {
                 settings,
             )
             assertEquals(1f, settings.imageHoldSeconds, 0f)
+            assertFalse(settings.showReaderRestartSentenceButton)
         }
     }
 
@@ -56,6 +57,7 @@ class SasayakiSettingsRepositoryTest {
             holdPlaybackControlsToBoost = false,
             doubleTapPlaybackControlsToToggle = false,
             copyAudiobookToPrivateStorage = true,
+            pageAdvance = true,
             autoScroll = false,
             autoPause = false,
             imageHoldSeconds = 2.5f,
@@ -89,7 +91,9 @@ class SasayakiSettingsRepositoryTest {
             dragPlaybackControlsToScrub = false,
             holdPlaybackControlsToBoost = false,
             doubleTapPlaybackControlsToToggle = false,
+            showReaderRestartSentenceButton = true,
             copyAudiobookToPrivateStorage = true,
+            pageAdvance = true,
             autoScroll = false,
             autoPause = false,
             imageHoldSeconds = 4.5f,
@@ -143,12 +147,14 @@ class SasayakiSettingsRepositoryTest {
             val repository = SasayakiSettingsRepository(store)
             assertEquals(SasayakiTranscriptionPreset.Balanced, repository.settings.first().transcriptionPreset)
             repository.update { it.copy(transcriptionPreset = SasayakiTranscriptionPreset.Light) }
+            repository.update { it.copy(showReaderRestartSentenceButton = true) }
         } finally { firstJob.cancelAndJoin() }
         val secondJob = Job()
         try {
             val store = PreferenceDataStoreFactory.create(scope = CoroutineScope(Dispatchers.IO + secondJob), produceFile = { file })
             val repository = SasayakiSettingsRepository(store)
             assertEquals(SasayakiTranscriptionPreset.Light, repository.settings.first().transcriptionPreset)
+            assertTrue(repository.settings.first().showReaderRestartSentenceButton)
             store.edit { it[stringPreferencesKey("sasayakiTranscriptionPreset")] = "unsupported" }
             assertEquals(SasayakiTranscriptionPreset.Balanced, repository.settings.first().transcriptionPreset)
         } finally { secondJob.cancelAndJoin() }

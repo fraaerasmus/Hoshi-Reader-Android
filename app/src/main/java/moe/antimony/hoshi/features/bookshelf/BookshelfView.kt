@@ -1,5 +1,6 @@
 package moe.antimony.hoshi.features.bookshelf
 
+import moe.antimony.hoshi.features.sync.syncKey
 import moe.antimony.hoshi.ui.theme.hoshiSurfaces
 import moe.antimony.hoshi.ui.theme.hoshiContainerBorder
 import android.content.Intent
@@ -40,7 +41,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
@@ -69,6 +73,7 @@ import androidx.compose.material.icons.rounded.Translate
 import moe.antimony.hoshi.ui.HoshiAlertDialog as AlertDialog
 import moe.antimony.hoshi.ui.HoshiButton as Button
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import moe.antimony.hoshi.ui.HoshiDropdownMenu as DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -118,10 +123,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.Dispatchers
@@ -132,6 +141,7 @@ import moe.antimony.hoshi.content.ContentLanguageProfile
 import moe.antimony.hoshi.epub.BookEntry
 import moe.antimony.hoshi.epub.BookRepository
 import moe.antimony.hoshi.epub.BookShelf
+import moe.antimony.hoshi.epub.BookReadingState
 import moe.antimony.hoshi.epub.BookSortOption
 import moe.antimony.hoshi.features.reader.ReaderSettings
 import moe.antimony.hoshi.features.kosync.KosyncSettings
@@ -141,6 +151,7 @@ import moe.antimony.hoshi.features.sync.SyncDirection
 import moe.antimony.hoshi.features.sync.BookSyncSheetContent
 import moe.antimony.hoshi.features.sync.SyncOptions
 import moe.antimony.hoshi.features.sync.SyncMode
+import moe.antimony.hoshi.features.sync.SyncProvider
 import moe.antimony.hoshi.features.sync.SyncSettings
 import moe.antimony.hoshi.importing.DirectoryImportContent
 import moe.antimony.hoshi.importing.ImportFileType
@@ -149,6 +160,7 @@ import moe.antimony.hoshi.importing.SafImportDirectoryScanner
 import moe.antimony.hoshi.profiles.ProfileState
 import moe.antimony.hoshi.importing.importDisplayName
 import moe.antimony.hoshi.ui.HoshiBlockingProgressOverlay
+import moe.antimony.hoshi.ui.ErrorDetailsText
 import moe.antimony.hoshi.ui.UiText
 import moe.antimony.hoshi.ui.asString
 import moe.antimony.hoshi.ui.hoshiOutlinedTextFieldColors
@@ -162,7 +174,7 @@ import moe.antimony.hoshi.ui.theme.LocalHoshiEInkMode
 fun BookshelfView(
     pendingImportUri: Uri? = null,
     onPendingImportConsumed: () -> Unit = {},
-    onOpenReader: (String) -> Unit,
+    onOpenReader: (String, Boolean) -> Unit,
     refreshKey: Int = 0,
     layoutSpec: MainShellLayoutSpec,
     modifier: Modifier = Modifier,
@@ -197,6 +209,7 @@ fun BookshelfView(
     var remoteDeleteCandidate by remember { mutableStateOf<RemoteBookEntry?>(null) }
     var exportCandidate by remember { mutableStateOf<BookEntry?>(null) }
     var markReadCandidate by remember { mutableStateOf<BookEntry?>(null) }
+    var markUnreadCandidate by remember { mutableStateOf<BookEntry?>(null) }
     var renameCandidate by remember { mutableStateOf<BookEntry?>(null) }
     val folderScanner = remember(context) { SafImportDirectoryScanner(context.contentResolver) }
     val renameTextState = rememberTextFieldState()
@@ -254,12 +267,12 @@ fun BookshelfView(
     }
 
     LaunchedEffect(refreshKey) {
-        booksViewModel.reloadBookEntries()
+        booksViewModel.onBookshelfVisible()
     }
 
-    LaunchedEffect(syncSettings.enabled, refreshKey) {
+    LaunchedEffect(syncSettings.enabled, syncSettings.provider, refreshKey) {
         driveAuthStatus = if (syncSettings.enabled) {
-            appContainer.deviceCodeDriveAuthorizer.status()
+            appContainer.googleDriveAuth.status()
         } else {
             null
         }
@@ -277,7 +290,7 @@ fun BookshelfView(
 
     LaunchedEffect(uiState.openReaderBookId) {
         val bookId = uiState.openReaderBookId ?: return@LaunchedEffect
-        onOpenReader(bookId)
+        onOpenReader(bookId, uiState.openReaderSkipSync)
         booksViewModel.consumeOpenReaderEvent()
     }
 
@@ -308,6 +321,7 @@ fun BookshelfView(
         remoteBookEntries = uiState.remoteBookEntries,
         sections = uiState.sections,
         bookProgressById = uiState.bookProgressById,
+        bookReadingStateById = uiState.bookReadingStateById,
         remoteProgressById = uiState.remoteProgressById,
         remoteImportProgressById = uiState.remoteImportProgressById,
         remoteBusyBookIds = uiState.remoteBusyBookIds,
@@ -367,6 +381,7 @@ fun BookshelfView(
             epubExporter.launch("${entry.displayTitle.sanitizeExportFileName()}.epub")
         },
         onMarkReadCandidate = { markReadCandidate = it },
+        onMarkUnreadCandidate = { markUnreadCandidate = it },
         onRenameCandidate = {
             renameCandidate = it
             renameTextState.replaceTextAndSelectStart(it.displayTitle)
@@ -386,6 +401,7 @@ fun BookshelfView(
             booksViewModel.syncBook(entry = entry, direction = direction, options = syncOptions)
         },
         onSyncDetails = { syncSheetEntry = it },
+        onDownloadBook = { booksViewModel.downloadBooks(listOf(it)) },
     )
         if (showOpdsCatalogs) {
             OpdsView(
@@ -419,7 +435,7 @@ fun BookshelfView(
         AlertDialog(
             onDismissRequest = booksViewModel::consumeErrorMessage,
             title = { Text(stringResource(R.string.dialog_error_title)) },
-            text = { Text(message.asString()) },
+            text = { ErrorDetailsText(message.asString()) },
             confirmButton = {
                 TextButton(onClick = booksViewModel::consumeErrorMessage) {
                     Text(stringResource(R.string.action_ok))
@@ -433,18 +449,31 @@ fun BookshelfView(
             onDismissRequest = { deleteCandidate = null },
             title = { Text(stringResource(R.string.bookshelf_delete_book_title_format, candidate.displayTitle)) },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        booksViewModel.deleteBook(candidate)
-                        deleteCandidate = null
-                    },
-                ) {
-                    Text(stringResource(R.string.action_delete))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deleteCandidate = null }) {
-                    Text(stringResource(R.string.action_cancel))
+                Column(Modifier.fillMaxWidth()) {
+                    if (syncSettings.enabled && syncSettings.provider == SyncProvider.Gdrive && candidate.metadata.id in uiState.canDeleteLocalBookIds) {
+                        TextButton(
+                            onClick = {
+                                booksViewModel.deleteLocalBook(candidate)
+                                deleteCandidate = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(R.string.sync_delete_local))
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            booksViewModel.deleteBook(candidate)
+                            deleteCandidate = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    ) {
+                        Text(stringResource(if (syncSettings.enabled && syncSettings.provider == SyncProvider.Gdrive) R.string.sync_delete_everywhere else R.string.action_delete))
+                    }
+                    TextButton(onClick = { deleteCandidate = null }, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
                 }
             },
         )
@@ -492,6 +521,17 @@ fun BookshelfView(
                     Text(stringResource(R.string.action_cancel))
                 }
             },
+        )
+    }
+
+    markUnreadCandidate?.let { candidate ->
+        MarkUnreadConfirmationDialog(
+            entry = candidate,
+            onConfirm = {
+                booksViewModel.markUnread(candidate)
+                markUnreadCandidate = null
+            },
+            onDismiss = { markUnreadCandidate = null },
         )
     }
 
@@ -802,8 +842,8 @@ internal data class BookSyncMenuState(
 
 internal fun bookSyncMenuState(syncSettings: SyncSettings, kosyncEnabled: Boolean): BookSyncMenuState =
     BookSyncMenuState(
-        available = syncSettings.enabled || kosyncEnabled,
-        showDirectionMenu = syncSettings.enabled && syncSettings.mode == SyncMode.Manual,
+        available = syncSettings.usesTtuSync || kosyncEnabled,
+        showDirectionMenu = syncSettings.usesTtuSync && syncSettings.mode == SyncMode.Manual,
     )
 
 internal fun shouldEnableBookshelfPullRefresh(
@@ -814,7 +854,7 @@ internal fun shouldEnableBookshelfPullRefresh(
     isSelecting: Boolean,
     fileTaskBlocked: Boolean,
 ): Boolean =
-    (shouldLoadRemoteBooks(syncSettings, authStatus ?: DriveAuthStatus.NotConnected) || kosyncEnabled) &&
+    (syncSettings.enabled && authStatus?.isLinked == true || kosyncEnabled) &&
         hasLoadedBooks &&
         !isSelecting &&
         !fileTaskBlocked
@@ -919,12 +959,13 @@ private fun LazyGridScope.googleDriveSection(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun BooksTab(
+internal fun BooksTab(
     layoutSpec: MainShellLayoutSpec,
     bookEntries: List<BookEntry>,
     remoteBookEntries: List<RemoteBookEntry>,
     sections: List<BookshelfSectionModel>,
     bookProgressById: Map<String, Double>,
+    bookReadingStateById: Map<String, BookReadingState>,
     remoteProgressById: Map<String, Double>,
     remoteImportProgressById: Map<String, Double>,
     remoteBusyBookIds: Set<String>,
@@ -965,6 +1006,7 @@ private fun BooksTab(
     onDeleteCandidate: (BookEntry) -> Unit,
     onExportCandidate: (BookEntry) -> Unit,
     onMarkReadCandidate: (BookEntry) -> Unit,
+    onMarkUnreadCandidate: (BookEntry) -> Unit,
     onRenameCandidate: (BookEntry) -> Unit,
     onMoveBook: (BookEntry, String?) -> Unit,
     onCreateShelfForBook: (BookEntry) -> Unit,
@@ -976,6 +1018,7 @@ private fun BooksTab(
     syncMenuState: BookSyncMenuState,
     onSyncBook: (BookEntry, SyncDirection?) -> Unit,
     onSyncDetails: (BookEntry) -> Unit,
+    onDownloadBook: (BookEntry) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val fileTaskBlocked = blockingProgressMessage != null
@@ -1125,6 +1168,7 @@ private fun BooksTab(
                                         BookGridCell(
                                             entry = entry,
                                             progress = bookProgressById[entry.metadata.id] ?: 0.0,
+                                            downloadProgress = remoteImportProgressById[entry.metadata.id],
                                             coverSource = coverSourcesById[entry.metadata.id],
                                             coverMode = coverMode,
                                             layoutSpec = layoutSpec,
@@ -1141,6 +1185,7 @@ private fun BooksTab(
                                         )
                                         BookContextMenu(
                                             entry = entry,
+                                            readingState = bookReadingStateById[entry.metadata.id] ?: BookReadingState(),
                                             shelves = shelves,
                                             currentShelfName = section.shelfName,
                                             hideMove = section.isReading,
@@ -1149,6 +1194,7 @@ private fun BooksTab(
                                             onMoveBook = onMoveBook,
                                             onCreateShelfForBook = onCreateShelfForBook,
                                             onMarkReadCandidate = onMarkReadCandidate,
+                                            onMarkUnreadCandidate = onMarkUnreadCandidate,
                                             onRenameCandidate = onRenameCandidate,
                                             onDeleteCandidate = onDeleteCandidate,
                                             onExportCandidate = onExportCandidate,
@@ -1157,6 +1203,7 @@ private fun BooksTab(
                                             syncMenuState = syncMenuState,
                                             onSyncBook = onSyncBook,
                                             onSyncDetails = onSyncDetails,
+                                            onDownloadBook = onDownloadBook,
                                         )
                                     }
                                 }
@@ -1497,6 +1544,7 @@ private fun BookshelfSectionHeader(
 private fun BookGridCell(
     entry: BookEntry,
     progress: Double,
+    downloadProgress: Double?,
     coverSource: BookCoverSource?,
     coverMode: BookshelfCoverMode,
     layoutSpec: MainShellLayoutSpec,
@@ -1565,13 +1613,34 @@ private fun BookGridCell(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            text = entry.displayTitle,
+            text = buildAnnotatedString {
+                if (entry.metadata.epub == null) {
+                    appendInlineContent("cloud")
+                    append(" ")
+                }
+                append(entry.displayTitle)
+            },
+            inlineContent = mapOf(
+                "cloud" to InlineTextContent(
+                    Placeholder(1.em, 1.em, PlaceholderVerticalAlign.TextCenter),
+                ) {
+                    Icon(
+                        Icons.Rounded.CloudDownload,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                },
+            ),
             style = layoutSpec.bookTitleTextStyle.toTextStyle(),
             fontWeight = layoutSpec.bookTitleFontWeight.toFontWeight(),
             color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 2,
+            maxLines = if (downloadProgress == null) 2 else 1,
             overflow = TextOverflow.Ellipsis,
         )
+        downloadProgress?.let { value ->
+            LinearProgressIndicator(progress = { value.toFloat() }, modifier = Modifier.fillMaxWidth())
+        }
     }
 }
 
@@ -1622,14 +1691,6 @@ private fun RemoteBookGridCell(
     }
 }
 
-internal suspend fun loadBookProgressById(
-    entries: List<BookEntry>,
-    bookRepository: BookRepository,
-): Map<String, Double> =
-    entries.associate { entry ->
-        entry.metadata.id to bookRepository.loadReadingProgress(entry.root)
-    }
-
 @Composable
 private fun ReadingProgressPill(progress: Double, modifier: Modifier = Modifier) {
     val clamped = progress.coerceIn(0.0, 1.0).toFloat()
@@ -1672,8 +1733,9 @@ private fun ReadingProgressPill(progress: Double, modifier: Modifier = Modifier)
 }
 
 @Composable
-private fun BookContextMenu(
+internal fun BookContextMenu(
     entry: BookEntry,
+    readingState: BookReadingState,
     shelves: List<BookShelf>,
     currentShelfName: String?,
     hideMove: Boolean,
@@ -1682,6 +1744,7 @@ private fun BookContextMenu(
     onMoveBook: (BookEntry, String?) -> Unit,
     onCreateShelfForBook: (BookEntry) -> Unit,
     onMarkReadCandidate: (BookEntry) -> Unit,
+    onMarkUnreadCandidate: (BookEntry) -> Unit,
     onRenameCandidate: (BookEntry) -> Unit,
     onDeleteCandidate: (BookEntry) -> Unit,
     onExportCandidate: (BookEntry) -> Unit,
@@ -1690,10 +1753,12 @@ private fun BookContextMenu(
     syncMenuState: BookSyncMenuState,
     onSyncBook: (BookEntry, SyncDirection?) -> Unit,
     onSyncDetails: (BookEntry) -> Unit,
+    onDownloadBook: (BookEntry) -> Unit,
 ) {
     var moveMenuExpanded by remember { mutableStateOf(false) }
     var syncMenuExpanded by remember { mutableStateOf(false) }
     var profileMenuExpanded by remember { mutableStateOf(false) }
+    var markMenuExpanded by remember { mutableStateOf(false) }
     LaunchedEffect(expanded, hideMove) {
         if (!expanded || hideMove) {
             moveMenuExpanded = false
@@ -1701,13 +1766,14 @@ private fun BookContextMenu(
         if (!expanded) {
             syncMenuExpanded = false
             profileMenuExpanded = false
+            markMenuExpanded = false
         }
     }
     DropdownMenu(
-        expanded = expanded && !moveMenuExpanded && !syncMenuExpanded && !profileMenuExpanded,
+        expanded = expanded && !moveMenuExpanded && !syncMenuExpanded && !profileMenuExpanded && !markMenuExpanded,
         onDismissRequest = onDismiss,
     ) {
-        if (syncMenuState.available) {
+        if (syncMenuState.available || (syncSettings.enabled && entry.metadata.epub == null)) {
             if (syncMenuState.showDirectionMenu) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bookshelf_sync)) },
@@ -1719,7 +1785,7 @@ private fun BookContextMenu(
                     },
                     onClick = { syncMenuExpanded = true },
                 )
-            } else {
+            } else if (syncSettings.provider == SyncProvider.Ttu) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.bookshelf_sync)) },
                     onClick = {
@@ -1728,13 +1794,24 @@ private fun BookContextMenu(
                     },
                 )
             }
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.bookshelf_sync_details)) },
-                onClick = {
-                    onSyncDetails(entry)
-                    onDismiss()
-                },
-            )
+            if (syncMenuState.available) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.bookshelf_sync_details)) },
+                    onClick = {
+                        onSyncDetails(entry)
+                        onDismiss()
+                    },
+                )
+            }
+            if (syncSettings.provider == SyncProvider.Gdrive && entry.metadata.epub == null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.action_download)) },
+                    onClick = {
+                        onDownloadBook(entry)
+                        onDismiss()
+                    },
+                )
+            }
             HorizontalDivider()
         }
         if (!hideMove) {
@@ -1769,14 +1846,15 @@ private fun BookContextMenu(
             },
         )
         DropdownMenuItem(
-            text = { Text(stringResource(R.string.bookshelf_mark_read)) },
-            onClick = {
-                onMarkReadCandidate(entry)
-                onDismiss()
+            text = { Text(stringResource(R.string.bookshelf_mark)) },
+            trailingIcon = {
+                Icon(Icons.Rounded.ChevronRight, contentDescription = null)
             },
+            onClick = { markMenuExpanded = true },
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.bookshelf_export_epub)) },
+            enabled = entry.metadata.epub != null,
             onClick = {
                 onExportCandidate(entry)
                 onDismiss()
@@ -1812,6 +1890,45 @@ private fun BookContextMenu(
         onDismiss = onDismiss,
         onSyncBook = onSyncBook,
     )
+    ReadingStateMenu(
+        entry = entry,
+        readingState = readingState,
+        expanded = expanded && markMenuExpanded,
+        onDismiss = onDismiss,
+        onMarkReadCandidate = onMarkReadCandidate,
+        onMarkUnreadCandidate = onMarkUnreadCandidate,
+    )
+}
+
+@Composable
+private fun ReadingStateMenu(
+    entry: BookEntry,
+    readingState: BookReadingState,
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onMarkReadCandidate: (BookEntry) -> Unit,
+    onMarkUnreadCandidate: (BookEntry) -> Unit,
+) {
+    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+        SortMenuHeader(text = stringResource(R.string.bookshelf_mark))
+        HorizontalDivider()
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.bookshelf_read)) },
+            enabled = readingState.canMarkRead,
+            onClick = {
+                onMarkReadCandidate(entry)
+                onDismiss()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.bookshelf_unread)) },
+            enabled = readingState.canMarkUnread,
+            onClick = {
+                onMarkUnreadCandidate(entry)
+                onDismiss()
+            },
+        )
+    }
 }
 
 @Composable
@@ -2005,8 +2122,9 @@ internal fun ShelfManagementDialog(
         onValueChange = { newShelfName = it },
         scrollState = newShelfNameScrollState,
     )
-    val trimmedName = newShelfName.trim()
-    val shelfNames = remember(shelves) { shelves.mapTo(mutableSetOf()) { it.name } }
+    val trimmedName = newShelfName.trim().syncKey()
+    val shelfNames = remember(shelves) { shelves.mapTo(mutableSetOf()) { it.name.syncKey() } }
+    val isDuplicateName = trimmedName in shelfNames
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.bookshelf_manage_shelves)) },
@@ -2121,6 +2239,10 @@ internal fun ShelfManagementDialog(
                             label = { Text(stringResource(R.string.bookshelf_shelf_name)) },
                             lineLimits = hoshiSingleLineTextFieldLineLimits(),
                             scrollState = newShelfNameScrollState,
+                            isError = isDuplicateName,
+                            supportingText = if (isDuplicateName) {
+                                { Text(stringResource(R.string.bookshelf_shelf_name_exists)) }
+                            } else null,
                             colors = hoshiOutlinedTextFieldColors(),
                             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                             modifier = Modifier.weight(1f),
@@ -2130,7 +2252,7 @@ internal fun ShelfManagementDialog(
                                 onCreateShelf(trimmedName)
                                 newShelfName = ""
                             },
-                            enabled = trimmedName.isNotEmpty(),
+                            enabled = trimmedName.isNotEmpty() && !isDuplicateName,
                         ) {
                             Icon(Icons.Rounded.Add, contentDescription = stringResource(R.string.bookshelf_add_shelf))
                         }
@@ -2165,8 +2287,8 @@ private fun ShelfManagementShelfRow(
             onValueChange = { draftName = it },
             scrollState = draftScrollState,
         )
-        val trimmedName = draftName.trim()
-        val isDuplicateName = trimmedName != shelf.name && trimmedName in shelfNames
+        val trimmedName = draftName.trim().syncKey()
+        val isDuplicateName = trimmedName != shelf.name.syncKey() && trimmedName in shelfNames
         val canSaveName = trimmedName.isNotEmpty() && !isDuplicateName
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -2193,7 +2315,7 @@ private fun ShelfManagementShelfRow(
             }
             IconButton(
                 onClick = {
-                    if (trimmedName != shelf.name) {
+                    if (trimmedName != shelf.name.syncKey()) {
                         onRenameShelf(shelf.name, trimmedName)
                     }
                     isRenaming = false

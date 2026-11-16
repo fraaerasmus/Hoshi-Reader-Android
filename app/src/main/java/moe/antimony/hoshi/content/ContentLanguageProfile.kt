@@ -17,6 +17,8 @@ class ContentLanguageProfile private constructor(
     companion object {
         const val JapaneseLanguageId = "ja"
         const val EnglishLanguageId = "en"
+        const val ChineseLanguageId = "zh"
+        const val KoreanLanguageId = "ko"
 
         // Generic stacks for the non-Japanese languages supported by the kaihouguide
         // multilingual engine. Scripts (Korean, Greek, Arabic, Georgian, Yiddish, …)
@@ -50,14 +52,40 @@ class ContentLanguageProfile private constructor(
             readerSansSerifFontFamilyCss = "'Roboto', 'Noto Sans', Arial, sans-serif",
         )
 
+        val Chinese: ContentLanguageProfile = ContentLanguageProfile(
+            id = ChineseLanguageId,
+            displayNameRes = R.string.profile_language_chinese,
+            dictionaryLanguageId = ChineseLanguageId,
+            htmlLang = "zh",
+            composeLocaleTag = "zh-CN",
+            inputLocaleTag = "zh-CN",
+            webViewFontFamilyCss = "'Noto Sans CJK SC', sans-serif",
+            readerSerifFontFamilyCss = "'Noto Serif CJK SC', serif",
+            readerSansSerifFontFamilyCss = "'Noto Sans CJK SC', sans-serif",
+        )
+
+        val Korean: ContentLanguageProfile = ContentLanguageProfile(
+            id = KoreanLanguageId,
+            displayNameRes = R.string.profile_language_korean,
+            dictionaryLanguageId = KoreanLanguageId,
+            htmlLang = "ko",
+            composeLocaleTag = "ko-KR",
+            inputLocaleTag = "ko-KR",
+            webViewFontFamilyCss = "'Noto Sans CJK KR', sans-serif",
+            readerSerifFontFamilyCss = "'Noto Serif CJK KR', serif",
+            readerSansSerifFontFamilyCss = "'Noto Sans CJK KR', sans-serif",
+        )
+
         val Default: ContentLanguageProfile = Japanese
 
-        // Japanese and English first (matching upstream), then the remaining languages
+        // Upstream's Japanese, English, Chinese and Korean first, then the remaining languages
         // the kaihouguide engine de-inflects. The language id is what reaches the native
         // setLookupLanguage(), so lookups work for all of them.
         val Supported: List<ContentLanguageProfile> = listOf(
             Japanese,
             English,
+            Chinese,
+            Korean,
             additional("ar", R.string.dictionary_language_arabic, "ar"),
             additional("de", R.string.dictionary_language_german, "de-DE"),
             additional("el", R.string.dictionary_language_modern_greek, "el-GR"),
@@ -68,7 +96,6 @@ class ContentLanguageProfile private constructor(
             additional("ga", R.string.dictionary_language_irish, "ga-IE"),
             additional("grc", R.string.dictionary_language_ancient_greek, "grc"),
             additional("kat", R.string.dictionary_language_georgian, "ka-GE", htmlLang = "ka"),
-            additional("ko", R.string.dictionary_language_korean, "ko-KR"),
             additional("la", R.string.dictionary_language_latin, "la"),
             additional("sga", R.string.dictionary_language_old_irish, "sga"),
             additional("sq", R.string.dictionary_language_albanian, "sq-AL"),

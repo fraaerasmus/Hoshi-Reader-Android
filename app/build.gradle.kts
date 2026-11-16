@@ -1,4 +1,4 @@
-import hoshi.build.PrepareSherpaTask
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
@@ -13,12 +13,11 @@ val uniffiOutDir = layout.buildDirectory.dir("generated/source/uniffi/main/kotli
 val rustDebugJniLibsDir = layout.buildDirectory.dir("jniLibs/debug").get().asFile
 val rustReleaseJniLibsDir = layout.buildDirectory.dir("jniLibs/release").get().asFile
 val cargo = System.getenv("HOME") + "/.cargo/bin/cargo"
-val sherpaOnnxArtifact = "com.k2fsa.sherpa:sherpa-onnx:${libs.versions.sherpaOnnx.get()}@aar"
-val sherpaOnnxArchive by configurations.creating {
-    isCanBeConsumed = false
-    isTransitive = false
-}
 val androidNdkHome = System.getenv("ANDROID_NDK_HOME") ?: "/opt/homebrew/share/android-ndk"
+val secrets = Properties().apply {
+    val secretsFile = rootProject.file("secrets.properties")
+    if (secretsFile.isFile) secretsFile.inputStream().use { load(it) }
+}
 val releaseKeystorePath = providers.environmentVariable("ANDROID_KEYSTORE_FILE").orNull
 val releaseKeystorePassword = providers.environmentVariable("ANDROID_KEYSTORE_PASSWORD").orNull
 val releaseKeyAlias = providers.environmentVariable("ANDROID_KEY_ALIAS").orNull
@@ -27,6 +26,20 @@ val releaseAbi = providers.gradleProperty("releaseAbi").getOrElse("arm64-v8a")
 require(releaseAbi in listOf("arm64-v8a", "armeabi-v7a", "x86_64"))
 val releaseVersionName = providers.gradleProperty("releaseVersionName").orNull
 val releaseVersionCode = providers.gradleProperty("releaseVersionCode").orNull?.toIntOrNull()
+val buildCommitSha = providers.gradleProperty("buildCommitSha").orElse(
+    if (rootProject.file(".git").exists()) {
+        providers.exec {
+            workingDir(rootProject.projectDir)
+            commandLine("git", "rev-parse", "HEAD")
+            isIgnoreExitValue = true
+        }.standardOutput.asText.map { it.trim() }
+    } else {
+        providers.provider { "" }
+    }
+).get()
+require(buildCommitSha.isEmpty() || buildCommitSha.matches(Regex("[0-9a-f]{40}"))) {
+    "buildCommitSha must be a full lowercase Git commit SHA."
+}
 if (providers.gradleProperty("releaseVersionCode").isPresent && releaseVersionCode == null) {
     throw GradleException("releaseVersionCode must be an integer.")
 }
@@ -66,15 +79,16 @@ android {
         applicationId = "moe.antimony.hoshi"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10400
-        versionName = "1.4.0"
+        versionCode = 10500
+        versionName = "1.5.0"
         releaseVersionCode?.let { versionCode = it }
         releaseVersionName?.let { versionName = it }
+        buildConfigField("String", "BUILD_COMMIT_SHA", "\"$buildCommitSha\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
-                targets += listOf("hoshidicts_jni")
+                targets += listOf("hoshidicts_jni", "hoshilocalaudio_jni")
             }
         }
     }
@@ -101,6 +115,13 @@ android {
     }
 
     buildTypes {
+        configureEach {
+            val key = "HOSHI_GOOGLE_CLIENT_ID_${name.uppercase()}"
+            val clientId = providers.environmentVariable(key).getOrElse(secrets.getProperty(key, "")).trim()
+            buildConfigField("String", "HOSHI_GOOGLE_CLIENT_ID", "\"$clientId\"")
+            manifestPlaceholders["googleOAuthRedirectScheme"] = clientId.split('.').reversed().joinToString(".")
+                .ifEmpty { "moe.antimony.hoshi.$name.oauth" }
+        }
         debug {
             // Sideload build: keep debug signing, but ship it non-debuggable so ART applies
             // normal JIT/AOT optimization (debuggable apps run de-optimized). BuildConfig.DEBUG
@@ -183,23 +204,15 @@ android {
     sourceSets["release"].jniLibs.directories.add(rustReleaseJniLibsDir.absolutePath)
 }
 
-val prepareSherpa by tasks.registering(PrepareSherpaTask::class) {
-    archive.set(layout.file(sherpaOnnxArchive.elements.map { it.single().asFile }))
-    releaseBaseUrl.set("https://github.com/HuangAntimony/Hoshi-Reader-Android/releases/download/transcription-sherpa-${libs.versions.sherpaOnnx.get()}-633c2432")
-    outputDirectory.set(layout.buildDirectory.dir("generated/sherpa"))
-    assetsDirectory.set(outputDirectory.dir("assets"))
-}
-androidComponents.onVariants { variant ->
-    variant.sources.assets?.addGeneratedSourceDirectory(prepareSherpa, PrepareSherpaTask::getAssetsDirectory)
-}
-
 dependencies {
-    implementation(files(prepareSherpa.map { it.outputDirectory.file("bindings.jar").get() }))
-    sherpaOnnxArchive(sherpaOnnxArtifact)
+    implementation(libs.google.play.services.auth)
+    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.androidx.browser)
     implementation(libs.jsoup)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.compose.material3)
     implementation(libs.material.color.utilities)
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
@@ -229,10 +242,14 @@ dependencies {
     implementation(libs.androidx.hilt.work)
     implementation(libs.ankidroid.api)
     implementation(libs.google.dagger.hilt.android)
+    implementation(libs.re2j)
+    implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.serialization.protobuf)
     implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
     ksp(libs.androidx.hilt.compiler)
     ksp(libs.google.dagger.hilt.android.compiler)
+    testImplementation(libs.mockwebserver)
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testRuntimeOnly("net.java.dev.jna:jna:${libs.versions.jna.get()}@jar")
@@ -347,7 +364,6 @@ val buildRustAndroidRelease by tasks.registering(Exec::class) {
 
 tasks.named("preBuild") {
     dependsOn(generateUniffiKotlin)
-    dependsOn(prepareSherpa)
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {

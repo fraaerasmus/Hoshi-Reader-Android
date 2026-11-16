@@ -4,6 +4,9 @@
         name="anki_media"
         path="anki-media/" />
     <cache-path
+        name="tts_exports"
+        path="tts/export/" />
+    <cache-path
         name="reader_images"
         path="reader-images/" />
     <cache-path
@@ -15,4 +18,7 @@
     <external-files-path
         name="update_downloads"
         path="Download/" />
+    <cache-path
+        name="diagnostics_exports"
+        path="diagnostics-exports/" />
 </paths>

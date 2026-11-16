@@ -25,24 +25,29 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import moe.antimony.hoshi.LocalHoshiUiDependencies
 import moe.antimony.hoshi.R
+import moe.antimony.hoshi.features.settings.SettingsLoadState
+import moe.antimony.hoshi.features.settings.combineSettingsLoadStates
 import moe.antimony.hoshi.features.settings.SettingsDetailScaffold
-import moe.antimony.hoshi.features.settings.collectAsLoadedSettings
+import moe.antimony.hoshi.features.settings.rememberSettingsLoader
 
 @Composable
 fun ReaderBehaviorScreen(
-    settings: ReaderSettings,
+    settings: SettingsLoadState<ReaderSettings>,
+    onRetrySettings: () -> Unit,
     onSettingsChange: ((ReaderSettings) -> ReaderSettings) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val appContainer = LocalHoshiUiDependencies.current
-    val updateSettings = appContainer.updateSettingsRepository.settings.collectAsLoadedSettings()
+    val updateSettingsLoader = appContainer.updateSettingsRepository.settings.rememberSettingsLoader()
     val scope = rememberCoroutineScope()
     SettingsDetailScaffold(
+        state = combineSettingsLoadStates(settings, updateSettingsLoader.state) { reader, update -> reader to update },
+        onRetry = { onRetrySettings(); updateSettingsLoader.retry() },
         title = stringResource(R.string.settings_behavior),
         onClose = onClose,
         modifier = modifier,
-    ) { innerPadding ->
+    ) { innerPadding, (settings, loadedUpdateSettings) ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -50,8 +55,15 @@ fun ReaderBehaviorScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
         ) {
             item {
-                val loadedUpdateSettings = updateSettings ?: return@item
                 BehaviorSettingsCard {
+                    BehaviorSwitchRow(
+                        label = stringResource(ReaderBehaviorRow.ExitReaderOnFirstBack.labelRes),
+                        checked = settings.exitReaderOnFirstBack,
+                        onCheckedChange = {
+                            onSettingsChange { current -> current.copy(exitReaderOnFirstBack = it) }
+                        },
+                    )
+                    BehaviorDivider()
                     BehaviorSwitchRow(
                         label = stringResource(ReaderBehaviorRow.KeepScreenOn.labelRes),
                         checked = settings.keepScreenOnWhileReading,
@@ -102,6 +114,7 @@ fun ReaderBehaviorScreen(
 internal fun readerBehaviorRows(): List<Int> = ReaderBehaviorRow.entries.map { it.labelRes }
 
 private enum class ReaderBehaviorRow(val labelRes: Int) {
+    ExitReaderOnFirstBack(R.string.reader_behavior_exit_reader_on_first_back),
     KeepScreenOn(R.string.reader_behavior_keep_screen_on),
     LockCurrentOrientation(R.string.reader_behavior_lock_current_orientation),
     OpenLastReadBookOnLaunch(R.string.reader_behavior_open_last_read_book_on_launch),

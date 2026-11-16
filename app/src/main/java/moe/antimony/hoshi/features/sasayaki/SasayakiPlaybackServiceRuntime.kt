@@ -8,13 +8,13 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
+import moe.antimony.hoshi.ui.appLanguageContext
 import androidx.annotation.OptIn
 import androidx.core.content.IntentCompat
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaController
 import androidx.media3.session.MediaSession
@@ -35,6 +35,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import moe.antimony.hoshi.features.playback.ReadingMediaArtwork
+import moe.antimony.hoshi.features.playback.ReadingMediaArtworkRepository
+import moe.antimony.hoshi.features.playback.readingMediaMetadata
 import moe.antimony.hoshi.di.ApplicationScope
 import moe.antimony.hoshi.di.IoDispatcher
 import moe.antimony.hoshi.MainActivity
@@ -104,6 +107,7 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
     @ApplicationContext context: Context,
     @param:ApplicationScope private val appScope: CoroutineScope,
     @param:IoDispatcher private val ioDispatcher: CoroutineDispatcher,
+    private val artworkRepository: ReadingMediaArtworkRepository,
 ) : SasayakiPlaybackRuntime {
     private val appContext = context.applicationContext
     private var player: ExoPlayerSasayakiPlayerHandle? = null
@@ -111,6 +115,11 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
     private var playbackServiceConnection: ListenableFuture<MediaController>? = null
     private var activeKey: ActivePlaybackKey? = null
     private var activeBookId: String? = null
+    private var bookTitle: String? = null
+    private var mediaSentence: String? = null
+    private var artworkRequest = 0L
+    private var artworkSourceJob: Job? = null
+    private val artwork = ReadingMediaArtwork(appScope, artworkRepository::load, ::updateMediaMetadata)
     private var activeController: SasayakiPlaybackControllerContract? = null
     private var foregroundPlaybackRequested = false
     private val readerAttachment = SasayakiReaderAttachment()
@@ -134,11 +143,7 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
     fun createServiceSession(serviceContext: Context): MediaSession {
         session?.let { return it }
 
-        val createdPlayer = ExoPlayerSasayakiPlayerHandle(
-            ExoPlayer.Builder(serviceContext)
-                .setWakeMode(C.WAKE_MODE_LOCAL)
-                .build(),
-        ).apply {
+        val createdPlayer = ExoPlayerSasayakiPlayerHandle.createServicePlayer(serviceContext).apply {
             setAudioAttributes(sasayakiMedia3AudioAttributes(), true)
         }
         val sessionPlayer = SasayakiServiceSessionPlayer(
@@ -195,6 +200,7 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
         activeController?.let { controller ->
             if (activeKey == requestedKey) {
                 activeBookId = request.bookId
+                updateBookMetadata(request)
                 session?.setSessionActivity(sasayakiPlaybackReturnPendingIntent(appContext, request.bookId))
                 readerAttachment.attach(
                     getCurrentChapterIndex = getCurrentChapterIndex,
@@ -219,6 +225,7 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
             title = request.bookTitle ?: request.bookRoot.name,
             coverFile = request.bookCoverFile,
         )
+        updateBookMetadata(request)
         session?.setSessionActivity(sasayakiPlaybackReturnPendingIntent(appContext, request.bookId))
         val controller = SasayakiPlaybackController(
             context = appContext,
@@ -234,12 +241,17 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
             onCue = readerAttachment::cue,
             onClearCue = readerAttachment::clearCue,
             playbackPreparer = ServiceOwnedSasayakiPlaybackPreparer(
+                metadataProvider = { readingMediaMetadata(bookTitle, mediaSentence, artwork.data) },
                 playerProvider = ::requirePlayer,
             ),
             onPlaybackStartRequested = ::ensurePlaybackServiceReady,
             onForegroundPlaybackRequestedChanged = ::setForegroundPlaybackRequested,
             onPlaybackSnapshot = ::handleSnapshot,
             restoreAudioOnCreate = false,
+            onMediaSentenceChanged = { sentence ->
+                mediaSentence = sentence
+                updateMediaMetadata()
+            },
         )
         activeKey = requestedKey
         activeController = controller
@@ -422,9 +434,36 @@ internal class SasayakiPlaybackServiceRuntime @Inject constructor(
         _nowPlaying.value = null
         _snapshot.value = SasayakiPlaybackSnapshot()
         pendingIdentity = null
+        artworkRequest++
+        artworkSourceJob?.cancel()
+        artworkSourceJob = null
+        mediaSentence = null
+        bookTitle = null
+        artwork.clear()
         if (clearBookId) {
             activeBookId = null
         }
+    }
+
+    private fun updateBookMetadata(request: SasayakiPlaybackRuntimeLoadRequest) {
+        bookTitle = request.bookTitle ?: request.bookRoot.name
+        updateMediaMetadata()
+        artworkSourceJob?.cancel()
+        val generation = ++artworkRequest
+        artworkSourceJob = appScope.launch {
+            val source = artworkRepository.source(request.bookCoverFile)
+            if (generation == artworkRequest && activeBookId == request.bookId) {
+                artwork.update(request.bookId, source)
+            }
+        }
+    }
+
+    private fun updateMediaMetadata() {
+        val currentPlayer = player?.player ?: return
+        val item = currentPlayer.currentMediaItem ?: return
+        val metadata = readingMediaMetadata(bookTitle, mediaSentence, artwork.data)
+        if (item.mediaMetadata == metadata) return
+        currentPlayer.replaceMediaItem(currentPlayer.currentMediaItemIndex, item.buildUpon().setMediaMetadata(metadata).build())
     }
 
     private data class ActivePlaybackKey(
@@ -599,17 +638,19 @@ internal fun sasayakiServiceMediaButtonSpecs(): List<SasayakiServiceMediaButtonS
 internal fun sasayakiServiceMediaButtons(
     context: Context,
     speedIcon: Int = CommandButton.ICON_PLAYBACK_SPEED_1_0,
-): List<CommandButton> =
-    sasayakiServiceMediaButtonSpecs().map { spec ->
+): List<CommandButton> {
+    val languageContext = context.appLanguageContext()
+    return sasayakiServiceMediaButtonSpecs().map { spec ->
         CommandButton.Builder(spec.icon)
-            .setDisplayName(context.getString(spec.displayNameResId))
+            .setDisplayName(languageContext.getString(spec.displayNameResId))
             .setPlayerCommand(spec.playerCommand)
             .setSlots(spec.slot)
             .build()
     } + CommandButton.Builder(speedIcon)
-        .setDisplayName(context.getString(R.string.sasayaki_speed))
+        .setDisplayName(languageContext.getString(R.string.sasayaki_speed))
         .setSessionCommand(sasayakiCycleSpeedCommand)
         .build()
+}
 
 internal fun sasayakiPlaybackReturnActivityFlags(): Int =
     Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
